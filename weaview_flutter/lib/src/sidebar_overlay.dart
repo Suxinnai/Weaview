@@ -48,8 +48,7 @@ class _SidebarOverlay extends StatelessWidget {
                 filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: (state.isDark(context) ? _layerDark : Colors.white)
-                        .withValues(alpha: 0.92),
+                    color: state.layer(context).withValues(alpha: 0.92),
                     border: Border(
                       right: BorderSide(
                         color: state.text(context).withValues(alpha: 0.07),

@@ -6,7 +6,15 @@ class WeaviewState extends ChangeNotifier {
   ThemeMode themeMode = ThemeMode.system;
   Color? backgroundOverride;
   Color? textOverride;
+  Color? assistantBubbleOverride;
+  Color? userBubbleOverride;
   String fontMood = 'sans';
+  String fontStyleMood = 'normal';
+  String fontWeightMood = 'normal';
+  String bubbleStyle = 'minimal';
+  String messageAlignment = 'left';
+  double assistantBubbleOpacity = 0.08;
+  double userBubbleOpacity = 0.12;
   List<Color> accents = const [_accentMint, _accentGreen];
   int themePulse = 0;
 
@@ -18,6 +26,8 @@ class WeaviewState extends ChangeNotifier {
   String userAvatar = '';
   String userName = '织梦者';
   bool isStreaming = false;
+  int _streamRunId = 0;
+  bool _cancelStreamRequested = false;
 
   final List<ChatMessage> messages = [];
   final List<ChatSession> chatSessions = [];
@@ -41,6 +51,15 @@ class WeaviewState extends ChangeNotifier {
     ),
   ];
 
+  ThemeMode get effectiveThemeMode {
+    if (themeMode != ThemeMode.system) return themeMode;
+    final customBackground = backgroundOverride;
+    if (customBackground == null) return themeMode;
+    return customBackground.computeLuminance() < 0.45
+        ? ThemeMode.dark
+        : ThemeMode.light;
+  }
+
   Future<void> load() async {
     _prefs = await SharedPreferences.getInstance();
     final prefs = _prefs!;
@@ -55,7 +74,38 @@ class WeaviewState extends ChangeNotifier {
     themeMode = _decodeThemeMode(prefs.getString('theme_mode'));
     backgroundOverride = colorFromHex(prefs.getString('theme_background'));
     textOverride = colorFromHex(prefs.getString('theme_text'));
+    if (themeMode != ThemeMode.system && backgroundOverride != null) {
+      _clearGlobalThemeOverrides();
+    }
+    assistantBubbleOverride = colorFromHex(
+      prefs.getString('theme_assistant_bubble'),
+    );
+    userBubbleOverride = colorFromHex(prefs.getString('theme_user_bubble'));
     fontMood = prefs.getString('theme_font_family') ?? 'sans';
+    fontStyleMood = _enumPref(prefs.getString('theme_font_style'), const [
+      'normal',
+      'italic',
+    ], 'normal');
+    fontWeightMood = _enumPref(prefs.getString('theme_font_weight'), const [
+      'normal',
+      'medium',
+      'bold',
+    ], 'normal');
+    bubbleStyle = _enumPref(prefs.getString('theme_bubble_style'), const [
+      'minimal',
+      'none',
+      'glass',
+      'solid',
+      'outline',
+    ], 'minimal');
+    messageAlignment = _enumPref(
+      prefs.getString('theme_message_alignment'),
+      const ['left', 'center', 'right'],
+      'left',
+    );
+    assistantBubbleOpacity =
+        prefs.getDouble('theme_assistant_bubble_opacity') ?? 0.08;
+    userBubbleOpacity = prefs.getDouble('theme_user_bubble_opacity') ?? 0.12;
 
     final savedSessions = _decodeList(
       prefs.getString('chat_sessions'),
@@ -80,11 +130,12 @@ class WeaviewState extends ChangeNotifier {
       ];
     }
     providers = providers.map((provider) {
-      if (provider.name.toLowerCase().contains('gemini') &&
-          provider.apiKey.isEmpty) {
-        return provider.copyWith(models: const [], status: '未配置');
+      final normalized = provider.copyWith(models: provider.models);
+      if (normalized.name.toLowerCase().contains('gemini') &&
+          normalized.apiKey.isEmpty) {
+        return normalized.copyWith(models: const [], status: '未配置');
       }
-      return provider;
+      return normalized;
     }).toList();
     if (!providers.any((provider) => provider.current) &&
         providers.isNotEmpty) {
@@ -103,6 +154,7 @@ class WeaviewState extends ChangeNotifier {
           ),
       ];
     }
+    _persistProviders();
 
     final assignmentText = prefs.getString('ai_model_assignments');
     if (assignmentText != null) {
@@ -163,6 +215,10 @@ class WeaviewState extends ChangeNotifier {
   bool isDark(BuildContext context) {
     if (themeMode == ThemeMode.dark) return true;
     if (themeMode == ThemeMode.light) return false;
+    final customBackground = backgroundOverride;
+    if (customBackground != null) {
+      return customBackground.computeLuminance() < 0.45;
+    }
     return MediaQuery.platformBrightnessOf(context) == Brightness.dark;
   }
 
@@ -171,11 +227,23 @@ class WeaviewState extends ChangeNotifier {
   }
 
   Color layer(BuildContext context) {
+    final customBackground = backgroundOverride;
+    if (customBackground != null) {
+      return isDark(context)
+          ? Color.lerp(customBackground, Colors.white, 0.08)!
+          : Color.lerp(customBackground, Colors.black, 0.035)!;
+    }
     return isDark(context) ? _layerDark : _layerLight;
   }
 
   Color text(BuildContext context) {
-    return textOverride ?? (isDark(context) ? _textDark : _textLight);
+    final candidate =
+        textOverride ?? (isDark(context) ? _textDark : _textLight);
+    final currentBackground = background(context);
+    if (_contrastRatio(currentBackground, candidate) < 4.5) {
+      return _readableTextFor(currentBackground);
+    }
+    return candidate;
   }
 
   Color muted(BuildContext context) {
@@ -189,10 +257,16 @@ class WeaviewState extends ChangeNotifier {
     double opacity = 1,
     double height = 1.35,
   }) {
+    final effectiveWeight = switch (fontWeightMood) {
+      'bold' when weight.value <= FontWeight.w500.value => FontWeight.w700,
+      'medium' when weight.value <= FontWeight.w400.value => FontWeight.w500,
+      _ => weight,
+    };
     return TextStyle(
       color: text(context).withValues(alpha: opacity),
       fontSize: size,
-      fontWeight: weight,
+      fontWeight: effectiveWeight,
+      fontStyle: fontStyleMood == 'italic' ? FontStyle.italic : null,
       height: height,
       fontFamily: fontMood == 'serif' ? 'Noto Serif SC' : 'Inter',
       fontFamilyFallback: const [
@@ -207,30 +281,301 @@ class WeaviewState extends ChangeNotifier {
 
   void setThemeModeValue(ThemeMode mode) {
     themeMode = mode;
+    if (mode != ThemeMode.system) {
+      _clearGlobalThemeOverrides();
+    }
     _prefs?.setString('theme_mode', mode.name);
     notifyListeners();
   }
 
-  void applyAiTheme(Map<String, dynamic> args) {
+  void applyAiTheme(Map<String, dynamic> args, {String? userPrompt}) {
+    args = _guardAiThemeArgs(args, userPrompt: userPrompt);
+    if (args.isEmpty) return;
+    if (args['resetTheme'] == true) {
+      resetAiTheme();
+      return;
+    }
     final bg = colorFromHex(args['backgroundColor']?.toString());
     final txt = colorFromHex(args['textColor']?.toString());
+    final assistantBubble =
+        colorFromHex(args['assistantBubbleColor']?.toString()) ??
+        colorFromHex(args['bubbleColor']?.toString());
+    final userBubble =
+        colorFromHex(args['userBubbleColor']?.toString()) ??
+        colorFromHex(args['bubbleColor']?.toString());
+    var nextBackground = backgroundOverride;
+    var nextText = textOverride;
     if (bg != null) {
-      backgroundOverride = bg;
-      _prefs?.setString('theme_background', colorToHex(bg));
+      nextBackground = bg;
     }
     if (txt != null) {
-      textOverride = txt;
-      _prefs?.setString('theme_text', colorToHex(txt));
+      nextText = txt;
+    }
+    final proposedThemeMode = args['isDark'] is bool
+        ? (args['isDark'] == true ? ThemeMode.dark : ThemeMode.light)
+        : bg != null
+        ? (bg.computeLuminance() < 0.45 ? ThemeMode.dark : ThemeMode.light)
+        : themeMode;
+    final fallbackBackground = switch (proposedThemeMode) {
+      ThemeMode.dark => _baseDark,
+      ThemeMode.light => _baseLight,
+      ThemeMode.system => _baseLight,
+    };
+    final effectiveBackground = nextBackground ?? fallbackBackground;
+    final fallbackText = effectiveBackground.computeLuminance() < 0.45
+        ? _textDark
+        : _textLight;
+    final effectiveText = nextText ?? fallbackText;
+    if (_contrastRatio(effectiveBackground, effectiveText) < 4.5) {
+      nextText = _readableTextFor(effectiveBackground);
+    }
+    if (bg != null) {
+      backgroundOverride = nextBackground;
+      _prefs?.setString('theme_background', colorToHex(nextBackground!));
+    }
+    if (txt != null || bg != null && nextText != null) {
+      textOverride = nextText;
+      _prefs?.setString('theme_text', colorToHex(nextText!));
     }
     final family = args['fontFamily']?.toString();
     if (family == 'serif' || family == 'sans') {
       fontMood = family!;
       _prefs?.setString('theme_font_family', family);
     }
-    if (args['isDark'] is bool) {
-      themeMode = args['isDark'] == true ? ThemeMode.dark : ThemeMode.light;
+    if (args['isDark'] is bool || bg != null) {
+      themeMode = proposedThemeMode;
       _prefs?.setString('theme_mode', themeMode.name);
     }
+    if (assistantBubble != null) {
+      assistantBubbleOverride = assistantBubble;
+      _prefs?.setString('theme_assistant_bubble', colorToHex(assistantBubble));
+    }
+    if (userBubble != null) {
+      userBubbleOverride = userBubble;
+      _prefs?.setString('theme_user_bubble', colorToHex(userBubble));
+    }
+    final nextAssistantOpacity =
+        _opacityArg(args['assistantBubbleOpacity']) ??
+        _opacityArg(args['bubbleOpacity']);
+    if (nextAssistantOpacity != null) {
+      assistantBubbleOpacity = nextAssistantOpacity;
+      _prefs?.setDouble(
+        'theme_assistant_bubble_opacity',
+        assistantBubbleOpacity,
+      );
+    }
+    final nextUserOpacity =
+        _opacityArg(args['userBubbleOpacity']) ??
+        _opacityArg(args['bubbleOpacity']);
+    if (nextUserOpacity != null) {
+      userBubbleOpacity = nextUserOpacity;
+      _prefs?.setDouble('theme_user_bubble_opacity', userBubbleOpacity);
+    }
+    final nextBubbleStyle = _enumArg(args['bubbleStyle'], const [
+      'minimal',
+      'none',
+      'glass',
+      'solid',
+      'outline',
+    ]);
+    if (nextBubbleStyle != null) {
+      bubbleStyle = nextBubbleStyle;
+      _prefs?.setString('theme_bubble_style', bubbleStyle);
+    }
+    final nextAlignment = _enumArg(args['messageAlignment'], const [
+      'left',
+      'center',
+      'right',
+    ]);
+    if (nextAlignment != null) {
+      messageAlignment = nextAlignment;
+      _prefs?.setString('theme_message_alignment', messageAlignment);
+    }
+    final nextFontStyle = _enumArg(args['fontStyle'], const [
+      'normal',
+      'italic',
+    ]);
+    if (nextFontStyle != null) {
+      fontStyleMood = nextFontStyle;
+      _prefs?.setString('theme_font_style', fontStyleMood);
+    }
+    final nextFontWeight = _enumArg(args['fontWeight'], const [
+      'normal',
+      'medium',
+      'bold',
+    ]);
+    if (nextFontWeight != null) {
+      fontWeightMood = nextFontWeight;
+      _prefs?.setString('theme_font_weight', fontWeightMood);
+    }
+    themePulse++;
+    notifyListeners();
+  }
+
+  Map<String, dynamic> _guardAiThemeArgs(
+    Map<String, dynamic> args, {
+    String? userPrompt,
+  }) {
+    final prompt = userPrompt?.toLowerCase() ?? '';
+    if (prompt.isEmpty) return args;
+    final asksBubble = _promptHasAny(prompt, const [
+      '气泡',
+      '消息泡',
+      '对话泡',
+      'bubble',
+      'bubbles',
+    ]);
+    final asksBackground = _promptHasAny(prompt, const [
+      '背景',
+      '底色',
+      '画布',
+      '壁纸',
+      'background',
+      'canvas',
+      '深色',
+      '浅色',
+      '暗色',
+      '亮色',
+      '黑色背景',
+      '白色背景',
+    ]);
+    final asksText = _promptHasAny(prompt, const [
+      '文字',
+      '文本',
+      '字体',
+      '字色',
+      '字号',
+      '白字',
+      '黑字',
+      '红字',
+      '蓝字',
+      'font',
+      'text',
+      'serif',
+      'sans',
+      '粗体',
+      '斜体',
+    ]);
+    final asksAlignment = _promptHasAny(prompt, const [
+      '对齐',
+      '居中',
+      '靠左',
+      '靠右',
+      'align',
+      'center',
+      'left',
+      'right',
+    ]);
+    final hasSpecificStyleGroup =
+        asksBubble || asksBackground || asksText || asksAlignment;
+    if (!hasSpecificStyleGroup) return args;
+
+    final removesBubble =
+        asksBubble &&
+        _promptHasAny(prompt, const [
+          '去掉',
+          '去除',
+          '移除',
+          '取消',
+          '不要',
+          '无气泡',
+          '隐藏',
+          'remove',
+          'hide',
+          'disable',
+          'without bubble',
+          'no bubble',
+        ]);
+
+    final asksReset = _promptHasAny(prompt, const [
+      '恢复默认',
+      '默认主题',
+      '重置',
+      '还原',
+      'reset',
+      'default',
+      'restore',
+    ]);
+    final asksWholeTheme = _promptHasAny(prompt, const [
+      '主题',
+      'theme',
+      '全局',
+      '整体',
+      '全部',
+      '所有',
+      '整套',
+    ]);
+    final guarded = Map<String, dynamic>.from(args);
+    if (!asksReset || hasSpecificStyleGroup && !asksWholeTheme) {
+      guarded.remove('resetTheme');
+    }
+    if (!asksBackground) {
+      guarded.remove('backgroundColor');
+      guarded.remove('isDark');
+    }
+    if (!asksText) {
+      guarded.remove('textColor');
+      guarded.remove('fontFamily');
+      guarded.remove('fontStyle');
+      guarded.remove('fontWeight');
+    }
+    if (!asksAlignment) guarded.remove('messageAlignment');
+    if (!asksBubble) {
+      guarded.remove('bubbleStyle');
+      guarded.remove('bubbleColor');
+      guarded.remove('assistantBubbleColor');
+      guarded.remove('userBubbleColor');
+      guarded.remove('bubbleOpacity');
+      guarded.remove('assistantBubbleOpacity');
+      guarded.remove('userBubbleOpacity');
+    } else if (removesBubble) {
+      guarded['bubbleStyle'] = 'none';
+      guarded['bubbleOpacity'] = 0.0;
+      guarded.remove('bubbleColor');
+      guarded.remove('assistantBubbleColor');
+      guarded.remove('userBubbleColor');
+    }
+    return guarded;
+  }
+
+  bool _promptHasAny(String prompt, List<String> terms) {
+    return terms.any(prompt.contains);
+  }
+
+  void _clearGlobalThemeOverrides() {
+    backgroundOverride = null;
+    textOverride = null;
+    _prefs
+      ?..remove('theme_background')
+      ..remove('theme_text');
+  }
+
+  void resetAiTheme() {
+    backgroundOverride = null;
+    textOverride = null;
+    assistantBubbleOverride = null;
+    userBubbleOverride = null;
+    fontMood = 'sans';
+    fontStyleMood = 'normal';
+    fontWeightMood = 'normal';
+    bubbleStyle = 'minimal';
+    messageAlignment = 'left';
+    assistantBubbleOpacity = 0.08;
+    userBubbleOpacity = 0.12;
+    themeMode = ThemeMode.system;
+    _prefs
+      ?..remove('theme_background')
+      ..remove('theme_text')
+      ..remove('theme_assistant_bubble')
+      ..remove('theme_user_bubble')
+      ..setString('theme_font_family', fontMood)
+      ..setString('theme_font_style', fontStyleMood)
+      ..setString('theme_font_weight', fontWeightMood)
+      ..setString('theme_bubble_style', bubbleStyle)
+      ..setString('theme_message_alignment', messageAlignment)
+      ..setDouble('theme_assistant_bubble_opacity', assistantBubbleOpacity)
+      ..setDouble('theme_user_bubble_opacity', userBubbleOpacity)
+      ..setString('theme_mode', themeMode.name);
     themePulse++;
     notifyListeners();
   }
@@ -394,6 +739,8 @@ class WeaviewState extends ChangeNotifier {
       ..addAll(conversation)
       ..add(ChatMessage.model('', isThinking: true));
     isStreaming = true;
+    _cancelStreamRequested = false;
+    final runId = ++_streamRunId;
     _persistCurrentSession();
     notifyListeners();
 
@@ -405,6 +752,64 @@ class WeaviewState extends ChangeNotifier {
       notifyListeners();
     }
 
+    var targetContent = '';
+    var targetReasoning = '';
+    var remoteThinking = true;
+    var streamDone = false;
+    var typewriterRunning = false;
+    Completer<void>? typewriterCompleter;
+    var visibleContentChars = 0;
+    var visibleReasoningChars = 0;
+
+    Future<void> pumpTypewriter() async {
+      if (typewriterRunning) {
+        return typewriterCompleter?.future ?? Future<void>.value();
+      }
+      typewriterRunning = true;
+      final completer = Completer<void>();
+      typewriterCompleter = completer;
+      try {
+        while (runId == _streamRunId && !_cancelStreamRequested) {
+          final contentLength = targetContent.characters.length;
+          final reasoningLength = targetReasoning.characters.length;
+          final hasMore =
+              visibleContentChars < contentLength ||
+              visibleReasoningChars < reasoningLength;
+          if (!hasMore) {
+            if (streamDone) break;
+            final current = messages.last;
+            current.isThinking =
+                current.content.trim().isEmpty && remoteThinking;
+            flush();
+            await Future<void>.delayed(const Duration(milliseconds: 18));
+            continue;
+          }
+
+          if (visibleReasoningChars < reasoningLength &&
+              visibleContentChars == 0) {
+            visibleReasoningChars++;
+          }
+          if (visibleContentChars < contentLength) {
+            visibleContentChars++;
+          }
+
+          final current = messages.last;
+          current.content = targetContent.characters
+              .take(visibleContentChars)
+              .toString();
+          current.reasoning = targetReasoning.characters
+              .take(visibleReasoningChars)
+              .toString();
+          current.isThinking = current.content.trim().isEmpty;
+          flush();
+          await Future<void>.delayed(const Duration(milliseconds: 12));
+        }
+      } finally {
+        typewriterRunning = false;
+        if (!completer.isCompleted) completer.complete();
+      }
+    }
+
     try {
       final prompt = await _expandedSystemPrompt(
         webQuery: useWebSearch ? content : null,
@@ -414,15 +819,22 @@ class WeaviewState extends ChangeNotifier {
         systemInstruction: prompt,
         provider: chatProvider!,
         assignment: chatAssignment!,
-        onThemeUpdate: applyAiTheme,
+        onThemeUpdate: (args) => applyAiTheme(args, userPrompt: content),
+        shouldCancel: () => runId != _streamRunId || _cancelStreamRequested,
         onSnapshot: (content, reasoning, thinking) {
-          final current = messages.last;
-          current.content = content;
-          current.reasoning = reasoning;
-          current.isThinking = thinking;
-          flush();
+          targetContent = content;
+          targetReasoning = reasoning;
+          remoteThinking = thinking;
+          unawaited(pumpTypewriter());
         },
       );
+      streamDone = true;
+      await pumpTypewriter();
+      if (runId != _streamRunId || _cancelStreamRequested) {
+        messages.last.isThinking = false;
+        flush(force: true);
+        return;
+      }
       messages.last.isThinking = false;
       if (messages.last.content.trim().isEmpty) {
         messages.last.content = '我在，但这一缕回应没有形成文字。';
@@ -431,15 +843,39 @@ class WeaviewState extends ChangeNotifier {
       await _refreshCurrentSessionTitle();
       await _refreshSuggestions();
     } catch (error) {
+      if (runId != _streamRunId || _cancelStreamRequested) {
+        messages.last.isThinking = false;
+        notifyListeners();
+        return;
+      }
       messages.last.content =
           '连接织线时出现了问题：${_friendlyAiError(error)}\n\n请检查网络、API Key 或模型配置后重试。';
       messages.last.isThinking = false;
       notifyListeners();
     } finally {
-      isStreaming = false;
-      _persistCurrentSession();
-      notifyListeners();
+      if (runId == _streamRunId) {
+        isStreaming = false;
+        _cancelStreamRequested = false;
+        _persistCurrentSession();
+        notifyListeners();
+      }
     }
+  }
+
+  void cancelStreaming() {
+    if (!isStreaming) return;
+    _cancelStreamRequested = true;
+    _streamRunId++;
+    if (messages.isNotEmpty && messages.last.role == 'model') {
+      final current = messages.last;
+      current.isThinking = false;
+      if (current.content.trim().isEmpty) {
+        current.content = '已停止本次回复。';
+      }
+    }
+    isStreaming = false;
+    _persistCurrentSession();
+    notifyListeners();
   }
 
   Future<String> _expandedSystemPrompt({String? webQuery}) async {
@@ -448,6 +884,7 @@ class WeaviewState extends ChangeNotifier {
       prompt +=
           '\n\n[System directive: Emotion and poetry mode is ENABLED. Your responses should be highly emotional, vivid, and deeply artistic. Do not just output plain facts.]';
     }
+    prompt += _currentAppearanceDirective();
     if (globalMemoryEnabled && memories.isNotEmpty) {
       prompt +=
           '\n\n[System directive: You have the following memories about the user:\n${memories.map((m) => '- $m').join('\n')}\nPlease take them into account when responding.]';
@@ -473,6 +910,30 @@ class WeaviewState extends ChangeNotifier {
       }
     }
     return prompt;
+  }
+
+  String _currentAppearanceDirective() {
+    final background = backgroundOverride == null
+        ? 'default:${themeMode.name}'
+        : colorToHex(backgroundOverride!);
+    final text = textOverride == null
+        ? 'auto-contrast'
+        : colorToHex(textOverride!);
+    final assistantBubble = assistantBubbleOverride == null
+        ? 'default'
+        : colorToHex(assistantBubbleOverride!);
+    final userBubble = userBubbleOverride == null
+        ? 'default'
+        : colorToHex(userBubbleOverride!);
+    return '''
+
+[System directive: Current supported chat appearance state:
+- background style: background=$background, effectiveTheme=${effectiveThemeMode.name}
+- font/text style: text=$text, fontFamily=$fontMood, fontStyle=$fontStyleMood, fontWeight=$fontWeightMood
+- bubble style: style=$bubbleStyle, assistantColor=$assistantBubble, userColor=$userBubble, assistantOpacity=${assistantBubbleOpacity.toStringAsFixed(2)}, userOpacity=${userBubbleOpacity.toStringAsFixed(2)}
+- message alignment: $messageAlignment
+Treat background style, font/text style, bubble style, and message alignment as independent groups. If the user names only one group, modify only that group. Removing bubbles means bubbleStyle=none and bubbleOpacity=0; it never means changing background, text, or font.]
+''';
   }
 
   Future<void> _refreshCurrentSessionTitle() async {
@@ -681,12 +1142,18 @@ class WeaviewState extends ChangeNotifier {
   }
 
   void saveProviders(List<AiProvider> next) {
-    providers = next;
+    providers = next
+        .map((provider) => provider.copyWith(models: provider.models))
+        .toList();
+    _persistProviders();
+    notifyListeners();
+  }
+
+  void _persistProviders() {
     _prefs?.setString(
       'ai_providers',
       jsonEncode(providers.map((p) => p.toJson()).toList()),
     );
-    notifyListeners();
   }
 
   void upsertProvider(AiProvider provider, {bool makeCurrent = false}) {
@@ -759,6 +1226,8 @@ class WeaviewState extends ChangeNotifier {
       'ai_tts_providers': ttsProviders.map((p) => p.safeJson()).toList(),
       'user_name': userName,
       'theme_mode': themeMode.name,
+      'theme_bubble_style': bubbleStyle,
+      'theme_message_alignment': messageAlignment,
     });
   }
 
@@ -794,7 +1263,15 @@ class WeaviewState extends ChangeNotifier {
     themeMode = ThemeMode.system;
     backgroundOverride = null;
     textOverride = null;
+    assistantBubbleOverride = null;
+    userBubbleOverride = null;
     fontMood = 'sans';
+    fontStyleMood = 'normal';
+    fontWeightMood = 'normal';
+    bubbleStyle = 'minimal';
+    messageAlignment = 'left';
+    assistantBubbleOpacity = 0.08;
+    userBubbleOpacity = 0.12;
     notifyListeners();
   }
 }

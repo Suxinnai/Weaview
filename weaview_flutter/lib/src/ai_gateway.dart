@@ -56,6 +56,7 @@ class AiGateway {
     required ModelAssignment assignment,
     required ValueChanged<Map<String, dynamic>> onThemeUpdate,
     required AiStreamSnapshotHandler onSnapshot,
+    bool Function()? shouldCancel,
   }) async {
     final providerName = assignment.provider.isNotEmpty
         ? assignment.provider
@@ -68,6 +69,7 @@ class AiGateway {
         assignment: assignment,
         onThemeUpdate: onThemeUpdate,
       );
+      if (shouldCancel?.call() == true) return;
       final parsed = _splitReasoning(text);
       onSnapshot(parsed.answer, parsed.reasoning, false);
       return;
@@ -87,6 +89,7 @@ class AiGateway {
       systemInstruction: systemInstruction,
       onThemeUpdate: onThemeUpdate,
       onSnapshot: onSnapshot,
+      shouldCancel: shouldCancel,
     );
   }
 
@@ -317,6 +320,7 @@ class AiGateway {
     required String systemInstruction,
     required ValueChanged<Map<String, dynamic>> onThemeUpdate,
     required AiStreamSnapshotHandler onSnapshot,
+    bool Function()? shouldCancel,
   }) async {
     final uri = Uri.parse('${_trimSlash(baseUrl)}/chat/completions');
     final client = http.Client();
@@ -352,6 +356,7 @@ class AiGateway {
           in response.stream
               .transform(utf8.decoder)
               .transform(const LineSplitter())) {
+        if (shouldCancel?.call() == true) break;
         final trimmed = line.trim();
         if (trimmed.isEmpty || !trimmed.startsWith('data:')) continue;
         final data = trimmed.substring(5).trim();
@@ -369,6 +374,7 @@ class AiGateway {
         ].join('\n\n');
         onSnapshot(parsed.answer, reasoning, parsed.thinking);
       }
+      if (shouldCancel?.call() == true) return;
       final parsed = _splitReasoning(rawContent);
       final reasoning = [
         if (rawReasoning.trim().isNotEmpty) rawReasoning.trim(),
@@ -420,7 +426,7 @@ class AiGateway {
     if (models.isEmpty) {
       throw Exception('模型接口返回为空，请确认 Base URL 指向兼容 OpenAI 的 /v1 服务。');
     }
-    return models;
+    return _dedupeModels(models);
   }
 
   static Future<String> testConnection({
@@ -615,21 +621,77 @@ class AiGateway {
         {
           'name': 'modify_ui_state',
           'description':
-              'Modifies the visual theme of the chat interface based on the conversation context or user request.',
+              'Safely modifies supported chat appearance controls only. Keep groups independent: backgroundColor/isDark for background style, textColor/fontFamily/fontStyle/fontWeight for font and text style, bubbleStyle/bubble colors/bubble opacity for message bubble style, and messageAlignment for alignment. Do not use this for unsupported app layout, settings pages, navigation, spacing systems, or arbitrary CSS.',
           'parameters': {
             'type': 'object',
             'properties': {
+              'resetTheme': {
+                'type': 'boolean',
+                'description':
+                    'Set true only when the user asks to restore, reset, or return to the default theme.',
+              },
               'backgroundColor': {
                 'type': 'string',
-                'description': 'A CSS hex color string for the background.',
+                'description':
+                    'CSS hex color for the chat background/canvas only. Do not set this for bubble-only or font-only requests.',
               },
               'textColor': {
                 'type': 'string',
-                'description': 'A CSS hex color string for readable text.',
+                'description':
+                    'CSS hex color for readable message text only. Do not set this for bubble-only or background-only requests unless the user asks for text color too.',
               },
               'fontFamily': {
                 'type': 'string',
                 'enum': ['sans', 'serif'],
+                'description': 'Font family for message text only.',
+              },
+              'fontStyle': {
+                'type': 'string',
+                'enum': ['normal', 'italic'],
+                'description': 'Font style for message text only.',
+              },
+              'fontWeight': {
+                'type': 'string',
+                'enum': ['normal', 'medium', 'bold'],
+                'description': 'Font weight for message text only.',
+              },
+              'messageAlignment': {
+                'type': 'string',
+                'enum': ['left', 'center', 'right'],
+                'description': 'Message alignment only.',
+              },
+              'bubbleStyle': {
+                'type': 'string',
+                'enum': ['minimal', 'none', 'glass', 'solid', 'outline'],
+                'description':
+                    'Message bubble container style only. Use none to remove visible message bubbles, glass for transparent bubbles, solid for stronger filled bubbles, outline for border-only bubbles. Never change the background when removing bubbles.',
+              },
+              'bubbleColor': {
+                'type': 'string',
+                'description':
+                    'CSS hex color applied to both assistant and user bubble containers only.',
+              },
+              'assistantBubbleColor': {
+                'type': 'string',
+                'description':
+                    'CSS hex color for assistant bubble containers only.',
+              },
+              'userBubbleColor': {
+                'type': 'string',
+                'description': 'CSS hex color for user bubble containers only.',
+              },
+              'bubbleOpacity': {
+                'type': 'number',
+                'description':
+                    'Opacity from 0 to 1 applied to both assistant and user bubbles.',
+              },
+              'assistantBubbleOpacity': {
+                'type': 'number',
+                'description': 'Assistant bubble opacity from 0 to 1.',
+              },
+              'userBubbleOpacity': {
+                'type': 'number',
+                'description': 'User bubble opacity from 0 to 1.',
               },
               'isDark': {'type': 'boolean'},
             },

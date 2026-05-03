@@ -89,9 +89,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
         _back();
       },
       child: Scaffold(
-        backgroundColor: state.isDark(context)
-            ? _baseDark
-            : const Color(0xFFF8F9FA),
+        backgroundColor: state.background(context),
         body: Column(
           children: [
             _sheetHeader(),
@@ -118,7 +116,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
       bottom: false,
       child: Container(
         decoration: BoxDecoration(
-          color: state.isDark(context) ? _baseDark : const Color(0xFFF8F9FA),
+          color: state.background(context),
           border: Border(
             bottom: BorderSide(
               color: state.text(context).withValues(alpha: 0.06),
@@ -179,9 +177,24 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                   itemBuilder: (context, index) {
                     final tab = _tabs[index];
                     final active = _activeTab == tab.$1;
+                    final activeColor = state.accents[0].withValues(
+                      alpha: state.isDark(context) ? 0.18 : 0.22,
+                    );
+                    final inactiveColor = state
+                        .text(context)
+                        .withValues(alpha: 0.055);
                     return ChoiceChip(
                       selected: active,
-                      avatar: Icon(tab.$3, size: 17),
+                      showCheckmark: false,
+                      avatar: Icon(
+                        tab.$3,
+                        size: 17,
+                        color: active
+                            ? (state.isDark(context)
+                                  ? _accentMint
+                                  : const Color(0xFF007A78))
+                            : state.text(context).withValues(alpha: 0.62),
+                      ),
                       label: Text(tab.$2),
                       onSelected: (_) => setState(() => _activeTab = tab.$1),
                       labelStyle: state
@@ -192,19 +205,21 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                             opacity: active ? 1 : 0.72,
                           )
                           .copyWith(
-                            color: active
-                                ? (state.isDark(context)
-                                      ? Colors.black
-                                      : Colors.white)
-                                : state.text(context).withValues(alpha: 0.72),
+                            color: state
+                                .text(context)
+                                .withValues(alpha: active ? 0.96 : 0.72),
                           ),
-                      selectedColor: state.isDark(context)
-                          ? Colors.white
-                          : Colors.black,
-                      backgroundColor: state
-                          .text(context)
-                          .withValues(alpha: 0.055),
-                      side: BorderSide.none,
+                      selectedColor: activeColor,
+                      disabledColor: inactiveColor,
+                      backgroundColor: inactiveColor,
+                      surfaceTintColor: Colors.transparent,
+                      elevation: 0,
+                      pressElevation: 0,
+                      side: BorderSide(
+                        color: active
+                            ? state.accents[0].withValues(alpha: 0.45)
+                            : Colors.transparent,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(999),
                       ),

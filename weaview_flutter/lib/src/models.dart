@@ -219,7 +219,9 @@ class AiProvider {
       baseUrl: rawBaseUrl.trim().isEmpty
           ? ''
           : AiGateway.normalizeBaseUrl(rawBaseUrl),
-      models: (map['models'] as List? ?? []).map(AiModel.fromJson).toList(),
+      models: _dedupeModels(
+        (map['models'] as List? ?? []).map(AiModel.fromJson),
+      ),
     );
   }
 
@@ -295,7 +297,7 @@ class AiProvider {
       color: color ?? this.color,
       apiKey: apiKey ?? this.apiKey,
       baseUrl: baseUrl ?? this.baseUrl,
-      models: models ?? this.models,
+      models: models == null ? this.models : _dedupeModels(models),
     );
   }
 
@@ -313,6 +315,26 @@ class AiProvider {
     ...toJson(),
     'apiKey': apiKey.isEmpty ? '' : '***',
   };
+}
+
+List<AiModel> _dedupeModels(Iterable<AiModel> models) {
+  final seen = <String>{};
+  final result = <AiModel>[];
+  for (final model in models) {
+    final id = model.id.trim();
+    final name = model.name.trim();
+    if (id.isEmpty && name.isEmpty) continue;
+    final key = (id.isEmpty ? name : id).toLowerCase();
+    if (!seen.add(key)) continue;
+    result.add(
+      model.copyWith(
+        id: id.isEmpty ? name : id,
+        name: name.isEmpty ? id : name,
+        capabilities: model.capabilities.toSet().toList(),
+      ),
+    );
+  }
+  return result;
 }
 
 class ModelAssignment {

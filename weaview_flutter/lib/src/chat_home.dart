@@ -82,9 +82,12 @@ class _WeaviewHomeState extends State<WeaviewHome>
   }
 
   Future<void> _submit() async {
+    if (widget.state.isStreaming) {
+      widget.state.cancelStreaming();
+      return;
+    }
     final text = _input.text;
-    if ((text.trim().isEmpty && _pendingAttachments.isEmpty) ||
-        widget.state.isStreaming) {
+    if (text.trim().isEmpty && _pendingAttachments.isEmpty) {
       return;
     }
     if (_recording) {
@@ -635,6 +638,191 @@ class _WeaviewHomeState extends State<WeaviewHome>
   Widget _buildInputDock(WeaviewState state) {
     final dark = state.isDark(context);
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final keyboardOpen = keyboardInset > 0;
+    final dockSurface = AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        color: (dark ? Colors.black : state.layer(context)).withValues(
+          alpha: dark ? 0.58 : 0.62,
+        ),
+        borderRadius: BorderRadius.circular(_dockExpanded ? 24 : 32),
+        border: Border.all(
+          color: (dark ? Colors.white : Colors.black).withValues(
+            alpha: dark ? 0.06 : 0.07,
+          ),
+        ),
+        boxShadow: [
+          if (!keyboardOpen)
+            BoxShadow(
+              color: Colors.black.withValues(alpha: dark ? 0.14 : 0.055),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            child: _recording
+                ? _recordingStrip(state)
+                : const SizedBox.shrink(),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            child: _pendingAttachments.isEmpty
+                ? const SizedBox.shrink()
+                : _AttachmentPreviewStrip(
+                    state: state,
+                    attachments: _pendingAttachments,
+                    onRemove: _removePendingAttachment,
+                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(5),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                GestureDetector(
+                  onTap: () => setState(() => _dockExpanded = !_dockExpanded),
+                  child: AnimatedRotation(
+                    duration: const Duration(milliseconds: 260),
+                    turns: _dockExpanded ? 0.125 : 0,
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: _dockExpanded
+                            ? state.text(context).withValues(alpha: 0.06)
+                            : Colors.transparent,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.add_rounded,
+                        size: 24,
+                        color: state
+                            .text(context)
+                            .withValues(alpha: _dockExpanded ? 1 : 0.5),
+                      ),
+                    ),
+                  ),
+                ),
+                _IconCircleButton(
+                  icon: _webSearchEnabled
+                      ? Icons.travel_explore_rounded
+                      : Icons.public_rounded,
+                  onTap: _toggleWebSearch,
+                  color: _webSearchEnabled ? _sendGreen : state.text(context),
+                  background: _webSearchEnabled
+                      ? _sendGreen.withValues(alpha: 0.14)
+                      : Colors.transparent,
+                  opacity: _webSearchEnabled ? 1 : 0.42,
+                  size: 38,
+                ),
+                const SizedBox(width: 2),
+                Expanded(
+                  child: TextField(
+                    controller: _input,
+                    minLines: 1,
+                    maxLines: 5,
+                    textInputAction: TextInputAction.newline,
+                    style: state.textStyle(context, size: 15, height: 1.45),
+                    decoration: InputDecoration(
+                      hintText: '今天想编织什么？',
+                      hintStyle: state.textStyle(
+                        context,
+                        size: 15,
+                        opacity: 0.38,
+                      ),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 10,
+                      ),
+                    ),
+                    onSubmitted: (_) => _submit(),
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                if ((_input.text.trim().isEmpty || _recording) &&
+                    !state.isStreaming)
+                  _IconCircleButton(
+                    icon: Icons.mic_none_rounded,
+                    onTap: _toggleRecording,
+                    color: _recording ? _sendGreen : state.text(context),
+                    background: _recording
+                        ? _sendGreen.withValues(alpha: 0.18)
+                        : Colors.transparent,
+                    opacity: _recording ? 1 : 0.42,
+                    size: 38,
+                  ),
+                const SizedBox(width: 3),
+                _SendButton(
+                  streaming: state.isStreaming,
+                  enabled:
+                      state.isStreaming ||
+                      ((_input.text.trim().isNotEmpty ||
+                                  _pendingAttachments.isNotEmpty) &&
+                              !state.isStreaming) &&
+                          !_recording,
+                  onTap: _submit,
+                  state: state,
+                ),
+              ],
+            ),
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            child: _dockExpanded
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+                    child: Row(
+                      children: [
+                        _ToolChip(
+                          icon: Icons.image_outlined,
+                          label: '图片',
+                          state: state,
+                          onTap: _pickChatImages,
+                        ),
+                        const SizedBox(width: 10),
+                        _ToolChip(
+                          icon: Icons.description_outlined,
+                          label: '文件',
+                          state: state,
+                          onTap: _pickChatFiles,
+                        ),
+                        const SizedBox(width: 10),
+                        _ToolChip(
+                          icon: Icons.public_rounded,
+                          label: _webSearchEnabled ? '关闭联网' : '联网搜索',
+                          state: state,
+                          onTap: _toggleWebSearch,
+                        ),
+                      ],
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+    final dock = ClipRRect(
+      borderRadius: BorderRadius.circular(_dockExpanded ? 24 : 32),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(
+          sigmaX: keyboardOpen ? 0 : 4,
+          sigmaY: keyboardOpen ? 0 : 4,
+        ),
+        child: dockSurface,
+      ),
+    );
     return AnimatedPadding(
       duration: const Duration(milliseconds: 90),
       curve: Curves.easeOut,
@@ -645,209 +833,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
           top: false,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(_dockExpanded ? 24 : 32),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 120),
-                  curve: Curves.easeOut,
-                  decoration: BoxDecoration(
-                    color: (dark ? Colors.black : Colors.white).withValues(
-                      alpha: dark ? 0.58 : 0.76,
-                    ),
-                    borderRadius: BorderRadius.circular(
-                      _dockExpanded ? 24 : 32,
-                    ),
-                    border: Border.all(
-                      color: (dark ? Colors.white : Colors.black).withValues(
-                        alpha: dark ? 0.06 : 0.07,
-                      ),
-                    ),
-                    boxShadow: [
-                      if (keyboardInset == 0)
-                        BoxShadow(
-                          color: Colors.black.withValues(
-                            alpha: dark ? 0.14 : 0.055,
-                          ),
-                          blurRadius: 18,
-                          offset: const Offset(0, 8),
-                        ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeOutCubic,
-                        child: _recording
-                            ? _recordingStrip(state)
-                            : const SizedBox.shrink(),
-                      ),
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 220),
-                        curve: Curves.easeOutCubic,
-                        child: _pendingAttachments.isEmpty
-                            ? const SizedBox.shrink()
-                            : _AttachmentPreviewStrip(
-                                state: state,
-                                attachments: _pendingAttachments,
-                                onRemove: _removePendingAttachment,
-                              ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(5),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            GestureDetector(
-                              onTap: () => setState(
-                                () => _dockExpanded = !_dockExpanded,
-                              ),
-                              child: AnimatedRotation(
-                                duration: const Duration(milliseconds: 260),
-                                turns: _dockExpanded ? 0.125 : 0,
-                                child: Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    color: _dockExpanded
-                                        ? state
-                                              .text(context)
-                                              .withValues(alpha: 0.06)
-                                        : Colors.transparent,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.add_rounded,
-                                    size: 24,
-                                    color: state
-                                        .text(context)
-                                        .withValues(
-                                          alpha: _dockExpanded ? 1 : 0.5,
-                                        ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            _IconCircleButton(
-                              icon: _webSearchEnabled
-                                  ? Icons.travel_explore_rounded
-                                  : Icons.public_rounded,
-                              onTap: _toggleWebSearch,
-                              color: _webSearchEnabled
-                                  ? _sendGreen
-                                  : state.text(context),
-                              background: _webSearchEnabled
-                                  ? _sendGreen.withValues(alpha: 0.14)
-                                  : Colors.transparent,
-                              opacity: _webSearchEnabled ? 1 : 0.42,
-                              size: 38,
-                            ),
-                            const SizedBox(width: 2),
-                            Expanded(
-                              child: TextField(
-                                controller: _input,
-                                minLines: 1,
-                                maxLines: 5,
-                                textInputAction: TextInputAction.newline,
-                                style: state.textStyle(
-                                  context,
-                                  size: 15,
-                                  height: 1.45,
-                                ),
-                                decoration: InputDecoration(
-                                  hintText: '今天想编织什么？',
-                                  hintStyle: state.textStyle(
-                                    context,
-                                    size: 15,
-                                    opacity: 0.38,
-                                  ),
-                                  border: InputBorder.none,
-                                  isDense: true,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 10,
-                                  ),
-                                ),
-                                onSubmitted: (_) => _submit(),
-                                onChanged: (_) => setState(() {}),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            if ((_input.text.trim().isEmpty || _recording) &&
-                                !state.isStreaming)
-                              _IconCircleButton(
-                                icon: Icons.mic_none_rounded,
-                                onTap: _toggleRecording,
-                                color: _recording
-                                    ? _sendGreen
-                                    : state.text(context),
-                                background: _recording
-                                    ? _sendGreen.withValues(alpha: 0.18)
-                                    : Colors.transparent,
-                                opacity: _recording ? 1 : 0.42,
-                                size: 38,
-                              ),
-                            const SizedBox(width: 3),
-                            _SendButton(
-                              enabled:
-                                  (_input.text.trim().isNotEmpty ||
-                                      _pendingAttachments.isNotEmpty) &&
-                                  !state.isStreaming &&
-                                  !_recording,
-                              onTap: _submit,
-                              state: state,
-                            ),
-                          ],
-                        ),
-                      ),
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 260),
-                        curve: Curves.easeOutCubic,
-                        child: _dockExpanded
-                            ? Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  14,
-                                  10,
-                                  14,
-                                  14,
-                                ),
-                                child: Row(
-                                  children: [
-                                    _ToolChip(
-                                      icon: Icons.image_outlined,
-                                      label: '图片',
-                                      state: state,
-                                      onTap: _pickChatImages,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    _ToolChip(
-                                      icon: Icons.description_outlined,
-                                      label: '文件',
-                                      state: state,
-                                      onTap: _pickChatFiles,
-                                    ),
-                                    const SizedBox(width: 10),
-                                    _ToolChip(
-                                      icon: Icons.public_rounded,
-                                      label: _webSearchEnabled
-                                          ? '关闭联网'
-                                          : '联网搜索',
-                                      state: state,
-                                      onTap: _toggleWebSearch,
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            child: dock,
           ),
         ),
       ),

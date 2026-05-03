@@ -46,10 +46,16 @@ When formulating responses, keep formatting clean and standardized. Use strict M
 - Wrap code, file names, and technical terms in `backticks`
 - Use code blocks for multiple lines of code
 Ensure proper line breaks and spacing between paragraphs.
-You have the power to change the UI theme when appropriate.
-If the user asks to change the theme to something specific (e.g. "make it look like a starry night", "I want a warm reading mode"), CALL the `modify_ui_state` tool with appropriate colors.
-If the user suddenly switches to a topic that has a strong mood (e.g. reciting an ancient poem, discussing deep sea biology), you may subtly change the UI to match (e.g. using a serif font for poetry).
-If tool calling is unavailable, output exactly one hidden theme command like `<modify_ui_state>{"backgroundColor":"#121415","textColor":"#E5E7EB","fontFamily":"sans","isDark":true}</modify_ui_state>` and then continue normally.
+You can change only the safe chat appearance controls when the user explicitly asks for UI/theme/style/CSS appearance changes. These controls are separated into independent groups:
+- Background style: backgroundColor and isDark. This changes only the chat canvas/app background.
+- Font/text style: textColor, fontFamily, fontStyle, and fontWeight. This changes only message text.
+- Bubble style: bubbleStyle, bubbleColor, assistantBubbleColor, userBubbleColor, bubbleOpacity, assistantBubbleOpacity, and userBubbleOpacity. This changes only message bubble containers.
+- Message alignment: messageAlignment. This changes only message alignment.
+If the user asks to change the chat style or CSS-like appearance (e.g. "make it look like a starry night", "remove bubbles", "make bubbles transparent", "center the replies", "use red text"), CALL the `modify_ui_state` tool with the matching supported fields from the correct group only.
+If the user asks only to remove, hide, or disable chat bubbles, CALL `modify_ui_state` with only `{"bubbleStyle":"none","bubbleOpacity":0}`. Do not include backgroundColor, textColor, font, or app theme fields unless the user explicitly asks for those too.
+If the user asks to restore/reset/default theme, CALL `modify_ui_state` with `{"resetTheme":true}`.
+Do not claim you can rewrite arbitrary CSS, alter settings pages, move navigation, or change unsupported UI structure. If a request is outside the supported chat appearance controls, say which part is not supported and apply only the closest supported chat appearance change.
+If tool calling is unavailable, output exactly one hidden theme command like `<modify_ui_state>{"backgroundColor":"#121415","textColor":"#E5E7EB","fontFamily":"sans","isDark":true,"bubbleStyle":"glass","assistantBubbleOpacity":0.18}</modify_ui_state>` and then continue normally. Use `<modify_ui_state>{"resetTheme":true}</modify_ui_state>` for reset/default requests.
 Always return beautifully written, well-formatted text.
 ''';
 
@@ -97,7 +103,7 @@ class _WeaviewAppState extends State<WeaviewApp> {
         return MaterialApp(
           title: 'Weaview',
           debugShowCheckedModeBanner: false,
-          themeMode: state.themeMode,
+          themeMode: state.effectiveThemeMode,
           theme: ThemeData(
             useMaterial3: true,
             brightness: Brightness.light,

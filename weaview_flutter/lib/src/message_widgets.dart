@@ -45,51 +45,34 @@ class _MessageBubbleState extends State<_MessageBubble> {
     final message = widget.message;
     final isUser = message.role == 'user';
     final maxWidth = MediaQuery.sizeOf(context).width * 0.78;
+    final textAlign = _messageTextAlign(state);
     if (isUser) {
       return Align(
-        alignment: Alignment.centerRight,
+        alignment: _messageShellAlignment(state, isUser: true),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.end,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Flexible(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+                crossAxisAlignment: _messageColumnAlignment(
+                  state,
+                  fallback: CrossAxisAlignment.end,
+                ),
                 children: [
                   GestureDetector(
                     behavior: HitTestBehavior.translucent,
                     onTap: _toggleActions,
                     child: Container(
                       constraints: BoxConstraints(maxWidth: maxWidth),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 13,
-                      ),
-                      decoration: BoxDecoration(
-                        color: state.isDark(context)
-                            ? Colors.white.withValues(alpha: 0.055)
-                            : _accentMint.withValues(alpha: 0.12),
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(25),
-                          topRight: Radius.circular(8),
-                          bottomLeft: Radius.circular(25),
-                          bottomRight: Radius.circular(25),
-                        ),
-                        border: Border.all(
-                          color: state.isDark(context)
-                              ? Colors.white.withValues(alpha: 0.1)
-                              : Colors.white.withValues(alpha: 0.9),
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 18,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
+                      padding: _messageBubblePadding(state),
+                      decoration: _messageBubbleDecoration(
+                        context,
+                        state,
+                        isUser: true,
                       ),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment: _messageColumnAlignment(state),
                         children: [
                           if (message.attachments.isNotEmpty) ...[
                             _MessageAttachmentGrid(
@@ -103,6 +86,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
                           if (message.content.trim().isNotEmpty)
                             Text(
                               message.content,
+                              textAlign: textAlign,
                               style: state.textStyle(
                                 context,
                                 size: 14.5,
@@ -157,7 +141,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
     }
 
     return Align(
-      alignment: Alignment.centerLeft,
+      alignment: _messageShellAlignment(state, isUser: false),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -180,7 +164,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
                   if (!message.isThinking) _toggleActions();
                 },
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: _messageColumnAlignment(state),
                   children: [
                     if (message.reasoning.trim().isNotEmpty ||
                         message.isThinking) ...[
@@ -191,66 +175,17 @@ class _MessageBubbleState extends State<_MessageBubble> {
                       ),
                       const SizedBox(height: 10),
                     ],
-                    if (message.content.trim().isEmpty && message.isThinking)
-                      _ThinkingDots(state: state)
-                    else
-                      MarkdownBody(
-                        data: message.content.isEmpty ? ' ' : message.content,
-                        selectable: true,
-                        styleSheet:
-                            MarkdownStyleSheet.fromTheme(
-                              Theme.of(context),
-                            ).copyWith(
-                              p: state.textStyle(
-                                context,
-                                size: 15,
-                                height: 1.78,
-                              ),
-                              h1: state.textStyle(
-                                context,
-                                size: 24,
-                                weight: FontWeight.w600,
-                              ),
-                              h2: state.textStyle(
-                                context,
-                                size: 21,
-                                weight: FontWeight.w600,
-                              ),
-                              h3: state.textStyle(
-                                context,
-                                size: 18,
-                                weight: FontWeight.w600,
-                              ),
-                              listBullet: state.textStyle(
-                                context,
-                                size: 15,
-                                height: 1.6,
-                              ),
-                              code: state
-                                  .textStyle(context, size: 13)
-                                  .copyWith(
-                                    backgroundColor: state
-                                        .text(context)
-                                        .withValues(alpha: 0.06),
-                                    fontFamily: 'monospace',
-                                  ),
-                              codeblockDecoration: BoxDecoration(
-                                color: state
-                                    .text(context)
-                                    .withValues(alpha: 0.06),
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              blockquoteDecoration: BoxDecoration(
-                                border: Border(
-                                  left: BorderSide(
-                                    color: state.accents[0].withValues(
-                                      alpha: 0.8,
-                                    ),
-                                    width: 3,
-                                  ),
-                                ),
-                              ),
-                            ),
+                    if (message.content.trim().isNotEmpty ||
+                        !message.isThinking)
+                      _StyledMessageSurface(
+                        state: state,
+                        isUser: false,
+                        maxWidth: maxWidth,
+                        child: _AiMarkdown(
+                          state: state,
+                          data: message.content.isEmpty ? ' ' : message.content,
+                          textAlign: textAlign,
+                        ),
                       ),
                     AnimatedSize(
                       duration: const Duration(milliseconds: 120),
@@ -285,6 +220,562 @@ class _MessageBubbleState extends State<_MessageBubble> {
       ),
     );
   }
+}
+
+Alignment _messageShellAlignment(WeaviewState state, {required bool isUser}) {
+  return switch (state.messageAlignment) {
+    'center' => Alignment.center,
+    'right' => Alignment.centerRight,
+    _ => isUser ? Alignment.centerRight : Alignment.centerLeft,
+  };
+}
+
+CrossAxisAlignment _messageColumnAlignment(
+  WeaviewState state, {
+  CrossAxisAlignment fallback = CrossAxisAlignment.start,
+}) {
+  return switch (state.messageAlignment) {
+    'center' => CrossAxisAlignment.center,
+    'right' => CrossAxisAlignment.end,
+    'left' => CrossAxisAlignment.start,
+    _ => fallback,
+  };
+}
+
+TextAlign _messageTextAlign(WeaviewState state) {
+  return switch (state.messageAlignment) {
+    'center' => TextAlign.center,
+    'right' => TextAlign.right,
+    _ => TextAlign.left,
+  };
+}
+
+WrapAlignment _markdownWrapAlignment(TextAlign align) {
+  return switch (align) {
+    TextAlign.center => WrapAlignment.center,
+    TextAlign.right || TextAlign.end => WrapAlignment.end,
+    _ => WrapAlignment.start,
+  };
+}
+
+EdgeInsets _messageBubblePadding(WeaviewState state) {
+  return state.bubbleStyle == 'none'
+      ? const EdgeInsets.symmetric(horizontal: 2, vertical: 2)
+      : const EdgeInsets.symmetric(horizontal: 18, vertical: 13);
+}
+
+BorderRadius _messageBubbleRadius(bool isUser) {
+  return isUser
+      ? const BorderRadius.only(
+          topLeft: Radius.circular(25),
+          topRight: Radius.circular(8),
+          bottomLeft: Radius.circular(25),
+          bottomRight: Radius.circular(25),
+        )
+      : const BorderRadius.only(
+          topLeft: Radius.circular(8),
+          topRight: Radius.circular(22),
+          bottomLeft: Radius.circular(22),
+          bottomRight: Radius.circular(22),
+        );
+}
+
+BoxDecoration? _messageBubbleDecoration(
+  BuildContext context,
+  WeaviewState state, {
+  required bool isUser,
+}) {
+  final style = state.bubbleStyle;
+  if (style == 'none') return null;
+  final dark = state.isDark(context);
+  final fallbackColor = isUser
+      ? (dark ? Colors.white : _accentMint)
+      : state.accents[0];
+  final configuredColor = isUser
+      ? state.userBubbleOverride
+      : state.assistantBubbleOverride;
+  final color = configuredColor ?? fallbackColor;
+  final opacity =
+      (isUser ? state.userBubbleOpacity : state.assistantBubbleOpacity)
+          .clamp(0.0, 1.0)
+          .toDouble();
+  final radius = _messageBubbleRadius(isUser);
+  final borderColor = color.withValues(
+    alpha: style == 'outline' ? 0.55 : (dark ? 0.16 : 0.22),
+  );
+
+  if (style == 'minimal' && !isUser && configuredColor == null) return null;
+  if (style == 'outline') {
+    return BoxDecoration(
+      color: color.withValues(alpha: 0.02),
+      borderRadius: radius,
+      border: Border.all(color: borderColor),
+    );
+  }
+
+  final fillOpacity = switch (style) {
+    'solid' => math.max(opacity, 0.58),
+    'glass' => math.max(opacity, 0.10),
+    _ => opacity,
+  };
+  return BoxDecoration(
+    color: color.withValues(alpha: fillOpacity),
+    borderRadius: radius,
+    border: Border.all(color: borderColor),
+    boxShadow: style == 'solid'
+        ? null
+        : [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: dark ? 0.10 : 0.04),
+              blurRadius: style == 'glass' ? 22 : 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+  );
+}
+
+class _StyledMessageSurface extends StatelessWidget {
+  const _StyledMessageSurface({
+    required this.state,
+    required this.isUser,
+    required this.maxWidth,
+    required this.child,
+  });
+
+  final WeaviewState state;
+  final bool isUser;
+  final double maxWidth;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final decoration = _messageBubbleDecoration(context, state, isUser: isUser);
+    final content = Container(
+      constraints: BoxConstraints(maxWidth: maxWidth),
+      padding: _messageBubblePadding(state),
+      decoration: decoration,
+      child: child,
+    );
+    if (state.bubbleStyle == 'glass' && decoration != null) {
+      return ClipRRect(
+        borderRadius: _messageBubbleRadius(isUser),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: content,
+        ),
+      );
+    }
+    return content;
+  }
+}
+
+class _AiMarkdown extends StatelessWidget {
+  const _AiMarkdown({
+    required this.state,
+    required this.data,
+    required this.textAlign,
+  });
+
+  final WeaviewState state;
+  final String data;
+  final TextAlign textAlign;
+
+  @override
+  Widget build(BuildContext context) {
+    final segments = _splitMarkdownSegments(data);
+    return Column(
+      crossAxisAlignment: _messageColumnAlignment(state),
+      children: [
+        for (var i = 0; i < segments.length; i++) ...[
+          if (i > 0) const SizedBox(height: 12),
+          switch (segments[i].kind) {
+            _MarkdownSegmentKind.markdown => MarkdownBody(
+              data: segments[i].text,
+              selectable: true,
+              styleSheet: _aiMarkdownStyle(context, state, textAlign),
+            ),
+            _MarkdownSegmentKind.code => _CodeBlock(
+              state: state,
+              language: segments[i].language,
+              code: segments[i].text,
+            ),
+            _MarkdownSegmentKind.formula => _FormulaBlock(
+              state: state,
+              formula: segments[i].text,
+            ),
+          },
+        ],
+      ],
+    );
+  }
+}
+
+enum _MarkdownSegmentKind { markdown, code, formula }
+
+class _MarkdownSegment {
+  const _MarkdownSegment({
+    required this.kind,
+    required this.text,
+    this.language = '',
+  });
+
+  final _MarkdownSegmentKind kind;
+  final String text;
+  final String language;
+}
+
+List<_MarkdownSegment> _splitMarkdownSegments(String source) {
+  final segments = <_MarkdownSegment>[];
+  final codeFence = RegExp(r'```([^\r\n`]*)\r?\n([\s\S]*?)```');
+  var cursor = 0;
+  for (final match in codeFence.allMatches(source)) {
+    _addMarkdownAndFormulaSegments(
+      segments,
+      source.substring(cursor, match.start),
+    );
+    segments.add(
+      _MarkdownSegment(
+        kind: _MarkdownSegmentKind.code,
+        language: match.group(1)?.trim() ?? '',
+        text: (match.group(2) ?? '').replaceFirst(RegExp(r'\r?\n$'), ''),
+      ),
+    );
+    cursor = match.end;
+  }
+  _addMarkdownAndFormulaSegments(segments, source.substring(cursor));
+  if (segments.isEmpty) {
+    segments.add(
+      const _MarkdownSegment(kind: _MarkdownSegmentKind.markdown, text: ' '),
+    );
+  }
+  return segments;
+}
+
+void _addMarkdownAndFormulaSegments(
+  List<_MarkdownSegment> segments,
+  String source,
+) {
+  if (source.isEmpty) return;
+  final formulaBlock = RegExp(r'\$\$([\s\S]*?)\$\$');
+  var cursor = 0;
+  for (final match in formulaBlock.allMatches(source)) {
+    final markdown = source.substring(cursor, match.start);
+    if (markdown.trim().isNotEmpty) {
+      segments.add(
+        _MarkdownSegment(kind: _MarkdownSegmentKind.markdown, text: markdown),
+      );
+    }
+    final formula = match.group(1)?.trim() ?? '';
+    if (formula.isNotEmpty) {
+      segments.add(
+        _MarkdownSegment(kind: _MarkdownSegmentKind.formula, text: formula),
+      );
+    }
+    cursor = match.end;
+  }
+  final tail = source.substring(cursor);
+  if (tail.trim().isNotEmpty || segments.isEmpty) {
+    segments.add(
+      _MarkdownSegment(
+        kind: _MarkdownSegmentKind.markdown,
+        text: tail.trim().isEmpty ? ' ' : tail,
+      ),
+    );
+  }
+}
+
+MarkdownStyleSheet _aiMarkdownStyle(
+  BuildContext context,
+  WeaviewState state,
+  TextAlign textAlign,
+) {
+  final text = state.text(context);
+  final dark = state.isDark(context);
+  final tableBorder = text.withValues(alpha: dark ? 0.16 : 0.10);
+  final wrapAlign = _markdownWrapAlignment(textAlign);
+  return MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+    a: state
+        .textStyle(context, size: 15, height: 1.7, weight: FontWeight.w600)
+        .copyWith(color: _sendGreen),
+    p: state.textStyle(context, size: 15, height: 1.76),
+    h1: state.textStyle(context, size: 23, weight: FontWeight.w700),
+    h2: state.textStyle(context, size: 20, weight: FontWeight.w700),
+    h3: state.textStyle(context, size: 17, weight: FontWeight.w700),
+    blockSpacing: 10,
+    textAlign: wrapAlign,
+    h1Align: wrapAlign,
+    h2Align: wrapAlign,
+    h3Align: wrapAlign,
+    h4Align: wrapAlign,
+    h5Align: wrapAlign,
+    h6Align: wrapAlign,
+    blockquoteAlign: wrapAlign,
+    unorderedListAlign: wrapAlign,
+    orderedListAlign: wrapAlign,
+    codeblockAlign: wrapAlign,
+    listIndent: 22,
+    listBullet: state.textStyle(context, size: 15, height: 1.6),
+    listBulletPadding: const EdgeInsets.only(right: 7),
+    code: state
+        .textStyle(context, size: 13.5)
+        .copyWith(
+          backgroundColor: state.text(context).withValues(alpha: 0.075),
+          fontFamily: 'monospace',
+          color: text,
+        ),
+    codeblockPadding: const EdgeInsets.all(12),
+    codeblockDecoration: BoxDecoration(
+      color: text.withValues(alpha: dark ? 0.10 : 0.055),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: text.withValues(alpha: 0.08)),
+    ),
+    blockquote: state.textStyle(
+      context,
+      size: 14.5,
+      height: 1.65,
+      opacity: 0.8,
+    ),
+    blockquotePadding: const EdgeInsets.fromLTRB(13, 10, 13, 10),
+    blockquoteDecoration: BoxDecoration(
+      color: state.accents[0].withValues(alpha: dark ? 0.10 : 0.16),
+      borderRadius: BorderRadius.circular(14),
+      border: Border(
+        left: BorderSide(
+          color: state.accents[0].withValues(alpha: 0.9),
+          width: 4,
+        ),
+      ),
+    ),
+    tableColumnWidth: const IntrinsicColumnWidth(),
+    tableHead: state.textStyle(context, size: 13, weight: FontWeight.w800),
+    tableBody: state.textStyle(context, size: 13, height: 1.45),
+    tableHeadAlign: textAlign,
+    tablePadding: const EdgeInsets.symmetric(vertical: 6),
+    tableBorder: TableBorder.all(
+      color: tableBorder,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    tableCellsPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+    tableHeadCellsPadding: const EdgeInsets.symmetric(
+      horizontal: 12,
+      vertical: 10,
+    ),
+    tableCellsDecoration: BoxDecoration(
+      color: text.withValues(alpha: dark ? 0.045 : 0.028),
+    ),
+    tableHeadCellsDecoration: BoxDecoration(
+      color: state.accents[0].withValues(alpha: dark ? 0.16 : 0.22),
+    ),
+    horizontalRuleDecoration: BoxDecoration(
+      border: Border(
+        top: BorderSide(color: text.withValues(alpha: 0.10), width: 1),
+      ),
+    ),
+  );
+}
+
+class _CodeBlock extends StatelessWidget {
+  const _CodeBlock({
+    required this.state,
+    required this.language,
+    required this.code,
+  });
+
+  final WeaviewState state;
+  final String language;
+  final String code;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = state.isDark(context);
+    final text = state.text(context);
+    final label = language.trim().isEmpty
+        ? 'TEXT'
+        : language.trim().toUpperCase();
+    return Container(
+      width: double.infinity,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: text.withValues(alpha: dark ? 0.09 : 0.055),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: text.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+            decoration: BoxDecoration(
+              color: text.withValues(alpha: dark ? 0.08 : 0.045),
+              border: Border(
+                bottom: BorderSide(color: text.withValues(alpha: 0.07)),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.code_rounded,
+                  size: 15,
+                  color: text.withValues(alpha: 0.55),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: state
+                        .textStyle(
+                          context,
+                          size: 11.5,
+                          weight: FontWeight.w800,
+                          opacity: 0.58,
+                        )
+                        .copyWith(letterSpacing: 1.1),
+                  ),
+                ),
+                _CopyMiniButton(
+                  state: state,
+                  tooltip: '复制代码',
+                  onTap: () => _copyText(context, code, '已复制代码。'),
+                ),
+              ],
+            ),
+          ),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.all(13),
+            child: SelectableText(
+              code.isEmpty ? ' ' : code,
+              style: state
+                  .textStyle(context, size: 13.2, height: 1.55)
+                  .copyWith(
+                    fontFamily: 'monospace',
+                    color: text.withValues(alpha: 0.88),
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FormulaBlock extends StatelessWidget {
+  const _FormulaBlock({required this.state, required this.formula});
+
+  final WeaviewState state;
+  final String formula;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = state.text(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(13, 11, 9, 13),
+      decoration: BoxDecoration(
+        color: state.accents[1].withValues(
+          alpha: state.isDark(context) ? 0.11 : 0.20,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: state.accents[0].withValues(alpha: 0.30)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.functions_rounded,
+                size: 16,
+                color: text.withValues(alpha: 0.55),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  '公式',
+                  style: state
+                      .textStyle(
+                        context,
+                        size: 11.5,
+                        weight: FontWeight.w800,
+                        opacity: 0.56,
+                      )
+                      .copyWith(letterSpacing: 1.2),
+                ),
+              ),
+              _CopyMiniButton(
+                state: state,
+                tooltip: '复制公式',
+                onTap: () => _copyText(context, formula, '已复制公式。'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SelectableText(
+              formula,
+              style: state
+                  .textStyle(context, size: 16, height: 1.55)
+                  .copyWith(
+                    fontFamily: 'monospace',
+                    fontStyle: FontStyle.italic,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CopyMiniButton extends StatelessWidget {
+  const _CopyMiniButton({
+    required this.state,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final WeaviewState state;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: state.text(context).withValues(alpha: 0.065),
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            width: 30,
+            height: 30,
+            child: Icon(
+              Icons.content_copy_rounded,
+              size: 15,
+              color: state.text(context).withValues(alpha: 0.58),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+Future<void> _copyText(
+  BuildContext context,
+  String text,
+  String message,
+) async {
+  await Clipboard.setData(ClipboardData(text: text));
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+  );
 }
 
 class _TranslationBlock extends StatelessWidget {
@@ -559,68 +1050,6 @@ class _ReasoningPanelState extends State<_ReasoningPanel> {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _ThinkingDots extends StatefulWidget {
-  const _ThinkingDots({required this.state});
-
-  final WeaviewState state;
-
-  @override
-  State<_ThinkingDots> createState() => _ThinkingDotsState();
-}
-
-class _ThinkingDotsState extends State<_ThinkingDots>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController controller;
-
-  @override
-  void initState() {
-    super.initState();
-    controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (var i = 0; i < 3; i++)
-              Container(
-                width: 6,
-                height: 6,
-                margin: const EdgeInsets.only(right: 5),
-                decoration: BoxDecoration(
-                  color: widget.state
-                      .text(context)
-                      .withValues(
-                        alpha:
-                            0.25 +
-                            0.45 *
-                                ((math.sin(controller.value * math.pi * 2 + i) +
-                                        1) /
-                                    2),
-                      ),
-                  shape: BoxShape.circle,
-                ),
-              ),
-          ],
-        );
-      },
     );
   }
 }

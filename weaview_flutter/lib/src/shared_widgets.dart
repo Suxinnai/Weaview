@@ -145,11 +145,13 @@ class _IconCircleButton extends StatelessWidget {
 class _SendButton extends StatelessWidget {
   const _SendButton({
     required this.enabled,
+    required this.streaming,
     required this.onTap,
     required this.state,
   });
 
   final bool enabled;
+  final bool streaming;
   final VoidCallback onTap;
   final WeaviewState state;
 
@@ -164,13 +166,16 @@ class _SendButton extends StatelessWidget {
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: enabled
-              ? _sendGreen
+              ? streaming
+                    ? const Color(0xFFF97316)
+                    : _sendGreen
               : state.text(context).withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(999),
           boxShadow: enabled
               ? [
                   BoxShadow(
-                    color: _sendGreen.withValues(alpha: 0.35),
+                    color: (streaming ? const Color(0xFFF97316) : _sendGreen)
+                        .withValues(alpha: 0.32),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -178,7 +183,7 @@ class _SendButton extends StatelessWidget {
               : null,
         ),
         child: Text(
-          '编织',
+          streaming ? '编织中' : '编织',
           style: state
               .textStyle(
                 context,
@@ -539,7 +544,8 @@ class _GlassPanel extends StatelessWidget {
         filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
         child: Container(
           decoration: BoxDecoration(
-            color: (state.isDark(context) ? _layerDark : Colors.white)
+            color: state
+                .layer(context)
                 .withValues(alpha: state.isDark(context) ? 0.9 : 0.94),
             borderRadius: BorderRadius.circular(radius),
             border: Border.all(
@@ -822,7 +828,7 @@ class _SettingsActionBar extends StatelessWidget {
     final bottom = MediaQuery.paddingOf(context).bottom;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: state.isDark(context) ? _baseDark : const Color(0xFFF8F9FA),
+        color: state.background(context),
         border: Border(
           top: BorderSide(color: state.text(context).withValues(alpha: 0.06)),
         ),
@@ -1198,7 +1204,7 @@ class _SegmentedPills extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: value == item.key
-                        ? (state.isDark(context) ? _layerDark : Colors.white)
+                        ? state.layer(context)
                         : Colors.transparent,
                     borderRadius: BorderRadius.circular(999),
                   ),
@@ -1567,6 +1573,30 @@ ThemeMode _decodeThemeMode(String? value) {
   };
 }
 
+String _enumPref(String? value, List<String> allowed, String fallback) {
+  if (value == null) return fallback;
+  final normalized = value.trim().toLowerCase();
+  return allowed.contains(normalized) ? normalized : fallback;
+}
+
+String? _enumArg(dynamic value, List<String> allowed) {
+  if (value == null) return null;
+  final normalized = value.toString().trim().toLowerCase();
+  return allowed.contains(normalized) ? normalized : null;
+}
+
+double? _opacityArg(dynamic value) {
+  if (value == null) return null;
+  final parsed = switch (value) {
+    num number => number.toDouble(),
+    String text => double.tryParse(text.trim()),
+    _ => null,
+  };
+  if (parsed == null || parsed.isNaN || parsed.isInfinite) return null;
+  final normalized = parsed > 1 ? parsed / 100 : parsed;
+  return normalized.clamp(0.0, 1.0).toDouble();
+}
+
 List<T> _decodeList<T>(String? value, T Function(dynamic) decoder) {
   if (value == null) return [];
   try {
@@ -1612,6 +1642,16 @@ Color providerFallbackColor(String name) {
   if (lower.contains('mini')) return const Color(0xFF8B5CF6);
   if (lower.contains('anthropic')) return const Color(0xFFB45309);
   return Colors.indigo;
+}
+
+double _contrastRatio(Color a, Color b) {
+  final l1 = a.computeLuminance() + 0.05;
+  final l2 = b.computeLuminance() + 0.05;
+  return l1 > l2 ? l1 / l2 : l2 / l1;
+}
+
+Color _readableTextFor(Color background) {
+  return background.computeLuminance() > 0.48 ? _textLight : _textDark;
 }
 
 ImageProvider? avatarImage(String value) {
