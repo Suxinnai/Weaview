@@ -392,6 +392,7 @@ class _AttachmentVisual extends StatelessWidget {
     return const Center(child: Icon(Icons.description_outlined, size: 24));
   }
 }
+
 class ModelDropdownItem extends StatelessWidget {
   const ModelDropdownItem({
     required this.state,

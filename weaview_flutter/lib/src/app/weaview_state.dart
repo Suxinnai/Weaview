@@ -2,15 +2,16 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/app_utils.dart';
 import '../data/ai/ai_gateway.dart';
 import '../domain/models.dart';
+import 'ai_theme_guard.dart';
 import 'app_constants.dart';
+import 'weaview_preferences.dart';
 
 class WeaviewState extends ChangeNotifier {
-  SharedPreferences? _prefs;
+  WeaviewPreferences? _prefs;
   bool loaded = false;
   ThemeMode themeMode = ThemeMode.system;
   Color? backgroundOverride;
@@ -70,64 +71,37 @@ class WeaviewState extends ChangeNotifier {
   }
 
   Future<void> load() async {
-    _prefs = await SharedPreferences.getInstance();
+    _prefs = await WeaviewPreferences.open();
     final prefs = _prefs!;
-    systemPrompt = prefs.getString('system_prompt') ?? defaultSystemInstruction;
-    emotionEnabled = prefs.getBool('emotion_enabled') ?? true;
-    globalMemoryEnabled = prefs.getBool('global_memory_enabled') ?? true;
-    referenceHistoryEnabled =
-        prefs.getBool('reference_history_enabled') ?? false;
-    assistantAvatar = prefs.getString('assistant_avatar') ?? '';
-    userAvatar = prefs.getString('user_avatar') ?? '';
-    userName = prefs.getString('user_name') ?? '织梦者';
-    themeMode = decodeThemeMode(prefs.getString('theme_mode'));
-    backgroundOverride = colorFromHex(prefs.getString('theme_background'));
-    textOverride = colorFromHex(prefs.getString('theme_text'));
+    systemPrompt = prefs.systemPrompt;
+    emotionEnabled = prefs.emotionEnabled;
+    globalMemoryEnabled = prefs.globalMemoryEnabled;
+    referenceHistoryEnabled = prefs.referenceHistoryEnabled;
+    assistantAvatar = prefs.assistantAvatar;
+    userAvatar = prefs.userAvatar;
+    userName = prefs.userName;
+    themeMode = prefs.themeMode;
+    backgroundOverride = prefs.themeBackground;
+    textOverride = prefs.themeText;
     if (themeMode != ThemeMode.system && backgroundOverride != null) {
       _clearGlobalThemeOverrides();
     }
-    assistantBubbleOverride = colorFromHex(
-      prefs.getString('theme_assistant_bubble'),
-    );
-    userBubbleOverride = colorFromHex(prefs.getString('theme_user_bubble'));
-    fontMood = prefs.getString('theme_font_family') ?? 'sans';
-    fontStyleMood = enumPref(prefs.getString('theme_font_style'), const [
-      'normal',
-      'italic',
-    ], 'normal');
-    fontWeightMood = enumPref(prefs.getString('theme_font_weight'), const [
-      'normal',
-      'medium',
-      'bold',
-    ], 'normal');
-    bubbleStyle = enumPref(prefs.getString('theme_bubble_style'), const [
-      'minimal',
-      'none',
-      'glass',
-      'solid',
-      'outline',
-    ], 'minimal');
-    messageAlignment = enumPref(
-      prefs.getString('theme_message_alignment'),
-      const ['left', 'center', 'right'],
-      'left',
-    );
-    assistantBubbleOpacity =
-        prefs.getDouble('theme_assistant_bubble_opacity') ?? 0.08;
-    userBubbleOpacity = prefs.getDouble('theme_user_bubble_opacity') ?? 0.12;
+    assistantBubbleOverride = prefs.assistantBubble;
+    userBubbleOverride = prefs.userBubble;
+    fontMood = prefs.fontFamily;
+    fontStyleMood = prefs.fontStyle;
+    fontWeightMood = prefs.fontWeight;
+    bubbleStyle = prefs.bubbleStyle;
+    messageAlignment = prefs.messageAlignment;
+    assistantBubbleOpacity = prefs.assistantBubbleOpacity;
+    userBubbleOpacity = prefs.userBubbleOpacity;
 
-    final savedSessions = decodeList(
-      prefs.getString('chat_sessions'),
-      ChatSession.fromJson,
-    );
+    final savedSessions = prefs.loadChatSessions();
     chatSessions
       ..clear()
       ..addAll(savedSessions);
 
-    final savedProviders = decodeList(
-      prefs.getString('ai_providers'),
-      AiProvider.fromJson,
-    );
+    final savedProviders = prefs.loadProviders();
     if (savedProviders.isNotEmpty) {
       final savedNames = savedProviders
           .map((provider) => provider.name.toLowerCase())
@@ -165,16 +139,9 @@ class WeaviewState extends ChangeNotifier {
     }
     _persistProviders();
 
-    final assignmentText = prefs.getString('ai_model_assignments');
-    if (assignmentText != null) {
-      try {
-        final decoded = jsonDecode(assignmentText) as Map<String, dynamic>;
-        modelAssignments = {
-          ...ModelAssignment.defaults(),
-          for (final entry in decoded.entries)
-            entry.key: ModelAssignment.fromJson(entry.value),
-        };
-      } catch (_) {}
+    final savedAssignments = prefs.loadModelAssignments();
+    if (savedAssignments != null) {
+      modelAssignments = {...ModelAssignment.defaults(), ...savedAssignments};
     }
     final chatAssignment = modelAssignments['chat'];
     if (chatAssignment != null &&
@@ -192,27 +159,12 @@ class WeaviewState extends ChangeNotifier {
       };
     }
 
-    final savedMemories = prefs.getString('ai_memories');
-    if (savedMemories != null) {
-      try {
-        memories = (jsonDecode(savedMemories) as List)
-            .map((item) => item.toString())
-            .toList();
-      } catch (_) {}
-    }
+    memories = prefs.loadMemories();
 
-    final savedSearch = prefs.getString('ai_search_config');
-    if (savedSearch != null) {
-      try {
-        searchConfig = SearchConfig.fromJson(jsonDecode(savedSearch));
-      } catch (_) {}
-    }
+    searchConfig = prefs.loadSearchConfig() ?? searchConfig;
 
-    activeTtsId = prefs.getString('ai_active_tts_id') ?? 'system';
-    final savedTts = decodeList(
-      prefs.getString('ai_tts_providers'),
-      TtsProviderConfig.fromJson,
-    );
+    activeTtsId = prefs.activeTtsId;
+    final savedTts = prefs.loadTtsProviders();
     if (savedTts.isNotEmpty) {
       ttsProviders = savedTts;
     }
@@ -292,12 +244,12 @@ class WeaviewState extends ChangeNotifier {
     if (mode != ThemeMode.system) {
       _clearGlobalThemeOverrides();
     }
-    _prefs?.setString('theme_mode', mode.name);
+    _prefs?.saveThemeMode(mode);
     notifyListeners();
   }
 
   void applyAiTheme(Map<String, dynamic> args, {String? userPrompt}) {
-    args = _guardAiThemeArgs(args, userPrompt: userPrompt);
+    args = AiThemeGuard.guard(args, userPrompt: userPrompt);
     if (args.isEmpty) return;
     if (args['resetTheme'] == true) {
       resetAiTheme();
@@ -339,45 +291,42 @@ class WeaviewState extends ChangeNotifier {
     }
     if (bg != null) {
       backgroundOverride = nextBackground;
-      _prefs?.setString('theme_background', colorToHex(nextBackground!));
+      _prefs?.saveThemeBackground(nextBackground!);
     }
     if (txt != null || bg != null && nextText != null) {
       textOverride = nextText;
-      _prefs?.setString('theme_text', colorToHex(nextText!));
+      _prefs?.saveThemeText(nextText!);
     }
     final family = args['fontFamily']?.toString();
     if (family == 'serif' || family == 'sans') {
       fontMood = family!;
-      _prefs?.setString('theme_font_family', family);
+      _prefs?.saveFontFamily(family);
     }
     if (args['isDark'] is bool || bg != null) {
       themeMode = proposedThemeMode;
-      _prefs?.setString('theme_mode', themeMode.name);
+      _prefs?.saveThemeMode(themeMode);
     }
     if (assistantBubble != null) {
       assistantBubbleOverride = assistantBubble;
-      _prefs?.setString('theme_assistant_bubble', colorToHex(assistantBubble));
+      _prefs?.saveAssistantBubble(assistantBubble);
     }
     if (userBubble != null) {
       userBubbleOverride = userBubble;
-      _prefs?.setString('theme_user_bubble', colorToHex(userBubble));
+      _prefs?.saveUserBubble(userBubble);
     }
     final nextAssistantOpacity =
         opacityArg(args['assistantBubbleOpacity']) ??
         opacityArg(args['bubbleOpacity']);
     if (nextAssistantOpacity != null) {
       assistantBubbleOpacity = nextAssistantOpacity;
-      _prefs?.setDouble(
-        'theme_assistant_bubble_opacity',
-        assistantBubbleOpacity,
-      );
+      _prefs?.saveAssistantBubbleOpacity(assistantBubbleOpacity);
     }
     final nextUserOpacity =
         opacityArg(args['userBubbleOpacity']) ??
         opacityArg(args['bubbleOpacity']);
     if (nextUserOpacity != null) {
       userBubbleOpacity = nextUserOpacity;
-      _prefs?.setDouble('theme_user_bubble_opacity', userBubbleOpacity);
+      _prefs?.saveUserBubbleOpacity(userBubbleOpacity);
     }
     final nextBubbleStyle = enumArg(args['bubbleStyle'], const [
       'minimal',
@@ -388,7 +337,7 @@ class WeaviewState extends ChangeNotifier {
     ]);
     if (nextBubbleStyle != null) {
       bubbleStyle = nextBubbleStyle;
-      _prefs?.setString('theme_bubble_style', bubbleStyle);
+      _prefs?.saveBubbleStyle(bubbleStyle);
     }
     final nextAlignment = enumArg(args['messageAlignment'], const [
       'left',
@@ -397,7 +346,7 @@ class WeaviewState extends ChangeNotifier {
     ]);
     if (nextAlignment != null) {
       messageAlignment = nextAlignment;
-      _prefs?.setString('theme_message_alignment', messageAlignment);
+      _prefs?.saveMessageAlignment(messageAlignment);
     }
     final nextFontStyle = enumArg(args['fontStyle'], const [
       'normal',
@@ -405,7 +354,7 @@ class WeaviewState extends ChangeNotifier {
     ]);
     if (nextFontStyle != null) {
       fontStyleMood = nextFontStyle;
-      _prefs?.setString('theme_font_style', fontStyleMood);
+      _prefs?.saveFontStyle(fontStyleMood);
     }
     final nextFontWeight = enumArg(args['fontWeight'], const [
       'normal',
@@ -414,148 +363,16 @@ class WeaviewState extends ChangeNotifier {
     ]);
     if (nextFontWeight != null) {
       fontWeightMood = nextFontWeight;
-      _prefs?.setString('theme_font_weight', fontWeightMood);
+      _prefs?.saveFontWeight(fontWeightMood);
     }
     themePulse++;
     notifyListeners();
   }
 
-  Map<String, dynamic> _guardAiThemeArgs(
-    Map<String, dynamic> args, {
-    String? userPrompt,
-  }) {
-    final prompt = userPrompt?.toLowerCase() ?? '';
-    if (prompt.isEmpty) return args;
-    final asksBubble = _promptHasAny(prompt, const [
-      '气泡',
-      '消息泡',
-      '对话泡',
-      'bubble',
-      'bubbles',
-    ]);
-    final asksBackground = _promptHasAny(prompt, const [
-      '背景',
-      '底色',
-      '画布',
-      '壁纸',
-      'background',
-      'canvas',
-      '深色',
-      '浅色',
-      '暗色',
-      '亮色',
-      '黑色背景',
-      '白色背景',
-    ]);
-    final asksText = _promptHasAny(prompt, const [
-      '文字',
-      '文本',
-      '字体',
-      '字色',
-      '字号',
-      '白字',
-      '黑字',
-      '红字',
-      '蓝字',
-      'font',
-      'text',
-      'serif',
-      'sans',
-      '粗体',
-      '斜体',
-    ]);
-    final asksAlignment = _promptHasAny(prompt, const [
-      '对齐',
-      '居中',
-      '靠左',
-      '靠右',
-      'align',
-      'center',
-      'left',
-      'right',
-    ]);
-    final hasSpecificStyleGroup =
-        asksBubble || asksBackground || asksText || asksAlignment;
-    if (!hasSpecificStyleGroup) return args;
-
-    final removesBubble =
-        asksBubble &&
-        _promptHasAny(prompt, const [
-          '去掉',
-          '去除',
-          '移除',
-          '取消',
-          '不要',
-          '无气泡',
-          '隐藏',
-          'remove',
-          'hide',
-          'disable',
-          'without bubble',
-          'no bubble',
-        ]);
-
-    final asksReset = _promptHasAny(prompt, const [
-      '恢复默认',
-      '默认主题',
-      '重置',
-      '还原',
-      'reset',
-      'default',
-      'restore',
-    ]);
-    final asksWholeTheme = _promptHasAny(prompt, const [
-      '主题',
-      'theme',
-      '全局',
-      '整体',
-      '全部',
-      '所有',
-      '整套',
-    ]);
-    final guarded = Map<String, dynamic>.from(args);
-    if (!asksReset || hasSpecificStyleGroup && !asksWholeTheme) {
-      guarded.remove('resetTheme');
-    }
-    if (!asksBackground) {
-      guarded.remove('backgroundColor');
-      guarded.remove('isDark');
-    }
-    if (!asksText) {
-      guarded.remove('textColor');
-      guarded.remove('fontFamily');
-      guarded.remove('fontStyle');
-      guarded.remove('fontWeight');
-    }
-    if (!asksAlignment) guarded.remove('messageAlignment');
-    if (!asksBubble) {
-      guarded.remove('bubbleStyle');
-      guarded.remove('bubbleColor');
-      guarded.remove('assistantBubbleColor');
-      guarded.remove('userBubbleColor');
-      guarded.remove('bubbleOpacity');
-      guarded.remove('assistantBubbleOpacity');
-      guarded.remove('userBubbleOpacity');
-    } else if (removesBubble) {
-      guarded['bubbleStyle'] = 'none';
-      guarded['bubbleOpacity'] = 0.0;
-      guarded.remove('bubbleColor');
-      guarded.remove('assistantBubbleColor');
-      guarded.remove('userBubbleColor');
-    }
-    return guarded;
-  }
-
-  bool _promptHasAny(String prompt, List<String> terms) {
-    return terms.any(prompt.contains);
-  }
-
   void _clearGlobalThemeOverrides() {
     backgroundOverride = null;
     textOverride = null;
-    _prefs
-      ?..remove('theme_background')
-      ..remove('theme_text');
+    _prefs?.clearGlobalThemeOverrides();
   }
 
   void resetAiTheme() {
@@ -571,70 +388,59 @@ class WeaviewState extends ChangeNotifier {
     assistantBubbleOpacity = 0.08;
     userBubbleOpacity = 0.12;
     themeMode = ThemeMode.system;
-    _prefs
-      ?..remove('theme_background')
-      ..remove('theme_text')
-      ..remove('theme_assistant_bubble')
-      ..remove('theme_user_bubble')
-      ..setString('theme_font_family', fontMood)
-      ..setString('theme_font_style', fontStyleMood)
-      ..setString('theme_font_weight', fontWeightMood)
-      ..setString('theme_bubble_style', bubbleStyle)
-      ..setString('theme_message_alignment', messageAlignment)
-      ..setDouble('theme_assistant_bubble_opacity', assistantBubbleOpacity)
-      ..setDouble('theme_user_bubble_opacity', userBubbleOpacity)
-      ..setString('theme_mode', themeMode.name);
+    _prefs?.resetThemeControls(
+      fontFamily: fontMood,
+      fontStyle: fontStyleMood,
+      fontWeight: fontWeightMood,
+      bubbleStyle: bubbleStyle,
+      messageAlignment: messageAlignment,
+      assistantBubbleOpacity: assistantBubbleOpacity,
+      userBubbleOpacity: userBubbleOpacity,
+      themeMode: themeMode,
+    );
     themePulse++;
     notifyListeners();
   }
 
   void updateSystemPrompt(String value) {
     systemPrompt = value.isEmpty ? defaultSystemInstruction : value;
-    _prefs?.setString('system_prompt', systemPrompt);
+    _prefs?.saveSystemPrompt(systemPrompt);
     notifyListeners();
   }
 
   void updateUserName(String value) {
     userName = value;
-    _prefs?.setString('user_name', value);
+    _prefs?.saveUserName(value);
     notifyListeners();
   }
 
   void updateAssistantAvatar(String value) {
     assistantAvatar = value;
-    if (value.isEmpty) {
-      _prefs?.remove('assistant_avatar');
-    } else {
-      _prefs?.setString('assistant_avatar', value);
-    }
+    _prefs?.saveAssistantAvatar(value);
     notifyListeners();
   }
 
   void updateUserAvatar(String value) {
     userAvatar = value;
-    if (value.isEmpty) {
-      _prefs?.remove('user_avatar');
-    } else {
-      _prefs?.setString('user_avatar', value);
-    }
+    _prefs?.saveUserAvatar(value);
     notifyListeners();
   }
 
   void setEmotionEnabled(bool value) {
     emotionEnabled = value;
-    _prefs?.setBool('emotion_enabled', value);
+    _prefs?.saveEmotionEnabled(value);
     notifyListeners();
   }
 
   void setGlobalMemoryEnabled(bool value) {
     globalMemoryEnabled = value;
-    _prefs?.setBool('global_memory_enabled', value);
+    _prefs?.saveGlobalMemoryEnabled(value);
     notifyListeners();
   }
 
   void setReferenceHistoryEnabled(bool value) {
     referenceHistoryEnabled = value;
-    _prefs?.setBool('reference_history_enabled', value);
+    _prefs?.saveReferenceHistoryEnabled(value);
     notifyListeners();
   }
 
@@ -642,7 +448,7 @@ class WeaviewState extends ChangeNotifier {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return;
     memories = [trimmed, ...memories];
-    _prefs?.setString('ai_memories', jsonEncode(memories));
+    _prefs?.saveMemories(memories);
     notifyListeners();
   }
 
@@ -651,13 +457,13 @@ class WeaviewState extends ChangeNotifier {
       for (var i = 0; i < memories.length; i++)
         if (i != index) memories[i],
     ];
-    _prefs?.setString('ai_memories', jsonEncode(memories));
+    _prefs?.saveMemories(memories);
     notifyListeners();
   }
 
   void clearMemories() {
     memories = [];
-    _prefs?.setString('ai_memories', jsonEncode(memories));
+    _prefs?.saveMemories(memories);
     notifyListeners();
   }
 
@@ -704,10 +510,7 @@ class WeaviewState extends ChangeNotifier {
       chatSessions.removeAt(index);
     }
     chatSessions.insert(0, session);
-    _prefs?.setString(
-      'chat_sessions',
-      jsonEncode(chatSessions.map((s) => s.toJson()).toList()),
-    );
+    _prefs?.saveChatSessions(chatSessions);
   }
 
   Future<void> submitMessage(
@@ -1077,10 +880,7 @@ Treat background style, font/text style, bubble style, and message alignment as 
     final index = chatSessions.indexWhere((s) => s.id == sessionId);
     if (index < 0) return;
     chatSessions[index] = chatSessions[index].copyWith(title: title);
-    _prefs?.setString(
-      'chat_sessions',
-      jsonEncode(chatSessions.map((s) => s.toJson()).toList()),
-    );
+    _prefs?.saveChatSessions(chatSessions);
     notifyListeners();
   }
 
@@ -1158,10 +958,7 @@ Treat background style, font/text style, bubble style, and message alignment as 
   }
 
   void _persistProviders() {
-    _prefs?.setString(
-      'ai_providers',
-      jsonEncode(providers.map((p) => p.toJson()).toList()),
-    );
+    _prefs?.saveProviders(providers);
   }
 
   void upsertProvider(AiProvider provider, {bool makeCurrent = false}) {
@@ -1195,29 +992,20 @@ Treat background style, font/text style, bubble style, and message alignment as 
 
   void saveModelAssignment(String role, ModelAssignment assignment) {
     modelAssignments = {...modelAssignments, role: assignment};
-    _prefs?.setString(
-      'ai_model_assignments',
-      jsonEncode(
-        modelAssignments.map((key, value) => MapEntry(key, value.toJson())),
-      ),
-    );
+    _prefs?.saveModelAssignments(modelAssignments);
     notifyListeners();
   }
 
   void saveSearchConfig(SearchConfig next) {
     searchConfig = next;
-    _prefs?.setString('ai_search_config', jsonEncode(next.toJson()));
+    _prefs?.saveSearchConfig(next);
     notifyListeners();
   }
 
   void saveTtsConfig(List<TtsProviderConfig> providers, String activeId) {
     ttsProviders = providers;
     activeTtsId = activeId;
-    _prefs?.setString(
-      'ai_tts_providers',
-      jsonEncode(providers.map((p) => p.toJson()).toList()),
-    );
-    _prefs?.setString('ai_active_tts_id', activeId);
+    _prefs?.saveTtsConfig(providers, activeId);
     notifyListeners();
   }
 

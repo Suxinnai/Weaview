@@ -149,6 +149,7 @@ class IconCircleButton extends StatelessWidget {
     );
   }
 }
+
 class GlassPanel extends StatelessWidget {
   const GlassPanel({
     required this.state,
@@ -191,6 +192,7 @@ class GlassPanel extends StatelessWidget {
     );
   }
 }
+
 class AvatarDot extends StatelessWidget {
   const AvatarDot({
     required this.value,
