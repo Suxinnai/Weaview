@@ -1,0 +1,17 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Local agent/workspace state
+.omx/
+
+# Flutter and local QA artifacts
+**/.dart_tool/
+**/.flutter-plugins-dependencies
+**/build/
+qa_*.png

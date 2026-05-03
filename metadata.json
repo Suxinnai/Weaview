@@ -1,0 +1,6 @@
+{
+  "name": "Weaview 织境",
+  "description": "An AI chat experience focused on natural aesthetics, translucency, and the ability for AI to co-weave the UI environment with you.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": []
+}
