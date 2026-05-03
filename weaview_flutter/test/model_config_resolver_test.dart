@@ -9,14 +9,13 @@ void main() {
         assignment: const ModelAssignment(provider: '', model: '', prompt: ''),
         provider: null,
         roleLabel: '主对话模型',
-        geminiApiKey: '',
       );
 
       expect(issue, contains('默认模型'));
       expect(issue, contains('主对话模型'));
     });
 
-    test('allows Gemini provider to use bundled API key fallback', () {
+    test('requires Gemini to use an explicitly configured API key', () {
       final provider = AiProvider.defaults().firstWhere(
         (item) => item.name == 'Gemini',
       );
@@ -28,10 +27,10 @@ void main() {
         ),
         provider: provider,
         roleLabel: '主对话模型',
-        geminiApiKey: 'bundled-key',
       );
 
-      expect(issue, isNull);
+      expect(issue, contains('Gemini'));
+      expect(issue, contains('API Key'));
     });
 
     test('prefers explicitly assigned chat provider over current flag', () {

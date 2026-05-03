@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-import '../../app/app_constants.dart';
 import '../../core/app_utils.dart' as app_utils;
 import '../../domain/models.dart';
 import '../search/tavily_search_client.dart';
@@ -32,12 +31,11 @@ class AiGateway {
         ? assignment.provider
         : provider.name;
     if (_isGeminiProvider(providerName)) {
-      final key = provider.apiKey.isNotEmpty ? provider.apiKey : geminiApiKey;
-      if (key.isEmpty) {
-        return '请先在「设置 > 提供商 > Gemini」中配置 Gemini API Key，或用 `--dart-define=GEMINI_API_KEY=...` 启动应用。';
+      if (provider.apiKey.isEmpty) {
+        return '请先在「设置 > 提供商 > Gemini」中配置 Gemini API Key。';
       }
       return _geminiClient.generate(
-        apiKey: key,
+        apiKey: provider.apiKey,
         model: _geminiModelId(assignment, provider),
         messages: messages,
         systemInstruction: systemInstruction,

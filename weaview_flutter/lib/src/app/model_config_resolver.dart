@@ -16,7 +16,6 @@ class ModelConfigResolver {
     required ModelAssignment? assignment,
     required AiProvider? provider,
     required String roleLabel,
-    required String geminiApiKey,
   }) {
     if (assignment == null ||
         assignment.provider.trim().isEmpty ||
@@ -26,9 +25,7 @@ class ModelConfigResolver {
     if (provider == null) {
       return '$roleLabel关联的提供商不存在，请重新选择模型。';
     }
-    final isGemini = provider.name.toLowerCase().contains('gemini');
-    if (provider.apiKey.trim().isEmpty &&
-        !(isGemini && geminiApiKey.isNotEmpty)) {
+    if (provider.apiKey.trim().isEmpty) {
       return '请先在「设置 > 提供商」中为 ${provider.name} 配置 API Key。';
     }
     return null;

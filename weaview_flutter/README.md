@@ -9,13 +9,7 @@ flutter pub get
 flutter run
 ```
 
-如需直接用环境注入 Gemini Key：
-
-```bash
-flutter run --dart-define=GEMINI_API_KEY=your_key
-```
-
-也可以在 App 内进入「设置 > 提供商 > Gemini」配置 API Key。Key 仅保存在本机 SharedPreferences 中。
+在 App 内进入「设置 > 提供商」配置模型服务 API Key。Key 仅保存在本机 SharedPreferences 中。
 
 ## 结构
 

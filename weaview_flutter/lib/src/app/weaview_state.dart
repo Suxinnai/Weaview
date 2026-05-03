@@ -833,7 +833,6 @@ Treat background style, font/text style, bubble style, and message alignment as 
       assignment: assignment,
       provider: provider,
       roleLabel: roleLabel,
-      geminiApiKey: geminiApiKey,
     );
   }
 

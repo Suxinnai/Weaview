@@ -11,7 +11,6 @@ const mutedDark = Color(0xFF6B7280);
 const accentMint = Color(0xFFB5EAEA);
 const accentGreen = Color(0xFFE2F0CB);
 const sendGreen = Color(0xFF10B981);
-const geminiApiKey = String.fromEnvironment('GEMINI_API_KEY');
 
 const defaultSystemInstruction = '''
 You are the AI presence in "Weaview" (织境), an ultra-minimalist, poetic, and highly aesthetic chat environment.
