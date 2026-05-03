@@ -1,4 +1,24 @@
-part of '../main.dart';
+import 'dart:async';
+import 'dart:io';
+import 'dart:math' as math;
+import 'dart:ui';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:mime/mime.dart';
+import 'package:speech_to_text/speech_to_text.dart' as speech;
+
+import '../../app/app_constants.dart';
+import '../../app/weaview_state.dart';
+import '../../core/app_utils.dart';
+import '../../domain/models.dart';
+import '../../shared/view_models/provider_model.dart';
+import '../../shared/widgets/shared_widgets.dart';
+import '../history/sidebar_overlay.dart';
+import '../settings/settings_sheet.dart';
+import 'message_widgets.dart';
 
 class WeaviewHome extends StatefulWidget {
   const WeaviewHome({super.key, required this.state});
@@ -330,7 +350,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
     setState(() => _dockExpanded = false);
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => _SettingsSheet(
+        builder: (_) => SettingsSheet(
           state: widget.state,
           open: true,
           onClose: () => Navigator.of(context).maybePop(),
@@ -383,20 +403,20 @@ class _WeaviewHomeState extends State<WeaviewHome>
                     curve: Curves.easeOutCubic,
                     color: state.background(context),
                   ),
-                  _AmbientBlob(
+                  AmbientBlob(
                     alignment: Alignment.topLeft,
                     color: state.accents[0],
                     size: 360,
                     opacity: dark ? 0.16 : 0.22,
                   ),
-                  _AmbientBlob(
+                  AmbientBlob(
                     alignment: Alignment.bottomRight,
                     color: state.accents[1],
                     size: 320,
                     opacity: dark ? 0.18 : 0.26,
                   ),
                   if (state.themePulse > 0)
-                    _ThemeRipple(
+                    ThemeRipple(
                       key: ValueKey(state.themePulse),
                       color: state.text(context),
                     ),
@@ -405,7 +425,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
                   _buildSuggestions(state),
                   _buildInputDock(state),
                   _buildModelDropdown(state),
-                  _SidebarOverlay(
+                  SidebarOverlay(
                     state: state,
                     open: _sidebarOpen,
                     onClose: () => setState(() => _sidebarOpen = false),
@@ -436,7 +456,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
             children: [
               Positioned(
                 left: 12,
-                child: _IconCircleButton(
+                child: IconCircleButton(
                   icon: Icons.menu_rounded,
                   onTap: () {
                     FocusManager.instance.primaryFocus?.unfocus();
@@ -618,7 +638,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
                   separatorBuilder: (_, _) => const SizedBox(height: 32),
                   itemBuilder: (context, index) {
                     final message = state.messages[index];
-                    return _MessageBubble(
+                    return MessageBubble(
                       state: state,
                       message: message,
                       assistantAvatar: state.assistantAvatar,
@@ -676,7 +696,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
             curve: Curves.easeOutCubic,
             child: _pendingAttachments.isEmpty
                 ? const SizedBox.shrink()
-                : _AttachmentPreviewStrip(
+                : AttachmentPreviewStrip(
                     state: state,
                     attachments: _pendingAttachments,
                     onRemove: _removePendingAttachment,
@@ -711,14 +731,14 @@ class _WeaviewHomeState extends State<WeaviewHome>
                     ),
                   ),
                 ),
-                _IconCircleButton(
+                IconCircleButton(
                   icon: _webSearchEnabled
                       ? Icons.travel_explore_rounded
                       : Icons.public_rounded,
                   onTap: _toggleWebSearch,
-                  color: _webSearchEnabled ? _sendGreen : state.text(context),
+                  color: _webSearchEnabled ? sendGreen : state.text(context),
                   background: _webSearchEnabled
-                      ? _sendGreen.withValues(alpha: 0.14)
+                      ? sendGreen.withValues(alpha: 0.14)
                       : Colors.transparent,
                   opacity: _webSearchEnabled ? 1 : 0.42,
                   size: 38,
@@ -752,18 +772,18 @@ class _WeaviewHomeState extends State<WeaviewHome>
                 const SizedBox(width: 4),
                 if ((_input.text.trim().isEmpty || _recording) &&
                     !state.isStreaming)
-                  _IconCircleButton(
+                  IconCircleButton(
                     icon: Icons.mic_none_rounded,
                     onTap: _toggleRecording,
-                    color: _recording ? _sendGreen : state.text(context),
+                    color: _recording ? sendGreen : state.text(context),
                     background: _recording
-                        ? _sendGreen.withValues(alpha: 0.18)
+                        ? sendGreen.withValues(alpha: 0.18)
                         : Colors.transparent,
                     opacity: _recording ? 1 : 0.42,
                     size: 38,
                   ),
                 const SizedBox(width: 3),
-                _SendButton(
+                SendButton(
                   streaming: state.isStreaming,
                   enabled:
                       state.isStreaming ||
@@ -785,21 +805,21 @@ class _WeaviewHomeState extends State<WeaviewHome>
                     padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
                     child: Row(
                       children: [
-                        _ToolChip(
+                        ToolChip(
                           icon: Icons.image_outlined,
                           label: '图片',
                           state: state,
                           onTap: _pickChatImages,
                         ),
                         const SizedBox(width: 10),
-                        _ToolChip(
+                        ToolChip(
                           icon: Icons.description_outlined,
                           label: '文件',
                           state: state,
                           onTap: _pickChatFiles,
                         ),
                         const SizedBox(width: 10),
-                        _ToolChip(
+                        ToolChip(
                           icon: Icons.public_rounded,
                           label: _webSearchEnabled ? '关闭联网' : '联网搜索',
                           state: state,
@@ -867,7 +887,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
                 for (final suggestion in state.suggestions)
                   Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: _SuggestionChip(
+                    child: SuggestionChip(
                       state: state,
                       label: suggestion,
                       onTap: () {
@@ -891,7 +911,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
     return Container(
       height: 42,
       decoration: BoxDecoration(
-        color: _sendGreen.withValues(alpha: 0.1),
+        color: sendGreen.withValues(alpha: 0.1),
         border: Border(
           bottom: BorderSide(
             color: state.text(context).withValues(alpha: 0.06),
@@ -913,7 +933,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
                           8,
                   margin: const EdgeInsets.symmetric(horizontal: 2),
                   decoration: BoxDecoration(
-                    color: _sendGreen,
+                    color: sendGreen,
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
@@ -922,7 +942,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
                 '聆听中...',
                 style: state
                     .textStyle(context, size: 12, weight: FontWeight.w600)
-                    .copyWith(color: _sendGreen, letterSpacing: 1.5),
+                    .copyWith(color: sendGreen, letterSpacing: 1.5),
               ),
             ],
           );
@@ -936,7 +956,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
     final allModels = [
       for (final provider in state.providers)
         for (final model in provider.models)
-          _ProviderModel(provider: provider, model: model),
+          ProviderModel(provider: provider, model: model),
     ];
     final query = _modelSearch.text.trim().toLowerCase();
     final filtered = allModels.where((item) {
@@ -964,7 +984,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
               left: 0,
               right: 0,
               child: Center(
-                child: _GlassPanel(
+                child: GlassPanel(
                   state: state,
                   radius: 22,
                   child: SizedBox(
@@ -1079,7 +1099,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
                                                   .modelAssignments['chat']
                                                   ?.model ==
                                               item.model.name;
-                                      return _ModelDropdownItem(
+                                      return ModelDropdownItem(
                                         state: state,
                                         item: item,
                                         selected: selected,

@@ -1,12 +1,23 @@
-part of '../main.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+
+import '../../app/app_constants.dart';
+import '../../core/app_utils.dart' as app_utils;
+import '../../domain/models.dart';
+import '../search/tavily_search_client.dart';
+import 'openai_stream_parser.dart' as openai_stream_parser;
 
 typedef AiStreamSnapshotHandler =
     void Function(String content, String reasoning, bool thinking);
 
-const _searchRequestTimeout = Duration(seconds: 30);
-const _chatRequestTimeout = Duration(seconds: 180);
-const _roleRequestTimeout = Duration(seconds: 75);
-const _modelFetchTimeout = Duration(seconds: 45);
+const searchRequestTimeout = Duration(seconds: 30);
+const chatRequestTimeout = Duration(seconds: 180);
+const roleRequestTimeout = Duration(seconds: 75);
+const modelFetchTimeout = Duration(seconds: 45);
 
 class AiGateway {
   static Future<String> generate({
@@ -20,7 +31,7 @@ class AiGateway {
         ? assignment.provider
         : provider.name;
     if (providerName.toLowerCase().contains('gemini')) {
-      final key = provider.apiKey.isNotEmpty ? provider.apiKey : _geminiApiKey;
+      final key = provider.apiKey.isNotEmpty ? provider.apiKey : geminiApiKey;
       if (key.isEmpty) {
         return '请先在「设置 > 提供商 > Gemini」中配置 Gemini API Key，或用 `--dart-define=GEMINI_API_KEY=...` 启动应用。';
       }
@@ -97,48 +108,11 @@ class AiGateway {
     required SearchConfig config,
     required String query,
   }) async {
-    final key = config.keys[config.active]?.trim() ?? '';
-    if (key.isEmpty) {
-      throw Exception('请先配置 ${config.active} 搜索服务的 API Key。');
-    }
-    if (config.active != 'tavily') {
-      throw Exception('当前版本已接入 Tavily 搜索，请切换到 Tavily 后使用联网搜索。');
-    }
-    final response = await http
-        .post(
-          Uri.parse('https://api.tavily.com/search'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'api_key': key,
-            'query': query,
-            'search_depth': 'advanced',
-            'include_answer': true,
-            'include_raw_content': false,
-            'max_results': 5,
-          }),
-        )
-        .timeout(_searchRequestTimeout);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('Tavily HTTP ${response.statusCode}: ${response.body}');
-    }
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    final buffer = StringBuffer();
-    final answer = decoded['answer']?.toString().trim() ?? '';
-    if (answer.isNotEmpty) {
-      buffer.writeln('Summary: $answer');
-      buffer.writeln();
-    }
-    final results = decoded['results'] as List? ?? const [];
-    for (final result in results.take(5)) {
-      if (result is! Map) continue;
-      final title = result['title']?.toString().trim() ?? 'Untitled';
-      final url = result['url']?.toString().trim() ?? '';
-      final content = result['content']?.toString().trim() ?? '';
-      buffer.writeln('- $title');
-      if (url.isNotEmpty) buffer.writeln('  URL: $url');
-      if (content.isNotEmpty) buffer.writeln('  Snippet: $content');
-    }
-    return buffer.toString().trim();
+    return const TavilySearchClient().search(
+      config: config,
+      query: query,
+      timeout: searchRequestTimeout,
+    );
   }
 
   static Future<String> generateRoleText({
@@ -239,7 +213,7 @@ class AiGateway {
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode(payload),
         )
-        .timeout(_chatRequestTimeout);
+        .timeout(chatRequestTimeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('Gemini HTTP ${response.statusCode}: ${response.body}');
     }
@@ -292,7 +266,7 @@ class AiGateway {
             'temperature': 0.7,
           }),
         )
-        .timeout(_chatRequestTimeout);
+        .timeout(chatRequestTimeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('HTTP ${response.statusCode}: ${response.body}');
     }
@@ -346,7 +320,7 @@ class AiGateway {
           'temperature': 0.7,
           'stream': true,
         });
-      final response = await client.send(request).timeout(_chatRequestTimeout);
+      final response = await client.send(request).timeout(chatRequestTimeout);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         final body = await response.stream.bytesToString();
         throw Exception('HTTP ${response.statusCode}: $body');
@@ -401,7 +375,7 @@ class AiGateway {
             'Accept': 'application/json',
           },
         )
-        .timeout(_modelFetchTimeout);
+        .timeout(modelFetchTimeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('HTTP ${response.statusCode}: ${response.body}');
     }
@@ -426,7 +400,7 @@ class AiGateway {
     if (models.isEmpty) {
       throw Exception('模型接口返回为空，请确认 Base URL 指向兼容 OpenAI 的 /v1 服务。');
     }
-    return _dedupeModels(models);
+    return dedupeModels(models);
   }
 
   static Future<String> testConnection({
@@ -478,20 +452,7 @@ class AiGateway {
   static ({String contentDelta, String reasoningDelta}) parseOpenAiStreamData(
     String data,
   ) {
-    final decoded = jsonDecode(data);
-    if (decoded is! Map) return (contentDelta: '', reasoningDelta: '');
-    final choices = decoded['choices'] as List? ?? const [];
-    if (choices.isEmpty) return (contentDelta: '', reasoningDelta: '');
-    final first = choices.first;
-    if (first is! Map) return (contentDelta: '', reasoningDelta: '');
-    final delta = first['delta'] as Map? ?? const {};
-    return (
-      contentDelta: delta['content']?.toString() ?? '',
-      reasoningDelta:
-          delta['reasoning_content']?.toString() ??
-          delta['reasoning']?.toString() ??
-          '',
-    );
+    return openai_stream_parser.parseOpenAiStreamData(data);
   }
 
   static ({String text, Map<String, dynamic>? args}) _consumeThemeCommand(
@@ -558,7 +519,7 @@ class AiGateway {
     buffer.writeln('[用户上传的附件]');
     for (final attachment in message.attachments) {
       buffer.writeln(
-        '- ${attachment.name} (${attachment.mimeType}, ${_formatBytes(attachment.size ?? 0)})',
+        '- ${attachment.name} (${attachment.mimeType}, ${app_utils.formatBytes(attachment.size ?? 0)})',
       );
       if (!attachment.isImage) {
         final file = File(attachment.path);
@@ -716,27 +677,7 @@ class AiGateway {
   }
 
   static String normalizeBaseUrl(String value) {
-    var base = value.trim();
-    final schemeMatch = RegExp(
-      r'^(https?):/*',
-      caseSensitive: false,
-    ).firstMatch(base);
-    if (schemeMatch != null) {
-      final scheme = schemeMatch.group(1)!.toLowerCase();
-      base = '$scheme://${base.substring(schemeMatch.end)}';
-    } else if (!base.toLowerCase().startsWith('http')) {
-      base = 'https://$base';
-    }
-    base = base.replaceFirstMapped(
-      RegExp(r'^(https?)://+', caseSensitive: false),
-      (match) {
-        return '${match.group(1)!.toLowerCase()}://';
-      },
-    );
-    while (base.endsWith('/')) {
-      base = base.substring(0, base.length - 1);
-    }
-    return base;
+    return app_utils.normalizeBaseUrl(value);
   }
 
   static String _trimSlash(String value) => normalizeBaseUrl(value);

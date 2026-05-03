@@ -1,14 +1,19 @@
-part of '../main.dart';
+// ignore_for_file: use_key_in_widget_constructors
 
-class _ProviderModel {
-  const _ProviderModel({required this.provider, required this.model});
+import 'dart:math' as math;
+import 'dart:ui';
 
-  final AiProvider provider;
-  final AiModel model;
-}
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
-class _MessageBubble extends StatefulWidget {
-  const _MessageBubble({
+import '../../app/app_constants.dart';
+import '../../app/weaview_state.dart';
+import '../../domain/models.dart';
+import '../../shared/widgets/shared_widgets.dart';
+
+class MessageBubble extends StatefulWidget {
+  const MessageBubble({
     required this.state,
     required this.message,
     required this.assistantAvatar,
@@ -29,10 +34,10 @@ class _MessageBubble extends StatefulWidget {
   final ValueChanged<MessageAttachment> onDownloadAttachment;
 
   @override
-  State<_MessageBubble> createState() => _MessageBubbleState();
+  State<MessageBubble> createState() => _MessageBubbleState();
 }
 
-class _MessageBubbleState extends State<_MessageBubble> {
+class _MessageBubbleState extends State<MessageBubble> {
   bool _actionsVisible = false;
 
   void _toggleActions() {
@@ -75,7 +80,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
                         crossAxisAlignment: _messageColumnAlignment(state),
                         children: [
                           if (message.attachments.isNotEmpty) ...[
-                            _MessageAttachmentGrid(
+                            MessageAttachmentGrid(
                               state: state,
                               attachments: message.attachments,
                               onDownload: widget.onDownloadAttachment,
@@ -128,7 +133,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
             const SizedBox(width: 10),
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: _AvatarDot(
+              child: AvatarDot(
                 value: widget.userAvatar,
                 fallbackIcon: Icons.person_outline_rounded,
                 imageSize: 28,
@@ -147,7 +152,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 9),
-            child: _AvatarDot(
+            child: AvatarDot(
               value: widget.assistantAvatar,
               fallbackIcon: Icons.auto_awesome_rounded,
               imageSize: 28,
@@ -289,7 +294,7 @@ BoxDecoration? _messageBubbleDecoration(
   if (style == 'none') return null;
   final dark = state.isDark(context);
   final fallbackColor = isUser
-      ? (dark ? Colors.white : _accentMint)
+      ? (dark ? Colors.white : accentMint)
       : state.accents[0];
   final configuredColor = isUser
       ? state.userBubbleOverride
@@ -496,7 +501,7 @@ MarkdownStyleSheet _aiMarkdownStyle(
   return MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
     a: state
         .textStyle(context, size: 15, height: 1.7, weight: FontWeight.w600)
-        .copyWith(color: _sendGreen),
+        .copyWith(color: sendGreen),
     p: state.textStyle(context, size: 15, height: 1.76),
     h1: state.textStyle(context, size: 23, weight: FontWeight.w700),
     h2: state.textStyle(context, size: 20, weight: FontWeight.w700),

@@ -1,7 +1,20 @@
-part of '../main.dart';
+// ignore_for_file: use_key_in_widget_constructors
 
-class _SettingsSheet extends StatefulWidget {
-  const _SettingsSheet({
+import 'dart:convert';
+import 'dart:math' as math;
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../app/app_constants.dart';
+import '../../app/weaview_state.dart';
+import '../../core/app_utils.dart';
+import '../../data/ai/ai_gateway.dart';
+import '../../domain/models.dart';
+import '../../shared/widgets/shared_widgets.dart';
+
+class SettingsSheet extends StatefulWidget {
+  const SettingsSheet({
     required this.state,
     required this.open,
     required this.onClose,
@@ -16,10 +29,10 @@ class _SettingsSheet extends StatefulWidget {
   final ValueChanged<String> showSnack;
 
   @override
-  State<_SettingsSheet> createState() => _SettingsSheetState();
+  State<SettingsSheet> createState() => _SettingsSheetState();
 }
 
-class _SettingsSheetState extends State<_SettingsSheet> {
+class _SettingsSheetState extends State<SettingsSheet> {
   String _activeTab = 'general';
   String _subView = 'main';
   String? _editingRole;
@@ -65,7 +78,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
   }
 
   @override
-  void didUpdateWidget(covariant _SettingsSheet oldWidget) {
+  void didUpdateWidget(covariant SettingsSheet oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!oldWidget.open && widget.open) {
       _systemPrompt.text = widget.state.systemPrompt;
@@ -191,7 +204,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                         size: 17,
                         color: active
                             ? (state.isDark(context)
-                                  ? _accentMint
+                                  ? accentMint
                                   : const Color(0xFF007A78))
                             : state.text(context).withValues(alpha: 0.62),
                       ),
@@ -287,7 +300,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
       key: ValueKey('$_activeTab-$_subView-$_providerTab-actions'),
       children: [
         Expanded(child: _scroll(children, bottomPadding: 18)),
-        _SettingsActionBar(state: state, status: status, child: actions),
+        SettingsActionBar(state: state, status: status, child: actions),
       ],
     );
   }
@@ -295,27 +308,27 @@ class _SettingsSheetState extends State<_SettingsSheet> {
   Widget _generalTab() {
     final state = widget.state;
     return _scroll([
-      _SectionLabel(state: state, label: '外观与主题'),
-      _CardShell(
+      SectionLabel(state: state, label: '外观与主题'),
+      CardShell(
         state: state,
         padding: const EdgeInsets.all(8),
         child: Row(
           children: [
-            _ThemeChoice(
+            ThemeChoice(
               state: state,
               icon: Icons.light_mode_outlined,
               label: '浅色',
               selected: state.themeMode == ThemeMode.light,
               onTap: () => state.setThemeModeValue(ThemeMode.light),
             ),
-            _ThemeChoice(
+            ThemeChoice(
               state: state,
               icon: Icons.dark_mode_outlined,
               label: '深色',
               selected: state.themeMode == ThemeMode.dark,
               onTap: () => state.setThemeModeValue(ThemeMode.dark),
             ),
-            _ThemeChoice(
+            ThemeChoice(
               state: state,
               icon: Icons.monitor_rounded,
               label: '跟随系统',
@@ -326,12 +339,12 @@ class _SettingsSheetState extends State<_SettingsSheet> {
         ),
       ),
       const SizedBox(height: 28),
-      _SectionLabel(state: state, label: '个人资料'),
-      _CardShell(
+      SectionLabel(state: state, label: '个人资料'),
+      CardShell(
         state: state,
         child: Column(
           children: [
-            _SettingsRow(
+            SettingsRow(
               state: state,
               title: '昵称',
               subtitle: '你的专属代号',
@@ -342,12 +355,12 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                   onChanged: state.updateUserName,
                   textAlign: TextAlign.right,
                   style: state.textStyle(context, size: 14),
-                  decoration: _inputDecoration(state, hint: '织梦者'),
+                  decoration: inputDecoration(state, hint: '织梦者'),
                 ),
               ),
             ),
-            _DividerLine(state: state),
-            _SettingsRow(
+            DividerLine(state: state),
+            SettingsRow(
               state: state,
               title: '个人头像',
               subtitle: '用于展示你的个人形象',
@@ -356,12 +369,12 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (state.userAvatar.isNotEmpty)
-                    _TinyIcon(
+                    TinyIcon(
                       icon: Icons.delete_outline_rounded,
                       color: Colors.red,
                       onTap: () => state.updateUserAvatar(''),
                     ),
-                  _AvatarDot(
+                  AvatarDot(
                     value: state.userAvatar,
                     fallbackIcon: Icons.person_outline_rounded,
                     imageSize: 42,
@@ -374,16 +387,16 @@ class _SettingsSheetState extends State<_SettingsSheet> {
         ),
       ),
       const SizedBox(height: 28),
-      _SectionLabel(state: state, label: '人设设置'),
-      _CardShell(
+      SectionLabel(state: state, label: '人设设置'),
+      CardShell(
         state: state,
         child: Column(
           children: [
-            _SettingsRow(
+            SettingsRow(
               state: state,
               title: '全局系统提示词',
               subtitle: state.systemPrompt.replaceAll('\n', ' '),
-              leading: _AvatarDot(
+              leading: AvatarDot(
                 value: state.assistantAvatar,
                 fallbackIcon: Icons.person_outline_rounded,
                 imageSize: 42,
@@ -395,8 +408,8 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                 _subView = 'system_prompt';
               }),
             ),
-            _DividerLine(state: state),
-            _SettingsRow(
+            DividerLine(state: state),
+            SettingsRow(
               state: state,
               title: '助手头像',
               subtitle: '自定义AI伙伴的形象',
@@ -406,12 +419,12 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (state.assistantAvatar.isNotEmpty)
-                    _TinyIcon(
+                    TinyIcon(
                       icon: Icons.delete_outline_rounded,
                       color: Colors.red,
                       onTap: () => state.updateAssistantAvatar(''),
                     ),
-                  _TinyIcon(
+                  TinyIcon(
                     icon: Icons.edit_outlined,
                     color: state.text(context),
                     onTap: () => widget.onPickAvatar(false),
@@ -419,20 +432,20 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                 ],
               ),
             ),
-            _DividerLine(state: state),
-            _SettingsRow(
+            DividerLine(state: state),
+            SettingsRow(
               state: state,
               title: '情绪化回应',
               subtitle: '梦境的感性程度',
               onTap: () => state.setEmotionEnabled(!state.emotionEnabled),
-              trailing: _WeaveSwitch(
+              trailing: WeaveSwitch(
                 state: state,
                 value: state.emotionEnabled,
                 onChanged: state.setEmotionEnabled,
               ),
             ),
-            _DividerLine(state: state),
-            _SettingsRow(
+            DividerLine(state: state),
+            SettingsRow(
               state: state,
               title: '记忆管理',
               subtitle: '查看或清除AI长效记忆',
@@ -451,7 +464,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
       Row(
         children: [
           Expanded(
-            child: _SectionLabel(state: state, label: '模型提供商'),
+            child: SectionLabel(state: state, label: '模型提供商'),
           ),
           TextButton.icon(
             onPressed: () => _openProviderConfig(null),
@@ -583,18 +596,18 @@ class _SettingsSheetState extends State<_SettingsSheet> {
   Widget _modelsTab() {
     final state = widget.state;
     return _scroll([
-      _SectionLabel(state: state, label: '默认模型分配'),
+      SectionLabel(state: state, label: '默认模型分配'),
       for (final entry in _roles.entries)
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: _CardShell(
+          child: CardShell(
             state: state,
-            child: _SettingsRow(
+            child: SettingsRow(
               state: state,
               title: entry.value.$1,
               subtitle: entry.value.$2,
               showChevron: true,
-              trailing: _ModelBadge(
+              trailing: ModelBadge(
                 state: state,
                 label:
                     state.modelAssignments[entry.key]?.model.isNotEmpty == true
@@ -619,12 +632,12 @@ class _SettingsSheetState extends State<_SettingsSheet> {
   Widget _servicesTab() {
     final state = widget.state;
     return _scroll([
-      _SectionLabel(state: state, label: '搜索服务', icon: Icons.public_rounded),
-      _CardShell(
+      SectionLabel(state: state, label: '搜索服务', icon: Icons.public_rounded),
+      CardShell(
         state: state,
         child: Column(
           children: [
-            _SettingsRow(
+            SettingsRow(
               state: state,
               title: '默认搜索引擎',
               subtitle:
@@ -632,7 +645,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               showChevron: true,
               onTap: () => setState(() => _subView = 'search_engine_config'),
             ),
-            _DividerLine(state: state),
+            DividerLine(state: state),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
               child: Text(
@@ -649,16 +662,16 @@ class _SettingsSheetState extends State<_SettingsSheet> {
         ),
       ),
       const SizedBox(height: 28),
-      _SectionLabel(state: state, label: '语音服务 (TTS)', icon: Icons.mic_none),
-      _CardShell(
+      SectionLabel(state: state, label: '语音服务 (TTS)', icon: Icons.mic_none),
+      CardShell(
         state: state,
         child: Column(
           children: [
-            _SettingsRow(
+            SettingsRow(
               state: state,
               title: '系统 TTS',
               subtitle: '使用设备默认语音播报',
-              trailing: _WeaveSwitch(
+              trailing: WeaveSwitch(
                 state: state,
                 value: state.activeTtsId == 'system',
                 onChanged: (value) => state.saveTtsConfig(
@@ -668,8 +681,8 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               ),
             ),
             for (final tts in state.ttsProviders) ...[
-              _DividerLine(state: state),
-              _SettingsRow(
+              DividerLine(state: state),
+              SettingsRow(
                 state: state,
                 title: tts.name,
                 subtitle: tts.apiKey.isNotEmpty || tts.baseUrl.isNotEmpty
@@ -681,7 +694,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                     _subView = 'tts_config';
                   });
                 },
-                trailing: _WeaveSwitch(
+                trailing: WeaveSwitch(
                   state: state,
                   value: state.activeTtsId == tts.id,
                   onChanged: (value) => state.saveTtsConfig(
@@ -691,8 +704,8 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                 ),
               ),
             ],
-            _DividerLine(state: state),
-            _SettingsRow(
+            DividerLine(state: state),
+            SettingsRow(
               state: state,
               title: '添加自定义 TTS 提供商',
               leading: Icon(Icons.add_rounded, color: state.accents[0]),
@@ -726,8 +739,8 @@ class _SettingsSheetState extends State<_SettingsSheet> {
     final memoryBytes = utf8.encode(jsonEncode(state.memories)).length;
     final total = sessionBytes + providerBytes + memoryBytes;
     return _scroll([
-      _SectionLabel(state: state, label: '本地数据存储'),
-      _CardShell(
+      SectionLabel(state: state, label: '本地数据存储'),
+      CardShell(
         state: state,
         padding: const EdgeInsets.all(22),
         child: Column(
@@ -737,7 +750,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  _formatBytes(total),
+                  formatBytes(total),
                   style: state.textStyle(
                     context,
                     size: 31,
@@ -778,19 +791,19 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               ),
             ),
             const SizedBox(height: 22),
-            _StorageRow(
+            StorageRow(
               state: state,
               label: '对话记录',
               color: Colors.blue,
               bytes: sessionBytes,
             ),
-            _StorageRow(
+            StorageRow(
               state: state,
               label: '记忆数据',
               color: state.accents[0],
               bytes: memoryBytes,
             ),
-            _StorageRow(
+            StorageRow(
               state: state,
               label: '应用配置',
               color: Colors.purple,
@@ -803,7 +816,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
       Row(
         children: [
           Expanded(
-            child: _SoftButton(
+            child: SoftButton(
               state: state,
               label: '导出数据',
               onTap: () async {
@@ -816,7 +829,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: _SoftButton(
+            child: SoftButton(
               state: state,
               label: '清空所有缓存',
               danger: true,
@@ -845,7 +858,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: state.isDark(context)
-                      ? [const Color(0xFF1A1C1E), _baseDark]
+                      ? [const Color(0xFF1A1C1E), baseDark]
                       : [Colors.white, const Color(0xFFF4F5F7)],
                 ),
                 border: Border.all(
@@ -879,18 +892,18 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               style: state.textStyle(context, size: 13, opacity: 0.5),
             ),
             const SizedBox(height: 30),
-            _AboutButton(
+            AboutButton(
               state: state,
               label: '检查更新',
               onTap: () => widget.showSnack('当前已是最新版本。'),
             ),
-            _AboutButton(
+            AboutButton(
               state: state,
               label: '开源许可',
               onTap: () =>
                   showLicensePage(context: context, applicationName: 'Weaview'),
             ),
-            _AboutButton(
+            AboutButton(
               state: state,
               label: '报告问题 / 提供反馈',
               accent: true,
@@ -930,7 +943,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
           minLines: null,
           textAlignVertical: TextAlignVertical.top,
           style: state.textStyle(context, size: 14, height: 1.65),
-          decoration: _inputDecoration(
+          decoration: inputDecoration(
             state,
             hint: '在此输入全局系统提示词...',
           ).copyWith(contentPadding: const EdgeInsets.all(18)),
@@ -938,7 +951,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
         ),
       ),
       const SizedBox(height: 12),
-      _SoftButton(
+      SoftButton(
         state: state,
         label: '恢复默认提示词',
         onTap: () {
@@ -958,26 +971,26 @@ class _SettingsSheetState extends State<_SettingsSheet> {
         style: state.textStyle(context, size: 13, opacity: 0.55),
       ),
       const SizedBox(height: 22),
-      _CardShell(
+      CardShell(
         state: state,
         child: Column(
           children: [
-            _SettingsRow(
+            SettingsRow(
               state: state,
               title: '全局记忆',
               subtitle: '将记录的记忆应用于所有对话',
-              trailing: _WeaveSwitch(
+              trailing: WeaveSwitch(
                 state: state,
                 value: state.globalMemoryEnabled,
                 onChanged: state.setGlobalMemoryEnabled,
               ),
             ),
-            _DividerLine(state: state),
-            _SettingsRow(
+            DividerLine(state: state),
+            SettingsRow(
               state: state,
               title: '参考历史记忆',
               subtitle: '将最近的历史聊天用于当前上下文',
-              trailing: _WeaveSwitch(
+              trailing: WeaveSwitch(
                 state: state,
                 value: state.referenceHistoryEnabled,
                 onChanged: state.setReferenceHistoryEnabled,
@@ -987,9 +1000,9 @@ class _SettingsSheetState extends State<_SettingsSheet> {
         ),
       ),
       const SizedBox(height: 24),
-      _SectionLabel(state: state, label: '用户记忆'),
+      SectionLabel(state: state, label: '用户记忆'),
       if (state.memories.isEmpty)
-        _CardShell(
+        CardShell(
           state: state,
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
           child: Center(
@@ -1003,7 +1016,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
         for (var i = 0; i < state.memories.length; i++)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
-            child: _CardShell(
+            child: CardShell(
               state: state,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               child: Row(
@@ -1029,7 +1042,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                       style: state.textStyle(context, size: 14, height: 1.45),
                     ),
                   ),
-                  _TinyIcon(
+                  TinyIcon(
                     icon: Icons.delete_outline_rounded,
                     color: Colors.red,
                     onTap: () => state.deleteMemory(i),
@@ -1039,8 +1052,8 @@ class _SettingsSheetState extends State<_SettingsSheet> {
             ),
           ),
       const SizedBox(height: 24),
-      _SectionLabel(state: state, label: '手动添加记忆'),
-      _CardShell(
+      SectionLabel(state: state, label: '手动添加记忆'),
+      CardShell(
         state: state,
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
         child: Row(
@@ -1049,14 +1062,14 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               child: TextField(
                 controller: _memory,
                 style: state.textStyle(context, size: 14),
-                decoration: _inputDecoration(state, hint: '输入需要记住的信息...'),
+                decoration: inputDecoration(state, hint: '输入需要记住的信息...'),
                 onSubmitted: (_) => _addMemory(),
               ),
             ),
             const SizedBox(width: 10),
             SizedBox(
               width: 112,
-              child: _SoftButton(
+              child: SoftButton(
                 state: state,
                 label: '添加',
                 icon: Icons.add_rounded,
@@ -1068,7 +1081,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
         ),
       ),
       const SizedBox(height: 22),
-      _SoftButton(
+      SoftButton(
         state: state,
         label: '清空所有记忆',
         icon: Icons.delete_sweep_outlined,
@@ -1081,7 +1094,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
   Widget _providerConfigView() {
     final state = widget.state;
     final content = [
-      _SegmentedPills(
+      SegmentedPills(
         state: state,
         value: _providerTab,
         items: const {'config': '配置', 'models': '模型'},
@@ -1161,7 +1174,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
           obscureText: true,
           onChanged: (value) => _providerKey = value,
           style: state.textStyle(context, size: 14),
-          decoration: _inputDecoration(state, hint: '请输入 Provider API Key...'),
+          decoration: inputDecoration(state, hint: '请输入 Provider API Key...'),
         ),
         const SizedBox(height: 18),
         Text(
@@ -1181,7 +1194,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
             ),
           onChanged: (value) => _providerBaseUrl = value,
           style: state.textStyle(context, size: 14),
-          decoration: _inputDecoration(
+          decoration: inputDecoration(
             state,
             hint: 'https://api.example.com/v1',
           ),
@@ -1210,9 +1223,9 @@ class _SettingsSheetState extends State<_SettingsSheet> {
           for (final model in _providerModels)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: _CardShell(
+              child: CardShell(
                 state: state,
-                child: _SettingsRow(
+                child: SettingsRow(
                   state: state,
                   title: model.name,
                   subtitle: model.id,
@@ -1223,12 +1236,12 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _TinyIcon(
+                      TinyIcon(
                         icon: Icons.edit_outlined,
                         color: state.text(context),
                         onTap: () => _editModel(model),
                       ),
-                      _TinyIcon(
+                      TinyIcon(
                         icon: Icons.close_rounded,
                         color: Colors.red,
                         onTap: () => setState(
@@ -1252,7 +1265,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
           ? Row(
               children: [
                 Expanded(
-                  child: _SoftButton(
+                  child: SoftButton(
                     state: state,
                     label: '保存配置',
                     accent: true,
@@ -1261,7 +1274,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: _SoftButton(
+                  child: SoftButton(
                     state: state,
                     label: '启用',
                     onTap: () => _saveProvider(true),
@@ -1272,7 +1285,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
           : Row(
               children: [
                 Expanded(
-                  child: _SoftButton(
+                  child: SoftButton(
                     state: state,
                     label: '添加模型',
                     icon: Icons.add_rounded,
@@ -1282,7 +1295,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: _SoftButton(
+                  child: SoftButton(
                     state: state,
                     label: '拉取',
                     onTap: _pullModels,
@@ -1290,7 +1303,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: _SoftButton(
+                  child: SoftButton(
                     state: state,
                     label: '测试',
                     onTap: _testProvider,
@@ -1310,14 +1323,14 @@ class _SettingsSheetState extends State<_SettingsSheet> {
             ?.models ??
         const <AiModel>[];
     return _scroll([
-      _SectionLabel(state: state, label: '默认模型'),
-      _CardShell(
+      SectionLabel(state: state, label: '默认模型'),
+      CardShell(
         state: state,
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _DropdownField(
+            DropdownField(
               state: state,
               label: '提供商',
               value: _roleDraft.provider.isEmpty ? '未选择' : _roleDraft.provider,
@@ -1330,7 +1343,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               }),
             ),
             const SizedBox(height: 14),
-            _DropdownField(
+            DropdownField(
               state: state,
               label: '模型',
               value: _roleDraft.model.isEmpty ? '未选择' : _roleDraft.model,
@@ -1346,8 +1359,8 @@ class _SettingsSheetState extends State<_SettingsSheet> {
         ),
       ),
       const SizedBox(height: 24),
-      _SectionLabel(state: state, label: '系统提示词 (System Prompt)'),
-      _CardShell(
+      SectionLabel(state: state, label: '系统提示词 (System Prompt)'),
+      CardShell(
         state: state,
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -1366,7 +1379,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               onChanged: (value) =>
                   _roleDraft = _roleDraft.copyWith(prompt: value),
             ),
-            _DividerLine(state: state),
+            DividerLine(state: state),
             Row(
               children: [
                 Text(
@@ -1388,7 +1401,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
         ),
       ),
       const SizedBox(height: 22),
-      _SoftButton(
+      SoftButton(
         state: state,
         label: '保存设置',
         accent: true,
@@ -1413,7 +1426,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
       for (final engine in _engines)
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
-          child: _CardShell(
+          child: CardShell(
             state: state,
             padding: const EdgeInsets.all(16),
             borderColor: state.searchConfig.active == engine.$1
@@ -1431,7 +1444,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                     width: double.infinity,
                     child: Row(
                       children: [
-                        _RadioDot(
+                        RadioDot(
                           active: state.searchConfig.active == engine.$1,
                           color: state.accents[0],
                         ),
@@ -1450,7 +1463,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                 ),
                 if (state.searchConfig.active == engine.$1) ...[
                   const SizedBox(height: 16),
-                  _DividerLine(state: state),
+                  DividerLine(state: state),
                   const SizedBox(height: 12),
                   TextField(
                     obscureText: true,
@@ -1465,7 +1478,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                       );
                     },
                     style: state.textStyle(context, size: 14),
-                    decoration: _inputDecoration(
+                    decoration: inputDecoration(
                       state,
                       hint: '输入 ${engine.$2} 的 API Key',
                     ),
@@ -1524,7 +1537,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                 obscureText: obscure,
                 onChanged: (value) => setLocal(() => onChanged(value)),
                 style: state.textStyle(context, size: 15),
-                decoration: _inputDecoration(state, hint: hint),
+                decoration: inputDecoration(state, hint: hint),
               ),
               const SizedBox(height: 16),
             ],
@@ -1544,7 +1557,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
             initialValue: draft.type,
-            decoration: _inputDecoration(state),
+            decoration: inputDecoration(state),
             items: const [
               DropdownMenuItem(value: 'xiaomi', child: Text('Xiaomi MiMo TTS')),
               DropdownMenuItem(value: 'openai', child: Text('OpenAI TTS')),
@@ -1622,7 +1635,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               style: TextButton.styleFrom(foregroundColor: Colors.red),
             ),
           const SizedBox(height: 12),
-          _SoftButton(
+          SoftButton(
             state: state,
             label: '保存设置',
             accent: true,
@@ -1734,7 +1747,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
       final selected = await showDialog<List<AiModel>>(
         context: context,
         builder: (context) =>
-            _ModelPickerDialog(state: widget.state, models: models),
+            ModelPickerDialog(state: widget.state, models: models),
       );
       if (selected != null && selected.isNotEmpty) {
         setState(() {
@@ -1762,7 +1775,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
     final model = await showDialog<AiModel>(
       context: context,
       builder: (context) =>
-          _TestModelDialog(state: widget.state, models: _providerModels),
+          TestModelDialog(state: widget.state, models: _providerModels),
     );
     if (model == null) return;
     setState(() => _statusText = '正在测试连接...');
@@ -1798,7 +1811,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
   Future<void> _editModel(AiModel model) async {
     final edited = await showDialog<AiModel>(
       context: context,
-      builder: (context) => _EditModelDialog(state: widget.state, model: model),
+      builder: (context) => EditModelDialog(state: widget.state, model: model),
     );
     if (edited == null) return;
     setState(() {

@@ -1,4 +1,13 @@
-part of '../main.dart';
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../core/app_utils.dart';
+import '../data/ai/ai_gateway.dart';
+import '../domain/models.dart';
+import 'app_constants.dart';
 
 class WeaviewState extends ChangeNotifier {
   SharedPreferences? _prefs;
@@ -15,7 +24,7 @@ class WeaviewState extends ChangeNotifier {
   String messageAlignment = 'left';
   double assistantBubbleOpacity = 0.08;
   double userBubbleOpacity = 0.12;
-  List<Color> accents = const [_accentMint, _accentGreen];
+  List<Color> accents = const [accentMint, accentGreen];
   int themePulse = 0;
 
   String systemPrompt = defaultSystemInstruction;
@@ -71,7 +80,7 @@ class WeaviewState extends ChangeNotifier {
     assistantAvatar = prefs.getString('assistant_avatar') ?? '';
     userAvatar = prefs.getString('user_avatar') ?? '';
     userName = prefs.getString('user_name') ?? '织梦者';
-    themeMode = _decodeThemeMode(prefs.getString('theme_mode'));
+    themeMode = decodeThemeMode(prefs.getString('theme_mode'));
     backgroundOverride = colorFromHex(prefs.getString('theme_background'));
     textOverride = colorFromHex(prefs.getString('theme_text'));
     if (themeMode != ThemeMode.system && backgroundOverride != null) {
@@ -82,23 +91,23 @@ class WeaviewState extends ChangeNotifier {
     );
     userBubbleOverride = colorFromHex(prefs.getString('theme_user_bubble'));
     fontMood = prefs.getString('theme_font_family') ?? 'sans';
-    fontStyleMood = _enumPref(prefs.getString('theme_font_style'), const [
+    fontStyleMood = enumPref(prefs.getString('theme_font_style'), const [
       'normal',
       'italic',
     ], 'normal');
-    fontWeightMood = _enumPref(prefs.getString('theme_font_weight'), const [
+    fontWeightMood = enumPref(prefs.getString('theme_font_weight'), const [
       'normal',
       'medium',
       'bold',
     ], 'normal');
-    bubbleStyle = _enumPref(prefs.getString('theme_bubble_style'), const [
+    bubbleStyle = enumPref(prefs.getString('theme_bubble_style'), const [
       'minimal',
       'none',
       'glass',
       'solid',
       'outline',
     ], 'minimal');
-    messageAlignment = _enumPref(
+    messageAlignment = enumPref(
       prefs.getString('theme_message_alignment'),
       const ['left', 'center', 'right'],
       'left',
@@ -107,7 +116,7 @@ class WeaviewState extends ChangeNotifier {
         prefs.getDouble('theme_assistant_bubble_opacity') ?? 0.08;
     userBubbleOpacity = prefs.getDouble('theme_user_bubble_opacity') ?? 0.12;
 
-    final savedSessions = _decodeList(
+    final savedSessions = decodeList(
       prefs.getString('chat_sessions'),
       ChatSession.fromJson,
     );
@@ -115,7 +124,7 @@ class WeaviewState extends ChangeNotifier {
       ..clear()
       ..addAll(savedSessions);
 
-    final savedProviders = _decodeList(
+    final savedProviders = decodeList(
       prefs.getString('ai_providers'),
       AiProvider.fromJson,
     );
@@ -200,7 +209,7 @@ class WeaviewState extends ChangeNotifier {
     }
 
     activeTtsId = prefs.getString('ai_active_tts_id') ?? 'system';
-    final savedTts = _decodeList(
+    final savedTts = decodeList(
       prefs.getString('ai_tts_providers'),
       TtsProviderConfig.fromJson,
     );
@@ -223,7 +232,7 @@ class WeaviewState extends ChangeNotifier {
   }
 
   Color background(BuildContext context) {
-    return backgroundOverride ?? (isDark(context) ? _baseDark : _baseLight);
+    return backgroundOverride ?? (isDark(context) ? baseDark : baseLight);
   }
 
   Color layer(BuildContext context) {
@@ -233,21 +242,20 @@ class WeaviewState extends ChangeNotifier {
           ? Color.lerp(customBackground, Colors.white, 0.08)!
           : Color.lerp(customBackground, Colors.black, 0.035)!;
     }
-    return isDark(context) ? _layerDark : _layerLight;
+    return isDark(context) ? layerDark : layerLight;
   }
 
   Color text(BuildContext context) {
-    final candidate =
-        textOverride ?? (isDark(context) ? _textDark : _textLight);
+    final candidate = textOverride ?? (isDark(context) ? textDark : textLight);
     final currentBackground = background(context);
-    if (_contrastRatio(currentBackground, candidate) < 4.5) {
-      return _readableTextFor(currentBackground);
+    if (contrastRatio(currentBackground, candidate) < 4.5) {
+      return readableTextFor(currentBackground);
     }
     return candidate;
   }
 
   Color muted(BuildContext context) {
-    return isDark(context) ? _mutedDark : _mutedLight;
+    return isDark(context) ? mutedDark : mutedLight;
   }
 
   TextStyle textStyle(
@@ -317,17 +325,17 @@ class WeaviewState extends ChangeNotifier {
         ? (bg.computeLuminance() < 0.45 ? ThemeMode.dark : ThemeMode.light)
         : themeMode;
     final fallbackBackground = switch (proposedThemeMode) {
-      ThemeMode.dark => _baseDark,
-      ThemeMode.light => _baseLight,
-      ThemeMode.system => _baseLight,
+      ThemeMode.dark => baseDark,
+      ThemeMode.light => baseLight,
+      ThemeMode.system => baseLight,
     };
     final effectiveBackground = nextBackground ?? fallbackBackground;
     final fallbackText = effectiveBackground.computeLuminance() < 0.45
-        ? _textDark
-        : _textLight;
+        ? textDark
+        : textLight;
     final effectiveText = nextText ?? fallbackText;
-    if (_contrastRatio(effectiveBackground, effectiveText) < 4.5) {
-      nextText = _readableTextFor(effectiveBackground);
+    if (contrastRatio(effectiveBackground, effectiveText) < 4.5) {
+      nextText = readableTextFor(effectiveBackground);
     }
     if (bg != null) {
       backgroundOverride = nextBackground;
@@ -355,8 +363,8 @@ class WeaviewState extends ChangeNotifier {
       _prefs?.setString('theme_user_bubble', colorToHex(userBubble));
     }
     final nextAssistantOpacity =
-        _opacityArg(args['assistantBubbleOpacity']) ??
-        _opacityArg(args['bubbleOpacity']);
+        opacityArg(args['assistantBubbleOpacity']) ??
+        opacityArg(args['bubbleOpacity']);
     if (nextAssistantOpacity != null) {
       assistantBubbleOpacity = nextAssistantOpacity;
       _prefs?.setDouble(
@@ -365,13 +373,13 @@ class WeaviewState extends ChangeNotifier {
       );
     }
     final nextUserOpacity =
-        _opacityArg(args['userBubbleOpacity']) ??
-        _opacityArg(args['bubbleOpacity']);
+        opacityArg(args['userBubbleOpacity']) ??
+        opacityArg(args['bubbleOpacity']);
     if (nextUserOpacity != null) {
       userBubbleOpacity = nextUserOpacity;
       _prefs?.setDouble('theme_user_bubble_opacity', userBubbleOpacity);
     }
-    final nextBubbleStyle = _enumArg(args['bubbleStyle'], const [
+    final nextBubbleStyle = enumArg(args['bubbleStyle'], const [
       'minimal',
       'none',
       'glass',
@@ -382,7 +390,7 @@ class WeaviewState extends ChangeNotifier {
       bubbleStyle = nextBubbleStyle;
       _prefs?.setString('theme_bubble_style', bubbleStyle);
     }
-    final nextAlignment = _enumArg(args['messageAlignment'], const [
+    final nextAlignment = enumArg(args['messageAlignment'], const [
       'left',
       'center',
       'right',
@@ -391,7 +399,7 @@ class WeaviewState extends ChangeNotifier {
       messageAlignment = nextAlignment;
       _prefs?.setString('theme_message_alignment', messageAlignment);
     }
-    final nextFontStyle = _enumArg(args['fontStyle'], const [
+    final nextFontStyle = enumArg(args['fontStyle'], const [
       'normal',
       'italic',
     ]);
@@ -399,7 +407,7 @@ class WeaviewState extends ChangeNotifier {
       fontStyleMood = nextFontStyle;
       _prefs?.setString('theme_font_style', fontStyleMood);
     }
-    final nextFontWeight = _enumArg(args['fontWeight'], const [
+    final nextFontWeight = enumArg(args['fontWeight'], const [
       'normal',
       'medium',
       'bold',
@@ -899,7 +907,7 @@ class WeaviewState extends ChangeNotifier {
         final searchBlock = await AiGateway.searchWeb(
           config: searchConfig,
           query: webQuery,
-        ).timeout(_searchRequestTimeout);
+        ).timeout(searchRequestTimeout);
         if (searchBlock.trim().isNotEmpty) {
           prompt +=
               '\n\n[System directive: Web search was enabled for this turn. Use the following fresh search results only when relevant, cite source titles/URLs naturally, and mention uncertainty when results are incomplete.]\n$searchBlock';
@@ -956,7 +964,7 @@ Treat background style, font/text style, bubble style, and message alignment as 
         provider: provider!,
         assignment: assignment,
         input: '请为下面这段对话生成一个不超过10个中文字的标题。\n\n${_compactConversation(messages)}',
-      ).timeout(_roleRequestTimeout);
+      ).timeout(roleRequestTimeout);
       final cleaned = title
           .replaceAll(RegExp(r'["“”「」#：:]'), '')
           .trim()
@@ -992,7 +1000,7 @@ Treat background style, font/text style, bubble style, and message alignment as 
         assignment: assignment,
         input:
             '基于下面这段对话，给出3个用户可能继续追问的简短中文问题。每行一个，不要编号。\n\n${_compactConversation(messages)}',
-      ).timeout(_roleRequestTimeout);
+      ).timeout(roleRequestTimeout);
       suggestions = raw
           .split(RegExp(r'[\n\r]+'))
           .map(
@@ -1033,7 +1041,7 @@ Treat background style, font/text style, bubble style, and message alignment as 
     }
     final isGemini = provider.name.toLowerCase().contains('gemini');
     if (provider.apiKey.trim().isEmpty &&
-        !(isGemini && _geminiApiKey.isNotEmpty)) {
+        !(isGemini && geminiApiKey.isNotEmpty)) {
       return '请先在「设置 > 提供商」中为 ${provider.name} 配置 API Key。';
     }
     return null;
@@ -1045,7 +1053,7 @@ Treat background style, font/text style, bubble style, and message alignment as 
         .replaceFirst(RegExp(r'^Exception:\s*'), '')
         .trim();
     if (text.contains('TimeoutException')) {
-      return '请求超时：当前设备网络或提供商在 ${_chatRequestTimeout.inSeconds} 秒内没有返回数据。'
+      return '请求超时：当前设备网络或提供商在 ${chatRequestTimeout.inSeconds} 秒内没有返回数据。'
           '如果桌面端可用但真机不可用，请确认手机网络能直接访问当前 Base URL，或为手机配置同一网络代理。';
     }
     if (text.contains('SocketException')) {
@@ -1135,7 +1143,7 @@ Treat background style, font/text style, bubble style, and message alignment as 
       provider: provider!,
       assignment: assignment!,
       input: '请将下面文本翻译成流畅自然的中文；如果原文已经是中文，则翻译成英文。\n\n$source',
-    ).timeout(_roleRequestTimeout);
+    ).timeout(roleRequestTimeout);
     messages[index].translation = translated.trim();
     _persistCurrentSession();
     notifyListeners();

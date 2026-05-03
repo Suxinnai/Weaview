@@ -21,14 +21,13 @@
 ```text
 .
 ├── weaview_flutter/             # Flutter 移动端主工程
-│   ├── lib/main.dart            # App 入口与全局常量
-│   ├── lib/src/ai_gateway.dart  # AI、搜索、流式解析与模型拉取
-│   ├── lib/src/app_state.dart   # 应用状态与持久化
-│   ├── lib/src/chat_home.dart   # 聊天主界面
-│   ├── lib/src/message_widgets.dart
-│   ├── lib/src/models.dart
-│   ├── lib/src/settings_sheet.dart
-│   ├── lib/src/sidebar_overlay.dart
+│   ├── lib/main.dart            # Flutter 入口，只负责系统 UI 初始化与 runApp
+│   ├── lib/src/app/             # App 装配、全局常量、WeaviewState
+│   ├── lib/src/core/            # 通用格式化、颜色、偏好值解码等基础工具
+│   ├── lib/src/domain/          # 聊天、模型、供应商、搜索、TTS 等领域模型
+│   ├── lib/src/data/            # AI、搜索等外部服务接入
+│   ├── lib/src/features/        # 聊天、设置、历史侧栏等功能界面
+│   ├── lib/src/shared/          # 共享 widget 与轻量 view model
 │   └── test/widget_test.dart
 └── README.md
 ```

@@ -17,6 +17,20 @@ flutter run --dart-define=GEMINI_API_KEY=your_key
 
 也可以在 App 内进入「设置 > 提供商 > Gemini」配置 API Key。Key 仅保存在本机 SharedPreferences 中。
 
+## 结构
+
+```text
+lib/
+├── main.dart              # Flutter 入口
+└── src/
+    ├── app/               # App 装配、常量、全局状态
+    ├── core/              # 通用工具
+    ├── domain/            # 领域模型与序列化
+    ├── data/              # AI / 搜索等外部服务接入
+    ├── features/          # 聊天、设置、历史侧栏
+    └── shared/            # 共享控件与轻量 view model
+```
+
 ## 验证
 
 已在本机执行：

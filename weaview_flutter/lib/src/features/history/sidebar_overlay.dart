@@ -1,7 +1,15 @@
-part of '../main.dart';
+// ignore_for_file: use_key_in_widget_constructors
 
-class _SidebarOverlay extends StatelessWidget {
-  const _SidebarOverlay({
+import 'dart:math' as math;
+import 'dart:ui';
+
+import 'package:flutter/material.dart';
+
+import '../../app/weaview_state.dart';
+import '../../shared/widgets/shared_widgets.dart';
+
+class SidebarOverlay extends StatelessWidget {
+  const SidebarOverlay({
     required this.state,
     required this.open,
     required this.onClose,
@@ -102,7 +110,7 @@ class _SidebarOverlay extends StatelessWidget {
                                     .copyWith(letterSpacing: 3),
                               ),
                               const Spacer(),
-                              _IconCircleButton(
+                              IconCircleButton(
                                 icon: Icons.close_rounded,
                                 onTap: onClose,
                                 color: state.text(context),
@@ -169,7 +177,7 @@ class _SidebarOverlay extends StatelessWidget {
                                 )
                               else
                                 for (final session in state.chatSessions)
-                                  _HistoryTile(
+                                  HistoryTile(
                                     state: state,
                                     session: session,
                                     selected:
@@ -194,7 +202,7 @@ class _SidebarOverlay extends StatelessWidget {
                             ),
                             child: Row(
                               children: [
-                                _AvatarDot(
+                                AvatarDot(
                                   value: state.userAvatar,
                                   fallbackIcon: Icons.person_outline_rounded,
                                   imageSize: 42,
@@ -226,7 +234,7 @@ class _SidebarOverlay extends StatelessWidget {
                                     ],
                                   ),
                                 ),
-                                _IconCircleButton(
+                                IconCircleButton(
                                   icon: Icons.settings_outlined,
                                   onTap: onSettings,
                                   color: state.text(context),

@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:weaview_flutter/main.dart';
+import 'package:weaview_flutter/src/app/weaview_app.dart';
+import 'package:weaview_flutter/src/app/weaview_state.dart';
+import 'package:weaview_flutter/src/core/app_utils.dart';
+import 'package:weaview_flutter/src/data/ai/ai_gateway.dart';
+import 'package:weaview_flutter/src/domain/models.dart';
+import 'package:weaview_flutter/src/features/chat/chat_home.dart';
 
 void main() {
   testWidgets('renders the Weaview chat shell', (WidgetTester tester) async {
