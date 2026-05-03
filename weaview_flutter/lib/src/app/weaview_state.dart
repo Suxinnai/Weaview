@@ -8,6 +8,7 @@ import '../data/ai/ai_gateway.dart';
 import '../domain/models.dart';
 import 'ai_theme_guard.dart';
 import 'app_constants.dart';
+import 'model_config_resolver.dart';
 import 'weaview_preferences.dart';
 
 class WeaviewState extends ChangeNotifier {
@@ -820,13 +821,7 @@ Treat background style, font/text style, bubble style, and message alignment as 
   }
 
   AiProvider? _providerForAssignment(ModelAssignment assignment) {
-    if (assignment.provider.isNotEmpty) {
-      final matched = providers.firstWhereOrNull(
-        (p) => p.name == assignment.provider,
-      );
-      if (matched != null) return matched;
-    }
-    return null;
+    return ModelConfigResolver.providerForAssignment(providers, assignment);
   }
 
   String? _modelConfigIssue({
@@ -834,38 +829,19 @@ Treat background style, font/text style, bubble style, and message alignment as 
     required AiProvider? provider,
     required String roleLabel,
   }) {
-    if (assignment == null ||
-        assignment.provider.trim().isEmpty ||
-        assignment.model.trim().isEmpty) {
-      return '请先在「设置 > 默认模型」中分配$roleLabel。';
-    }
-    if (provider == null) {
-      return '$roleLabel关联的提供商不存在，请重新选择模型。';
-    }
-    final isGemini = provider.name.toLowerCase().contains('gemini');
-    if (provider.apiKey.trim().isEmpty &&
-        !(isGemini && geminiApiKey.isNotEmpty)) {
-      return '请先在「设置 > 提供商」中为 ${provider.name} 配置 API Key。';
-    }
-    return null;
+    return ModelConfigResolver.modelConfigIssue(
+      assignment: assignment,
+      provider: provider,
+      roleLabel: roleLabel,
+      geminiApiKey: geminiApiKey,
+    );
   }
 
   String _friendlyAiError(Object error) {
-    final text = error
-        .toString()
-        .replaceFirst(RegExp(r'^Exception:\s*'), '')
-        .trim();
-    if (text.contains('TimeoutException')) {
-      return '请求超时：当前设备网络或提供商在 ${chatRequestTimeout.inSeconds} 秒内没有返回数据。'
-          '如果桌面端可用但真机不可用，请确认手机网络能直接访问当前 Base URL，或为手机配置同一网络代理。';
-    }
-    if (text.contains('SocketException')) {
-      return '网络连接失败：当前设备无法连接到提供商地址。';
-    }
-    if (text.contains('HandshakeException') || text.contains('CERTIFICATE')) {
-      return '安全连接失败：请检查提供商证书或改用有效的 HTTPS 地址。';
-    }
-    return text.isEmpty ? '未知错误。' : text;
+    return ModelConfigResolver.friendlyAiError(
+      error,
+      chatRequestTimeout: chatRequestTimeout,
+    );
   }
 
   String _compactConversation(List<ChatMessage> source) {
@@ -885,14 +861,10 @@ Treat background style, font/text style, bubble style, and message alignment as 
   }
 
   AiProvider get activeChatProvider {
-    final assignment = modelAssignments['chat'];
-    if (assignment != null && assignment.provider.isNotEmpty) {
-      final matched = providers.firstWhereOrNull(
-        (p) => p.name == assignment.provider,
-      );
-      if (matched != null) return matched;
-    }
-    return providers.firstWhereOrNull((p) => p.current) ?? providers.first;
+    return ModelConfigResolver.activeChatProvider(
+      providers: providers,
+      assignments: modelAssignments,
+    );
   }
 
   bool get hasActiveSearchKey =>

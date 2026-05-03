@@ -1,7 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -10,15 +8,13 @@ import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
 import 'package:speech_to_text/speech_to_text.dart' as speech;
 
-import '../../app/app_constants.dart';
 import '../../app/weaview_state.dart';
 import '../../core/app_utils.dart';
 import '../../domain/models.dart';
-import '../../shared/view_models/provider_model.dart';
 import '../../shared/widgets/shared_widgets.dart';
 import '../history/sidebar_overlay.dart';
 import '../settings/settings_sheet.dart';
-import 'message_widgets.dart';
+import 'chat_home_sections.dart';
 
 class WeaviewHome extends StatefulWidget {
   const WeaviewHome({super.key, required this.state});
@@ -420,11 +416,81 @@ class _WeaviewHomeState extends State<WeaviewHome>
                       key: ValueKey(state.themePulse),
                       color: state.text(context),
                     ),
-                  _buildChatBody(state),
-                  _buildHeader(state),
-                  _buildSuggestions(state),
-                  _buildInputDock(state),
-                  _buildModelDropdown(state),
+                  ChatBody(
+                    state: state,
+                    scrollController: _scroll,
+                    dockExpanded: _dockExpanded,
+                    pendingAttachments: _pendingAttachments,
+                    onCopyMessage: _copyMessage,
+                    onRetryMessage: _retryMessage,
+                    onTranslateMessage: _translateMessage,
+                    onDownloadAttachment: _downloadAttachment,
+                  ),
+                  ChatHeader(
+                    state: state,
+                    modelDropdownOpen: _modelDropdownOpen,
+                    onOpenSidebar: () {
+                      FocusManager.instance.primaryFocus?.unfocus();
+                      setState(() {
+                        _sidebarOpen = true;
+                        _dockExpanded = false;
+                        _modelDropdownOpen = false;
+                      });
+                    },
+                    onToggleModelDropdown: () => setState(() {
+                      _modelDropdownOpen = !_modelDropdownOpen;
+                      _modelSearch.clear();
+                    }),
+                  ),
+                  SuggestionsBar(
+                    state: state,
+                    inputController: _input,
+                    dockExpanded: _dockExpanded,
+                    onSuggestionSelected: () => setState(() {}),
+                  ),
+                  ChatInputDock(
+                    state: state,
+                    inputController: _input,
+                    wave: _wave,
+                    recording: _recording,
+                    webSearchEnabled: _webSearchEnabled,
+                    dockExpanded: _dockExpanded,
+                    pendingAttachments: _pendingAttachments,
+                    onToggleExpanded: () =>
+                        setState(() => _dockExpanded = !_dockExpanded),
+                    onToggleWebSearch: _toggleWebSearch,
+                    onSubmit: _submit,
+                    onToggleRecording: _toggleRecording,
+                    onPickChatImages: _pickChatImages,
+                    onPickChatFiles: _pickChatFiles,
+                    onRemoveAttachment: _removePendingAttachment,
+                    onTextChanged: () => setState(() {}),
+                  ),
+                  ChatModelDropdown(
+                    state: state,
+                    modelSearchController: _modelSearch,
+                    open: _modelDropdownOpen,
+                    onClose: () => setState(() => _modelDropdownOpen = false),
+                    onOpenSettings: () {
+                      setState(() => _modelDropdownOpen = false);
+                      _openSettings();
+                    },
+                    onSearchChanged: () => setState(() {}),
+                    onSelectModel: (item) {
+                      state.saveModelAssignment(
+                        'chat',
+                        ModelAssignment(
+                          provider: item.provider.name,
+                          model: item.model.name,
+                          prompt: state.modelAssignments['chat']?.prompt ?? '',
+                        ),
+                      );
+                      setState(() {
+                        _modelDropdownOpen = false;
+                        _modelSearch.clear();
+                      });
+                    },
+                  ),
                   SidebarOverlay(
                     state: state,
                     open: _sidebarOpen,
@@ -440,701 +506,6 @@ class _WeaviewHomeState extends State<WeaviewHome>
           ),
         );
       },
-    );
-  }
-
-  Widget _buildHeader(WeaviewState state) {
-    return SafeArea(
-      bottom: false,
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: SizedBox(
-          width: double.infinity,
-          height: 74,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Positioned(
-                left: 12,
-                child: IconCircleButton(
-                  icon: Icons.menu_rounded,
-                  onTap: () {
-                    FocusManager.instance.primaryFocus?.unfocus();
-                    setState(() {
-                      _sidebarOpen = true;
-                      _dockExpanded = false;
-                      _modelDropdownOpen = false;
-                    });
-                  },
-                  color: state.text(context),
-                ),
-              ),
-              GestureDetector(
-                onTap: () => setState(() {
-                  _modelDropdownOpen = !_modelDropdownOpen;
-                  _modelSearch.clear();
-                }),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    color: Colors.transparent,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        state.messages.isNotEmpty
-                            ? state.chatSessions
-                                      .firstWhereOrNull(
-                                        (s) => s.id == state.currentSessionId,
-                                      )
-                                      ?.title ??
-                                  '未命名梦境'
-                            : '新梦境',
-                        style: state.textStyle(
-                          context,
-                          size: 15,
-                          weight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 5,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              color: state.accents[0],
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: state.accents[0].withValues(
-                                    alpha: 0.8,
-                                  ),
-                                  blurRadius: 8,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 160),
-                            child: Text(
-                              state
-                                          .modelAssignments['chat']
-                                          ?.model
-                                          .isNotEmpty ==
-                                      true
-                                  ? state.modelAssignments['chat']!.model
-                                  : '未选择模型',
-                              overflow: TextOverflow.ellipsis,
-                              style: state
-                                  .textStyle(
-                                    context,
-                                    size: 10,
-                                    weight: FontWeight.w600,
-                                    opacity: 0.55,
-                                  )
-                                  .copyWith(letterSpacing: 1.4),
-                            ),
-                          ),
-                          AnimatedRotation(
-                            turns: _modelDropdownOpen ? -0.25 : 0.25,
-                            duration: const Duration(milliseconds: 220),
-                            child: Icon(
-                              Icons.chevron_right_rounded,
-                              size: 16,
-                              color: state
-                                  .text(context)
-                                  .withValues(alpha: 0.45),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildChatBody(WeaviewState state) {
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final suggestionPad =
-        state.suggestions.isNotEmpty &&
-            !state.isStreaming &&
-            !_dockExpanded &&
-            keyboardInset == 0
-        ? 48.0
-        : 0.0;
-    final bottomPad =
-        136.0 +
-        keyboardInset +
-        suggestionPad +
-        (_dockExpanded ? 92 : 0) +
-        (_pendingAttachments.isEmpty ? 0 : 78);
-    return Positioned.fill(
-      child: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.only(top: 86, bottom: bottomPad),
-          child: state.messages.isEmpty
-              ? Center(
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0, end: 1),
-                    duration: const Duration(milliseconds: 1000),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, value, child) {
-                      return Transform.translate(
-                        offset: Offset(0, 18 * (1 - value)),
-                        child: Opacity(opacity: value, child: child),
-                      );
-                    },
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '今天，你想编织什么梦境？',
-                          textAlign: TextAlign.center,
-                          style: state
-                              .textStyle(
-                                context,
-                                size: 17,
-                                weight: FontWeight.w300,
-                                opacity: 0.82,
-                              )
-                              .copyWith(letterSpacing: 1.8),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'What dream shall we weave today?',
-                          textAlign: TextAlign.center,
-                          style: state
-                              .textStyle(
-                                context,
-                                size: 12,
-                                weight: FontWeight.w400,
-                                opacity: 0.38,
-                              )
-                              .copyWith(letterSpacing: 0.7),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : ListView.separated(
-                  controller: _scroll,
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  itemCount: state.messages.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 32),
-                  itemBuilder: (context, index) {
-                    final message = state.messages[index];
-                    return MessageBubble(
-                      state: state,
-                      message: message,
-                      assistantAvatar: state.assistantAvatar,
-                      userAvatar: state.userAvatar,
-                      onCopy: () => _copyMessage(message),
-                      onRetry: () => _retryMessage(index),
-                      onTranslate: () => _translateMessage(index),
-                      onDownloadAttachment: _downloadAttachment,
-                    );
-                  },
-                ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInputDock(WeaviewState state) {
-    final dark = state.isDark(context);
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final keyboardOpen = keyboardInset > 0;
-    final dockSurface = AnimatedContainer(
-      duration: const Duration(milliseconds: 120),
-      curve: Curves.easeOut,
-      decoration: BoxDecoration(
-        color: (dark ? Colors.black : state.layer(context)).withValues(
-          alpha: dark ? 0.58 : 0.62,
-        ),
-        borderRadius: BorderRadius.circular(_dockExpanded ? 24 : 32),
-        border: Border.all(
-          color: (dark ? Colors.white : Colors.black).withValues(
-            alpha: dark ? 0.06 : 0.07,
-          ),
-        ),
-        boxShadow: [
-          if (!keyboardOpen)
-            BoxShadow(
-              color: Colors.black.withValues(alpha: dark ? 0.14 : 0.055),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          AnimatedSize(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            child: _recording
-                ? _recordingStrip(state)
-                : const SizedBox.shrink(),
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            child: _pendingAttachments.isEmpty
-                ? const SizedBox.shrink()
-                : AttachmentPreviewStrip(
-                    state: state,
-                    attachments: _pendingAttachments,
-                    onRemove: _removePendingAttachment,
-                  ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(5),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                GestureDetector(
-                  onTap: () => setState(() => _dockExpanded = !_dockExpanded),
-                  child: AnimatedRotation(
-                    duration: const Duration(milliseconds: 260),
-                    turns: _dockExpanded ? 0.125 : 0,
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: _dockExpanded
-                            ? state.text(context).withValues(alpha: 0.06)
-                            : Colors.transparent,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.add_rounded,
-                        size: 24,
-                        color: state
-                            .text(context)
-                            .withValues(alpha: _dockExpanded ? 1 : 0.5),
-                      ),
-                    ),
-                  ),
-                ),
-                IconCircleButton(
-                  icon: _webSearchEnabled
-                      ? Icons.travel_explore_rounded
-                      : Icons.public_rounded,
-                  onTap: _toggleWebSearch,
-                  color: _webSearchEnabled ? sendGreen : state.text(context),
-                  background: _webSearchEnabled
-                      ? sendGreen.withValues(alpha: 0.14)
-                      : Colors.transparent,
-                  opacity: _webSearchEnabled ? 1 : 0.42,
-                  size: 38,
-                ),
-                const SizedBox(width: 2),
-                Expanded(
-                  child: TextField(
-                    controller: _input,
-                    minLines: 1,
-                    maxLines: 5,
-                    textInputAction: TextInputAction.newline,
-                    style: state.textStyle(context, size: 15, height: 1.45),
-                    decoration: InputDecoration(
-                      hintText: '今天想编织什么？',
-                      hintStyle: state.textStyle(
-                        context,
-                        size: 15,
-                        opacity: 0.38,
-                      ),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 10,
-                      ),
-                    ),
-                    onSubmitted: (_) => _submit(),
-                    onChanged: (_) => setState(() {}),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                if ((_input.text.trim().isEmpty || _recording) &&
-                    !state.isStreaming)
-                  IconCircleButton(
-                    icon: Icons.mic_none_rounded,
-                    onTap: _toggleRecording,
-                    color: _recording ? sendGreen : state.text(context),
-                    background: _recording
-                        ? sendGreen.withValues(alpha: 0.18)
-                        : Colors.transparent,
-                    opacity: _recording ? 1 : 0.42,
-                    size: 38,
-                  ),
-                const SizedBox(width: 3),
-                SendButton(
-                  streaming: state.isStreaming,
-                  enabled:
-                      state.isStreaming ||
-                      ((_input.text.trim().isNotEmpty ||
-                                  _pendingAttachments.isNotEmpty) &&
-                              !state.isStreaming) &&
-                          !_recording,
-                  onTap: _submit,
-                  state: state,
-                ),
-              ],
-            ),
-          ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 260),
-            curve: Curves.easeOutCubic,
-            child: _dockExpanded
-                ? Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
-                    child: Row(
-                      children: [
-                        ToolChip(
-                          icon: Icons.image_outlined,
-                          label: '图片',
-                          state: state,
-                          onTap: _pickChatImages,
-                        ),
-                        const SizedBox(width: 10),
-                        ToolChip(
-                          icon: Icons.description_outlined,
-                          label: '文件',
-                          state: state,
-                          onTap: _pickChatFiles,
-                        ),
-                        const SizedBox(width: 10),
-                        ToolChip(
-                          icon: Icons.public_rounded,
-                          label: _webSearchEnabled ? '关闭联网' : '联网搜索',
-                          state: state,
-                          onTap: _toggleWebSearch,
-                        ),
-                      ],
-                    ),
-                  )
-                : const SizedBox.shrink(),
-          ),
-        ],
-      ),
-    );
-    final dock = ClipRRect(
-      borderRadius: BorderRadius.circular(_dockExpanded ? 24 : 32),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(
-          sigmaX: keyboardOpen ? 0 : 4,
-          sigmaY: keyboardOpen ? 0 : 4,
-        ),
-        child: dockSurface,
-      ),
-    );
-    return AnimatedPadding(
-      duration: const Duration(milliseconds: 90),
-      curve: Curves.easeOut,
-      padding: EdgeInsets.only(bottom: keyboardInset),
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-            child: dock,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSuggestions(WeaviewState state) {
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    if (state.suggestions.isEmpty ||
-        state.isStreaming ||
-        _dockExpanded ||
-        keyboardInset > 0) {
-      return const SizedBox.shrink();
-    }
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      left: 14,
-      right: 14,
-      bottom: 92 + MediaQuery.paddingOf(context).bottom,
-      child: IgnorePointer(
-        ignoring: state.suggestions.isEmpty,
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 180),
-          opacity: state.suggestions.isEmpty ? 0 : 1,
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            child: Row(
-              children: [
-                for (final suggestion in state.suggestions)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: SuggestionChip(
-                      state: state,
-                      label: suggestion,
-                      onTap: () {
-                        _input.text = suggestion;
-                        _input.selection = TextSelection.collapsed(
-                          offset: _input.text.length,
-                        );
-                        setState(() {});
-                      },
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _recordingStrip(WeaviewState state) {
-    return Container(
-      height: 42,
-      decoration: BoxDecoration(
-        color: sendGreen.withValues(alpha: 0.1),
-        border: Border(
-          bottom: BorderSide(
-            color: state.text(context).withValues(alpha: 0.06),
-          ),
-        ),
-      ),
-      child: AnimatedBuilder(
-        animation: _wave,
-        builder: (context, _) {
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (var i = 0; i < 7; i++)
-                Container(
-                  width: 5,
-                  height:
-                      10 +
-                      (math.sin((_wave.value * math.pi * 2) + i * 0.75) + 1) *
-                          8,
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  decoration: BoxDecoration(
-                    color: sendGreen,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              const SizedBox(width: 10),
-              Text(
-                '聆听中...',
-                style: state
-                    .textStyle(context, size: 12, weight: FontWeight.w600)
-                    .copyWith(color: sendGreen, letterSpacing: 1.5),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildModelDropdown(WeaviewState state) {
-    final safeTop = MediaQuery.paddingOf(context).top;
-    final allModels = [
-      for (final provider in state.providers)
-        for (final model in provider.models)
-          ProviderModel(provider: provider, model: model),
-    ];
-    final query = _modelSearch.text.trim().toLowerCase();
-    final filtered = allModels.where((item) {
-      if (query.isEmpty) return true;
-      return item.model.name.toLowerCase().contains(query) ||
-          item.provider.name.toLowerCase().contains(query) ||
-          item.model.id.toLowerCase().contains(query);
-    }).toList();
-
-    return IgnorePointer(
-      ignoring: !_modelDropdownOpen,
-      child: AnimatedOpacity(
-        opacity: _modelDropdownOpen ? 1 : 0,
-        duration: const Duration(milliseconds: 160),
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: () => setState(() => _modelDropdownOpen = false),
-                child: Container(color: Colors.transparent),
-              ),
-            ),
-            Positioned(
-              top: safeTop + 62,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: GlassPanel(
-                  state: state,
-                  radius: 22,
-                  child: SizedBox(
-                    width: math.min(
-                      390.0,
-                      MediaQuery.sizeOf(context).width - 28,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(6, 2, 6, 10),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  '选择模型',
-                                  style: state
-                                      .textStyle(
-                                        context,
-                                        size: 11,
-                                        weight: FontWeight.w700,
-                                        opacity: 0.42,
-                                      )
-                                      .copyWith(letterSpacing: 1.6),
-                                ),
-                                Icon(
-                                  Icons.auto_awesome_rounded,
-                                  size: 14,
-                                  color: state
-                                      .text(context)
-                                      .withValues(alpha: 0.35),
-                                ),
-                              ],
-                            ),
-                          ),
-                          TextField(
-                            controller: _modelSearch,
-                            autofocus: false,
-                            onChanged: (_) => setState(() {}),
-                            style: state.textStyle(context, size: 12),
-                            decoration: InputDecoration(
-                              hintText: '搜索模型...',
-                              hintStyle: state.textStyle(
-                                context,
-                                size: 12,
-                                opacity: 0.38,
-                              ),
-                              isDense: true,
-                              filled: true,
-                              fillColor: state
-                                  .text(context)
-                                  .withValues(alpha: 0.05),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                                borderSide: BorderSide.none,
-                              ),
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 10,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxHeight: math.min(
-                                420.0,
-                                MediaQuery.sizeOf(context).height * 0.48,
-                              ),
-                            ),
-                            child: filtered.isEmpty
-                                ? Padding(
-                                    padding: const EdgeInsets.all(18),
-                                    child: Column(
-                                      children: [
-                                        Text(
-                                          allModels.isEmpty
-                                              ? '未配置可用模型'
-                                              : '未找到匹配模型',
-                                          style: state.textStyle(
-                                            context,
-                                            size: 13,
-                                            opacity: 0.52,
-                                          ),
-                                        ),
-                                        TextButton(
-                                          onPressed: () {
-                                            setState(() {
-                                              _modelDropdownOpen = false;
-                                            });
-                                            _openSettings();
-                                          },
-                                          child: const Text('前往设置配置'),
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                : ListView.builder(
-                                    shrinkWrap: true,
-                                    itemCount: filtered.length,
-                                    itemBuilder: (context, index) {
-                                      final item = filtered[index];
-                                      final selected =
-                                          state
-                                                  .modelAssignments['chat']
-                                                  ?.provider ==
-                                              item.provider.name &&
-                                          state
-                                                  .modelAssignments['chat']
-                                                  ?.model ==
-                                              item.model.name;
-                                      return ModelDropdownItem(
-                                        state: state,
-                                        item: item,
-                                        selected: selected,
-                                        onTap: () {
-                                          state.saveModelAssignment(
-                                            'chat',
-                                            ModelAssignment(
-                                              provider: item.provider.name,
-                                              model: item.model.name,
-                                              prompt:
-                                                  state
-                                                      .modelAssignments['chat']
-                                                      ?.prompt ??
-                                                  '',
-                                            ),
-                                          );
-                                          setState(() {
-                                            _modelDropdownOpen = false;
-                                            _modelSearch.clear();
-                                          });
-                                        },
-                                      );
-                                    },
-                                  ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

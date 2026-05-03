@@ -11,6 +11,7 @@ import '../../app/app_constants.dart';
 import '../../app/weaview_state.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets/shared_widgets.dart';
+import 'markdown_segments.dart';
 
 class MessageBubble extends StatefulWidget {
   const MessageBubble({
@@ -387,104 +388,30 @@ class _AiMarkdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final segments = _splitMarkdownSegments(data);
+    final segments = splitMarkdownSegments(data);
     return Column(
       crossAxisAlignment: _messageColumnAlignment(state),
       children: [
         for (var i = 0; i < segments.length; i++) ...[
           if (i > 0) const SizedBox(height: 12),
           switch (segments[i].kind) {
-            _MarkdownSegmentKind.markdown => MarkdownBody(
+            MarkdownSegmentKind.markdown => MarkdownBody(
               data: segments[i].text,
               selectable: true,
               styleSheet: _aiMarkdownStyle(context, state, textAlign),
             ),
-            _MarkdownSegmentKind.code => _CodeBlock(
+            MarkdownSegmentKind.code => _CodeBlock(
               state: state,
               language: segments[i].language,
               code: segments[i].text,
             ),
-            _MarkdownSegmentKind.formula => _FormulaBlock(
+            MarkdownSegmentKind.formula => _FormulaBlock(
               state: state,
               formula: segments[i].text,
             ),
           },
         ],
       ],
-    );
-  }
-}
-
-enum _MarkdownSegmentKind { markdown, code, formula }
-
-class _MarkdownSegment {
-  const _MarkdownSegment({
-    required this.kind,
-    required this.text,
-    this.language = '',
-  });
-
-  final _MarkdownSegmentKind kind;
-  final String text;
-  final String language;
-}
-
-List<_MarkdownSegment> _splitMarkdownSegments(String source) {
-  final segments = <_MarkdownSegment>[];
-  final codeFence = RegExp(r'```([^\r\n`]*)\r?\n([\s\S]*?)```');
-  var cursor = 0;
-  for (final match in codeFence.allMatches(source)) {
-    _addMarkdownAndFormulaSegments(
-      segments,
-      source.substring(cursor, match.start),
-    );
-    segments.add(
-      _MarkdownSegment(
-        kind: _MarkdownSegmentKind.code,
-        language: match.group(1)?.trim() ?? '',
-        text: (match.group(2) ?? '').replaceFirst(RegExp(r'\r?\n$'), ''),
-      ),
-    );
-    cursor = match.end;
-  }
-  _addMarkdownAndFormulaSegments(segments, source.substring(cursor));
-  if (segments.isEmpty) {
-    segments.add(
-      const _MarkdownSegment(kind: _MarkdownSegmentKind.markdown, text: ' '),
-    );
-  }
-  return segments;
-}
-
-void _addMarkdownAndFormulaSegments(
-  List<_MarkdownSegment> segments,
-  String source,
-) {
-  if (source.isEmpty) return;
-  final formulaBlock = RegExp(r'\$\$([\s\S]*?)\$\$');
-  var cursor = 0;
-  for (final match in formulaBlock.allMatches(source)) {
-    final markdown = source.substring(cursor, match.start);
-    if (markdown.trim().isNotEmpty) {
-      segments.add(
-        _MarkdownSegment(kind: _MarkdownSegmentKind.markdown, text: markdown),
-      );
-    }
-    final formula = match.group(1)?.trim() ?? '';
-    if (formula.isNotEmpty) {
-      segments.add(
-        _MarkdownSegment(kind: _MarkdownSegmentKind.formula, text: formula),
-      );
-    }
-    cursor = match.end;
-  }
-  final tail = source.substring(cursor);
-  if (tail.trim().isNotEmpty || segments.isEmpty) {
-    segments.add(
-      _MarkdownSegment(
-        kind: _MarkdownSegmentKind.markdown,
-        text: tail.trim().isEmpty ? ' ' : tail,
-      ),
     );
   }
 }
