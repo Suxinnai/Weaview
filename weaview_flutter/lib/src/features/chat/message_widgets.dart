@@ -18,21 +18,29 @@ class MessageBubble extends StatefulWidget {
   const MessageBubble({
     required this.state,
     required this.message,
+    required this.index,
     required this.assistantAvatar,
     required this.userAvatar,
     required this.onCopy,
     required this.onRetry,
+    required this.onEdit,
     required this.onTranslate,
+    required this.onBranch,
+    required this.onDelete,
     required this.onDownloadAttachment,
   });
 
   final WeaviewState state;
   final ChatMessage message;
+  final int index;
   final String assistantAvatar;
   final String userAvatar;
   final VoidCallback onCopy;
   final VoidCallback onRetry;
+  final VoidCallback onEdit;
   final VoidCallback onTranslate;
+  final VoidCallback onBranch;
+  final VoidCallback onDelete;
   final ValueChanged<MessageAttachment> onDownloadAttachment;
 
   @override
@@ -51,97 +59,78 @@ class _MessageBubbleState extends State<MessageBubble> {
     final state = widget.state;
     final message = widget.message;
     final isUser = message.role == 'user';
-    final maxWidth = MediaQuery.sizeOf(context).width * 0.78;
+    final width = MediaQuery.sizeOf(context).width;
+    final maxWidth = isUser ? width * 0.80 : width - 82;
     final textAlign = _messageTextAlign(state);
     if (isUser) {
       return Align(
         alignment: _messageShellAlignment(state, isUser: true),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.end,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Flexible(
-              child: Column(
-                crossAxisAlignment: _messageColumnAlignment(
-                  state,
-                  fallback: CrossAxisAlignment.end,
-                ),
-                children: [
-                  GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onTap: _toggleActions,
-                    child: Container(
-                      constraints: BoxConstraints(maxWidth: maxWidth),
-                      padding: _messageBubblePadding(state),
-                      decoration: _messageBubbleDecoration(
-                        context,
-                        state,
-                        isUser: true,
+            AvatarDot(
+              value: widget.userAvatar,
+              fallbackIcon: Icons.person_outline_rounded,
+              imageSize: 28,
+              accent: state.accents[1],
+            ),
+            const SizedBox(height: 6),
+            GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _toggleActions,
+              child: _StyledMessageSurface(
+                state: state,
+                isUser: true,
+                maxWidth: maxWidth,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (message.attachments.isNotEmpty) ...[
+                      MessageAttachmentGrid(
+                        state: state,
+                        attachments: message.attachments,
+                        onDownload: widget.onDownloadAttachment,
                       ),
-                      child: Column(
-                        crossAxisAlignment: _messageColumnAlignment(state),
-                        children: [
-                          if (message.attachments.isNotEmpty) ...[
-                            MessageAttachmentGrid(
-                              state: state,
-                              attachments: message.attachments,
-                              onDownload: widget.onDownloadAttachment,
-                            ),
-                            if (message.content.trim().isNotEmpty)
-                              const SizedBox(height: 10),
-                          ],
-                          if (message.content.trim().isNotEmpty)
-                            Text(
-                              message.content,
-                              textAlign: textAlign,
-                              style: state.textStyle(
-                                context,
-                                size: 14.5,
-                                height: 1.55,
-                              ),
-                            ),
-                        ],
+                      if (message.content.trim().isNotEmpty)
+                        const SizedBox(height: 10),
+                    ],
+                    if (message.content.trim().isNotEmpty)
+                      Text(
+                        message.content,
+                        textAlign: textAlign,
+                        style: state.textStyle(
+                          context,
+                          size: 14.5,
+                          height: 1.55,
+                        ),
                       ),
-                    ),
-                  ),
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 120),
-                    curve: Curves.easeOut,
-                    child: _actionsVisible
-                        ? Padding(
-                            padding: const EdgeInsets.only(top: 8),
-                            child: MessageActionBar(
-                              state: state,
-                              isModel: false,
-                              hasText: message.content.trim().isNotEmpty,
-                              onCopy: widget.onCopy,
-                              onRetry: widget.onRetry,
-                              onTranslate: widget.onTranslate,
-                            ),
-                          )
-                        : const SizedBox.shrink(),
-                  ),
-                  if (message.translation.trim().isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    TranslationBlock(
-                      state: state,
-                      text: message.translation,
-                      alignRight: true,
-                    ),
                   ],
-                ],
+                ),
               ),
             ),
-            const SizedBox(width: 10),
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: AvatarDot(
-                value: widget.userAvatar,
-                fallbackIcon: Icons.person_outline_rounded,
-                imageSize: 28,
-                accent: state.accents[1],
+            _ActionReveal(
+              visible: _actionsVisible,
+              alignRight: true,
+              child: MessageActionBar(
+                state: state,
+                isModel: false,
+                hasText: message.content.trim().isNotEmpty,
+                onCopy: widget.onCopy,
+                onRetry: widget.onRetry,
+                onEdit: widget.onEdit,
+                onTranslate: widget.onTranslate,
+                onBranch: widget.onBranch,
+                onDelete: widget.onDelete,
               ),
             ),
+            if (message.translation.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              TranslationBlock(
+                state: state,
+                text: message.translation,
+                alignRight: true,
+              ),
+            ],
           ],
         ),
       );
@@ -149,79 +138,98 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     return Align(
       alignment: _messageShellAlignment(state, isUser: false),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 9),
-            child: AvatarDot(
-              value: widget.assistantAvatar,
-              fallbackIcon: Icons.auto_awesome_rounded,
-              imageSize: 28,
-              accent: state.accents[0],
-            ),
+          AvatarDot(
+            value: widget.assistantAvatar,
+            fallbackIcon: Icons.auto_awesome_rounded,
+            imageSize: 28,
+            accent: state.accents[0],
           ),
-          const SizedBox(width: 14),
-          Flexible(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Listener(
-                behavior: HitTestBehavior.translucent,
-                onPointerUp: (_) {
-                  if (!message.isThinking) _toggleActions();
-                },
-                child: Column(
-                  crossAxisAlignment: _messageColumnAlignment(state),
-                  children: [
-                    if (message.reasoning.trim().isNotEmpty ||
-                        message.isThinking) ...[
-                      ReasoningPanel(
-                        state: state,
-                        reasoning: message.reasoning,
-                        thinking: message.isThinking,
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-                    if (message.content.trim().isNotEmpty ||
-                        !message.isThinking)
-                      _StyledMessageSurface(
-                        state: state,
-                        isUser: false,
-                        maxWidth: maxWidth,
-                        child: _AiMarkdown(
-                          state: state,
-                          data: message.content.isEmpty ? ' ' : message.content,
-                          textAlign: textAlign,
-                        ),
-                      ),
-                    AnimatedSize(
-                      duration: const Duration(milliseconds: 120),
-                      curve: Curves.easeOut,
-                      child: _actionsVisible
-                          ? Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: MessageActionBar(
-                                state: state,
-                                isModel: true,
-                                hasText: message.content.trim().isNotEmpty,
-                                onCopy: widget.onCopy,
-                                onRetry: widget.onRetry,
-                                onTranslate: widget.onTranslate,
-                              ),
-                            )
-                          : const SizedBox.shrink(),
+          const SizedBox(height: 8),
+          Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerUp: (_) {
+              if (!message.isThinking) _toggleActions();
+            },
+            child: Column(
+              crossAxisAlignment: _messageColumnAlignment(state),
+              children: [
+                if (message.reasoning.trim().isNotEmpty ||
+                    message.isThinking) ...[
+                  ReasoningPanel(
+                    state: state,
+                    reasoning: message.reasoning,
+                    thinking: message.isThinking,
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                if (message.content.trim().isNotEmpty || !message.isThinking)
+                  _StyledMessageSurface(
+                    state: state,
+                    isUser: false,
+                    maxWidth: maxWidth,
+                    child: _AiMarkdown(
+                      state: state,
+                      data: message.content.isEmpty ? ' ' : message.content,
+                      textAlign: textAlign,
                     ),
-                    if (message.translation.trim().isNotEmpty) ...[
-                      const SizedBox(height: 10),
-                      TranslationBlock(state: state, text: message.translation),
-                    ],
-                  ],
+                  ),
+                _ActionReveal(
+                  visible: _actionsVisible,
+                  child: MessageActionBar(
+                    state: state,
+                    isModel: true,
+                    hasText: message.content.trim().isNotEmpty,
+                    onCopy: widget.onCopy,
+                    onRetry: widget.onRetry,
+                    onEdit: widget.onEdit,
+                    onTranslate: widget.onTranslate,
+                    onBranch: widget.onBranch,
+                    onDelete: widget.onDelete,
+                  ),
                 ),
-              ),
+                if (message.translation.trim().isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  TranslationBlock(state: state, text: message.translation),
+                ],
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ActionReveal extends StatelessWidget {
+  const _ActionReveal({
+    required this.visible,
+    required this.child,
+    this.alignRight = false,
+  });
+
+  final bool visible;
+  final Widget child;
+  final bool alignRight;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOut,
+      child: visible
+          ? Align(
+              alignment: alignRight
+                  ? Alignment.centerRight
+                  : Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: child,
+              ),
+            )
+          : const SizedBox.shrink(),
     );
   }
 }

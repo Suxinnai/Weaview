@@ -44,7 +44,11 @@ class SettingsSheetState extends State<SettingsSheet> {
   TtsProviderConfig? editingTts;
   final TextEditingController memoryController = TextEditingController();
   final TextEditingController systemPromptController = TextEditingController();
+  final TextEditingController profileController = TextEditingController();
   late ModelAssignment roleDraft;
+  final Set<String> deletingProviders = {};
+  String? providerDeleteTarget;
+  String? draggingProviderName;
 
   static const settingsTabs = [
     ('general', '通用', Icons.settings_outlined),
@@ -60,6 +64,7 @@ class SettingsSheetState extends State<SettingsSheet> {
     'title': ('标题总结模型', '用于生成历史记录标题 (需要快速)'),
     'suggest': ('聊天建议模型', '生成后续对话建议'),
     'translate': ('翻译模型', '用于语言翻译功能'),
+    'tool': ('工具模型', '用于人物画像补全与记忆整理'),
   };
 
   static const settingsEngines = [
@@ -72,6 +77,7 @@ class SettingsSheetState extends State<SettingsSheet> {
   void initState() {
     super.initState();
     systemPromptController.text = widget.state.systemPrompt;
+    profileController.text = widget.state.userProfile;
     roleDraft = widget.state.modelAssignments['chat']!;
   }
 
@@ -80,6 +86,7 @@ class SettingsSheetState extends State<SettingsSheet> {
     super.didUpdateWidget(oldWidget);
     if (!oldWidget.open && widget.open) {
       systemPromptController.text = widget.state.systemPrompt;
+      profileController.text = widget.state.userProfile;
     }
   }
 
@@ -87,6 +94,7 @@ class SettingsSheetState extends State<SettingsSheet> {
   void dispose() {
     memoryController.dispose();
     systemPromptController.dispose();
+    profileController.dispose();
     super.dispose();
   }
 
@@ -117,6 +125,7 @@ class SettingsSheetState extends State<SettingsSheet> {
     final state = widget.state;
     final title = switch (subView) {
       'system_prompt' => '全局系统提示词',
+      'user_profile' => '人物画像',
       'memory_management' => '记忆管理',
       'provider_config' => '供应商配置',
       'model_role_config' =>
@@ -256,6 +265,7 @@ class SettingsSheetState extends State<SettingsSheet> {
           ? mainTabBody()
           : switch (subView) {
               'system_prompt' => systemPromptView(),
+              'user_profile' => userProfileView(),
               'memory_management' => memoryView(),
               'provider_config' => providerConfigView(),
               'model_role_config' => modelRoleConfigView(),
@@ -314,7 +324,13 @@ class SettingsSheetState extends State<SettingsSheet> {
     }
     widget.onClose();
     Future<void>.delayed(const Duration(milliseconds: 260), () {
-      if (mounted) setState(() => subView = 'main');
+      if (mounted) {
+        setState(() {
+          subView = 'main';
+          providerDeleteTarget = null;
+          draggingProviderName = null;
+        });
+      }
     });
   }
 
@@ -329,6 +345,8 @@ class SettingsSheetState extends State<SettingsSheet> {
       editingProvider = null;
       editingTts = null;
       statusText = '';
+      providerDeleteTarget = null;
+      draggingProviderName = null;
     });
   }
 
@@ -337,8 +355,37 @@ class SettingsSheetState extends State<SettingsSheet> {
     memoryController.clear();
   }
 
+  Future<void> completeUserProfile() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => statusText = '正在调用工具模型补全人物画像...');
+    try {
+      await widget.state.completeUserProfileWithToolModel();
+      profileController.text = widget.state.userProfile;
+      setState(() => statusText = '');
+      widget.showSnack('人物画像已补全。');
+    } catch (error) {
+      setState(() => statusText = '');
+      widget.showSnack(error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<void> organizeMemories() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => statusText = '正在调用工具模型整理记忆...');
+    try {
+      await widget.state.organizeMemoriesWithToolModel();
+      setState(() => statusText = '');
+      widget.showSnack('记忆已整理。');
+    } catch (error) {
+      setState(() => statusText = '');
+      widget.showSnack(error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
   void openProviderConfig(AiProvider? provider) {
     setState(() {
+      providerDeleteTarget = null;
+      draggingProviderName = null;
       editingProvider = provider;
       providerName = provider?.name ?? '';
       providerKey = provider?.apiKey ?? '';
@@ -497,25 +544,37 @@ class SettingsSheetState extends State<SettingsSheet> {
   }
 
   Future<void> confirmDeleteProvider(String name) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('删除提供商'),
-        content: Text('确定要删除提供商 "$name" 吗？此操作无法撤销。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      widget.state.deleteProvider(name);
+    if (deletingProviders.contains(name)) return;
+    deletingProviders.add(name);
+    try {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('删除提供商'),
+          content: Text('确定要删除提供商 "$name" 吗？此操作无法撤销。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('删除'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) {
+        widget.state.deleteProvider(name);
+        if (mounted) {
+          setState(() {
+            providerDeleteTarget = null;
+            draggingProviderName = null;
+          });
+        }
+      }
+    } finally {
+      deletingProviders.remove(name);
     }
   }
 

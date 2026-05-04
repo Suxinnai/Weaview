@@ -373,6 +373,89 @@ class ModelBadge extends StatelessWidget {
   }
 }
 
+class ModelCapabilityChips extends StatelessWidget {
+  const ModelCapabilityChips({
+    required this.state,
+    required this.capabilities,
+    this.compact = false,
+  });
+
+  final WeaviewState state;
+  final List<String> capabilities;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final caps = capabilities.isEmpty ? const ['chat'] : capabilities;
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final cap in caps)
+          _CapabilityChip(state: state, cap: cap, compact: compact),
+      ],
+    );
+  }
+}
+
+class _CapabilityChip extends StatelessWidget {
+  const _CapabilityChip({
+    required this.state,
+    required this.cap,
+    required this.compact,
+  });
+
+  final WeaviewState state;
+  final String cap;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final meta = switch (cap) {
+      'vision' => (Icons.image_search_outlined, '视觉', const Color(0xFF60A5FA)),
+      'image' => (Icons.image_outlined, '图像', const Color(0xFFA78BFA)),
+      'tool' => (Icons.build_outlined, '工具', const Color(0xFFF59E0B)),
+      'reason' => (Icons.psychology_outlined, '推理', const Color(0xFF34D399)),
+      'chat' => (
+        Icons.chat_bubble_outline_rounded,
+        '聊天',
+        const Color(0xFF38BDF8),
+      ),
+      _ => (Icons.tune_rounded, cap, state.accents[0]),
+    };
+    return Container(
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 7 : 9,
+        vertical: compact ? 3 : 5,
+      ),
+      decoration: BoxDecoration(
+        color: meta.$3.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            meta.$1,
+            size: compact ? 13 : 15,
+            color: state.text(context).withValues(alpha: 0.72),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            meta.$2,
+            style: state.textStyle(
+              context,
+              size: compact ? 10.5 : 11.5,
+              weight: FontWeight.w700,
+              opacity: 0.74,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class SoftButton extends StatelessWidget {
   const SoftButton({
     required this.state,
@@ -645,22 +728,65 @@ class _ModelPickerDialogState extends State<ModelPickerDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final state = widget.state;
     final models = widget.models.where((m) {
       final q = query.toLowerCase();
       return q.isEmpty ||
           m.id.toLowerCase().contains(q) ||
           m.name.toLowerCase().contains(q);
     }).toList();
-    return AlertDialog(
-      title: const Text('模型列表'),
-      content: SizedBox(
-        width: 360,
-        height: 430,
+    final allVisibleSelected =
+        models.isNotEmpty && models.every((m) => selected.contains(m.id));
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 30),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      child: Container(
+        width: 430,
+        height: MediaQuery.sizeOf(context).height * 0.76,
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+        decoration: BoxDecoration(
+          color: state.background(context),
+          borderRadius: BorderRadius.circular(28),
+        ),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '可用模型',
+                    style: state.textStyle(
+                      context,
+                      size: 19,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: models.isEmpty
+                      ? null
+                      : () => setState(() {
+                          if (allVisibleSelected) {
+                            for (final model in models) {
+                              selected.remove(model.id);
+                            }
+                          } else {
+                            selected.addAll(models.map((m) => m.id));
+                          }
+                        }),
+                  child: Text(
+                    '${allVisibleSelected ? '取消全选' : '全选'} (${models.length})',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             TextField(
               onChanged: (value) => setState(() => query = value),
-              decoration: const InputDecoration(hintText: '搜索模型名称或ID...'),
+              style: state.textStyle(context, size: 14),
+              decoration: inputDecoration(state, hint: '输入模型名称筛选'),
             ),
             const SizedBox(height: 12),
             Expanded(
@@ -668,35 +794,131 @@ class _ModelPickerDialogState extends State<ModelPickerDialog> {
                 itemCount: models.length,
                 itemBuilder: (context, index) {
                   final model = models[index];
-                  return CheckboxListTile(
-                    value: selected.contains(model.id),
-                    title: Text(model.name, overflow: TextOverflow.ellipsis),
-                    subtitle: Text(model.id, overflow: TextOverflow.ellipsis),
-                    onChanged: (_) => setState(() {
-                      selected.contains(model.id)
-                          ? selected.remove(model.id)
-                          : selected.add(model.id);
-                    }),
+                  final active = selected.contains(model.id);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Material(
+                      color: active
+                          ? state.accents[0].withValues(alpha: 0.14)
+                          : state.text(context).withValues(alpha: 0.045),
+                      borderRadius: BorderRadius.circular(18),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(18),
+                        onTap: () => setState(() {
+                          active
+                              ? selected.remove(model.id)
+                              : selected.add(model.id);
+                        }),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(13, 12, 10, 12),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: state.accents[0].withValues(
+                                    alpha: 0.14,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Icon(
+                                  Icons.memory_rounded,
+                                  size: 19,
+                                  color: state
+                                      .text(context)
+                                      .withValues(alpha: 0.62),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      model.name,
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: state.textStyle(
+                                        context,
+                                        size: 14.5,
+                                        weight: FontWeight.w600,
+                                        height: 1.25,
+                                      ),
+                                    ),
+                                    if (model.id != model.name) ...[
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        model.id,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: state.textStyle(
+                                          context,
+                                          size: 11,
+                                          opacity: 0.44,
+                                        ),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 8),
+                                    ModelCapabilityChips(
+                                      state: state,
+                                      capabilities: model.capabilities,
+                                      compact: true,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Icon(
+                                active
+                                    ? Icons.check_circle_rounded
+                                    : Icons.add_circle_outline_rounded,
+                                size: 26,
+                                color: active
+                                    ? state.accents[0]
+                                    : state
+                                          .text(context)
+                                          .withValues(alpha: 0.46),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   );
                 },
               ),
             ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: SoftButton(
+                    state: state,
+                    label: '取消',
+                    onTap: () => Navigator.pop(context),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SoftButton(
+                    state: state,
+                    label: '添加 ${selected.length}',
+                    accent: true,
+                    onTap: () => Navigator.pop(
+                      context,
+                      widget.models
+                          .where((m) => selected.contains(m.id))
+                          .toList(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(
-            context,
-            widget.models.where((m) => selected.contains(m.id)).toList(),
-          ),
-          child: const Text('确认添加'),
-        ),
-      ],
     );
   }
 }
@@ -752,11 +974,13 @@ class _EditModelDialogState extends State<EditModelDialog> {
   @override
   Widget build(BuildContext context) {
     const options = [
-      ('vision', Icons.visibility_outlined, 'Vision (视觉处理)'),
-      ('image', Icons.image_outlined, 'Image Output (图像生成)'),
-      ('tool', Icons.build_outlined, 'Tool Calling (函数调用)'),
-      ('reason', Icons.psychology_outlined, 'Reasoning (深度推理)'),
+      ('chat', Icons.chat_bubble_outline_rounded, '聊天'),
+      ('vision', Icons.visibility_outlined, '视觉'),
+      ('image', Icons.image_outlined, '图像'),
+      ('tool', Icons.build_outlined, '工具'),
+      ('reason', Icons.psychology_outlined, '推理'),
     ];
+    final state = widget.state;
     return AlertDialog(
       title: const Text('编辑模型'),
       content: SizedBox(
@@ -775,15 +999,37 @@ class _EditModelDialogState extends State<EditModelDialog> {
               decoration: const InputDecoration(labelText: '显示名称'),
             ),
             const SizedBox(height: 16),
-            for (final option in options)
-              SwitchListTile(
-                value: caps.contains(option.$1),
-                secondary: Icon(option.$2),
-                title: Text(option.$3),
-                onChanged: (value) => setState(
-                  () => value ? caps.add(option.$1) : caps.remove(option.$1),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '模型能力',
+                style: state.textStyle(
+                  context,
+                  size: 13,
+                  weight: FontWeight.w700,
+                  opacity: 0.62,
                 ),
               ),
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final option in options)
+                  _ModelCapabilityToggle(
+                    state: state,
+                    icon: option.$2,
+                    label: option.$3,
+                    selected: caps.contains(option.$1),
+                    onTap: () => setState(() {
+                      caps.contains(option.$1)
+                          ? caps.remove(option.$1)
+                          : caps.add(option.$1);
+                    }),
+                  ),
+              ],
+            ),
           ],
         ),
       ),
@@ -803,6 +1049,66 @@ class _EditModelDialogState extends State<EditModelDialog> {
           child: const Text('保存配置'),
         ),
       ],
+    );
+  }
+}
+
+class _ModelCapabilityToggle extends StatelessWidget {
+  const _ModelCapabilityToggle({
+    required this.state,
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final WeaviewState state;
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected
+          ? state.accents[0].withValues(alpha: 0.18)
+          : state.text(context).withValues(alpha: 0.055),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Container(
+          width: 100,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                size: 17,
+                color: selected
+                    ? state.accents[0]
+                    : state.text(context).withValues(alpha: 0.58),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: state.textStyle(
+                    context,
+                    size: 12.5,
+                    weight: FontWeight.w700,
+                    opacity: selected ? 0.95 : 0.62,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

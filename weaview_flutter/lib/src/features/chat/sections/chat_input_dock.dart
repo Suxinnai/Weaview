@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
@@ -54,7 +53,7 @@ class ChatInputDock extends StatelessWidget {
       curve: Curves.easeOut,
       decoration: BoxDecoration(
         color: (dark ? Colors.black : state.layer(context)).withValues(
-          alpha: dark ? 0.58 : 0.62,
+          alpha: dark ? 0.50 : 0.42,
         ),
         borderRadius: BorderRadius.circular(dockExpanded ? 24 : 32),
         border: Border.all(
@@ -225,13 +224,7 @@ class ChatInputDock extends StatelessWidget {
     );
     final dock = ClipRRect(
       borderRadius: BorderRadius.circular(dockExpanded ? 24 : 32),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(
-          sigmaX: keyboardOpen ? 0 : 4,
-          sigmaY: keyboardOpen ? 0 : 4,
-        ),
-        child: dockSurface,
-      ),
+      child: dockSurface,
     );
     return AnimatedPadding(
       duration: const Duration(milliseconds: 90),

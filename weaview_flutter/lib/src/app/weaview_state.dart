@@ -9,6 +9,7 @@ import '../domain/models.dart';
 import 'ai_theme_guard.dart';
 import 'app_constants.dart';
 import 'model_config_resolver.dart';
+import 'prompt_appearance_intent.dart';
 import 'weaview_preferences.dart';
 
 class WeaviewState extends ChangeNotifier {
@@ -36,6 +37,8 @@ class WeaviewState extends ChangeNotifier {
   String assistantAvatar = '';
   String userAvatar = '';
   String userName = '织梦者';
+  String assistantName = '织境';
+  String userProfile = '';
   bool isStreaming = false;
   int _streamRunId = 0;
   bool _cancelStreamRequested = false;
@@ -81,6 +84,8 @@ class WeaviewState extends ChangeNotifier {
     assistantAvatar = prefs.assistantAvatar;
     userAvatar = prefs.userAvatar;
     userName = prefs.userName;
+    assistantName = prefs.assistantName;
+    userProfile = prefs.userProfile;
     themeMode = prefs.themeMode;
     backgroundOverride = prefs.themeBackground;
     textOverride = prefs.themeText;
@@ -288,7 +293,9 @@ class WeaviewState extends ChangeNotifier {
         : textLight;
     final effectiveText = nextText ?? fallbackText;
     if (contrastRatio(effectiveBackground, effectiveText) < 4.5) {
-      nextText = readableTextFor(effectiveBackground);
+      nextText = nextText == null
+          ? readableTextFor(effectiveBackground)
+          : _readableVariantOf(nextText, effectiveBackground);
     }
     if (bg != null) {
       backgroundOverride = nextBackground;
@@ -403,6 +410,13 @@ class WeaviewState extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool _applyPromptAppearanceIntent(String value) {
+    final args = PromptAppearanceIntent.parse(value);
+    if (args.isEmpty) return false;
+    applyAiTheme(args, userPrompt: value);
+    return true;
+  }
+
   void updateSystemPrompt(String value) {
     systemPrompt = value.isEmpty ? defaultSystemInstruction : value;
     _prefs?.saveSystemPrompt(systemPrompt);
@@ -412,6 +426,18 @@ class WeaviewState extends ChangeNotifier {
   void updateUserName(String value) {
     userName = value;
     _prefs?.saveUserName(value);
+    notifyListeners();
+  }
+
+  void updateAssistantName(String value) {
+    assistantName = value.trim().isEmpty ? '织境' : value.trim();
+    _prefs?.saveAssistantName(assistantName);
+    notifyListeners();
+  }
+
+  void updateUserProfile(String value) {
+    userProfile = value.trim();
+    _prefs?.saveUserProfile(userProfile);
     notifyListeners();
   }
 
@@ -468,6 +494,96 @@ class WeaviewState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> completeUserProfileWithToolModel() async {
+    final assignment = modelAssignments['tool'];
+    final provider = assignment == null
+        ? null
+        : _providerForAssignment(assignment);
+    final configIssue = _modelConfigIssue(
+      assignment: assignment,
+      provider: provider,
+      roleLabel: '工具模型',
+    );
+    if (configIssue != null) throw Exception(configIssue);
+    final input =
+        '''
+请根据已有信息补全用户人物画像。要求：
+- 只输出一段 120-260 字的中文人物画像。
+- 包含用户偏好、沟通方式、正在做的项目、技术倾向、已知约束。
+- 不要编造不存在的隐私信息，不确定就写“未明确”。
+
+当前画像：
+${userProfile.trim().isEmpty ? '无' : userProfile.trim()}
+
+长期记忆：
+${memories.isEmpty ? '无' : memories.map((m) => '- $m').join('\n')}
+
+最近对话：
+${_compactConversation(messages.isNotEmpty ? messages : chatSessions.expand((s) => s.messages).take(20).toList())}
+''';
+    final result = await AiGateway.generateRoleText(
+      provider: provider!,
+      assignment: assignment!,
+      input: input,
+    ).timeout(roleRequestTimeout);
+    updateUserProfile(result);
+  }
+
+  Future<void> organizeMemoriesWithToolModel() async {
+    final assignment = modelAssignments['tool'];
+    final provider = assignment == null
+        ? null
+        : _providerForAssignment(assignment);
+    final configIssue = _modelConfigIssue(
+      assignment: assignment,
+      provider: provider,
+      roleLabel: '工具模型',
+    );
+    if (configIssue != null) throw Exception(configIssue);
+    final input =
+        '''
+请整理用户长期记忆。要求：
+- 输出 JSON 数组字符串，例如 ["用户偏好...", "用户项目..."]。
+- 最多 12 条，每条不超过 40 个中文字符。
+- 去重、合并相近信息，删除空泛或临时信息。
+- 不要输出 Markdown，不要解释。
+
+当前人物画像：
+${userProfile.trim().isEmpty ? '无' : userProfile.trim()}
+
+已有记忆：
+${memories.isEmpty ? '无' : memories.map((m) => '- $m').join('\n')}
+
+最近对话：
+${_compactConversation(messages.isNotEmpty ? messages : chatSessions.expand((s) => s.messages).take(20).toList())}
+''';
+    final raw = await AiGateway.generateRoleText(
+      provider: provider!,
+      assignment: assignment!,
+      input: input,
+    ).timeout(roleRequestTimeout);
+    try {
+      final decoded = jsonDecode(raw) as List;
+      memories = decoded
+          .map((item) => item.toString().trim())
+          .where((item) => item.isNotEmpty)
+          .take(12)
+          .toList();
+    } catch (_) {
+      memories = raw
+          .split(RegExp(r'[\n\r]+'))
+          .map(
+            (line) =>
+                line.replaceFirst(RegExp(r'^\s*[-*0-9.、]+\s*'), '').trim(),
+          )
+          .where((line) => line.isNotEmpty)
+          .take(12)
+          .toList();
+    }
+    _prefs?.saveMemories(memories);
+    notifyListeners();
+  }
+
   void newSession() {
     messages.clear();
     suggestions = [];
@@ -481,6 +597,69 @@ class WeaviewState extends ChangeNotifier {
       ..addAll(session.messages.map((m) => m.copy()));
     suggestions = [];
     currentSessionId = session.id;
+    notifyListeners();
+  }
+
+  void createBranchAt(int index) {
+    if (index < 0 || index >= messages.length) return;
+    final branchMessages = messages
+        .take(index + 1)
+        .map((message) => message.copy())
+        .toList();
+    if (branchMessages.isEmpty) return;
+    final sourceTitle =
+        chatSessions
+            .firstWhereOrNull((session) => session.id == currentSessionId)
+            ?.title
+            .trim() ??
+        branchMessages
+            .firstWhereOrNull((m) => m.role == 'user')
+            ?.content
+            .trim();
+    currentSessionId = 'branch_${DateTime.now().millisecondsSinceEpoch}';
+    messages
+      ..clear()
+      ..addAll(branchMessages);
+    suggestions = [];
+    _persistCurrentSession();
+    final sessionIndex = chatSessions.indexWhere(
+      (s) => s.id == currentSessionId,
+    );
+    if (sessionIndex >= 0) {
+      final base = sourceTitle == null || sourceTitle.isEmpty
+          ? '未命名梦境'
+          : sourceTitle;
+      chatSessions[sessionIndex] = chatSessions[sessionIndex].copyWith(
+        title: '分支 · ${base.length > 14 ? base.substring(0, 14) : base}',
+      );
+      _prefs?.saveChatSessions(chatSessions);
+    }
+    notifyListeners();
+  }
+
+  void deleteMessageAt(int index) {
+    if (index < 0 || index >= messages.length) return;
+    messages.removeAt(index);
+    suggestions = [];
+    if (messages.isEmpty) {
+      if (currentSessionId != null) {
+        chatSessions.removeWhere((s) => s.id == currentSessionId);
+        _prefs?.saveChatSessions(chatSessions);
+      }
+      currentSessionId = null;
+    } else {
+      _persistCurrentSession();
+    }
+    notifyListeners();
+  }
+
+  void editMessageAt(int index, String content) {
+    if (index < 0 || index >= messages.length) return;
+    final trimmed = content.trim();
+    if (trimmed.isEmpty) return;
+    messages[index].content = trimmed;
+    suggestions = [];
+    _persistCurrentSession();
     notifyListeners();
   }
 
@@ -521,6 +700,7 @@ class WeaviewState extends ChangeNotifier {
   }) async {
     final content = value.trim();
     if ((content.isEmpty && attachments.isEmpty) || isStreaming) return;
+    _applyPromptAppearanceIntent(content);
 
     final chatAssignment = modelAssignments['chat'];
     final chatProvider = chatAssignment == null
@@ -597,8 +777,7 @@ class WeaviewState extends ChangeNotifier {
             continue;
           }
 
-          if (visibleReasoningChars < reasoningLength &&
-              visibleContentChars == 0) {
+          if (visibleReasoningChars < reasoningLength) {
             visibleReasoningChars++;
           }
           if (visibleContentChars < contentLength) {
@@ -612,7 +791,8 @@ class WeaviewState extends ChangeNotifier {
           current.reasoning = targetReasoning.characters
               .take(visibleReasoningChars)
               .toString();
-          current.isThinking = current.content.trim().isEmpty;
+          current.isThinking =
+              current.content.trim().isEmpty && remoteThinking && !streamDone;
           flush();
           await Future<void>.delayed(const Duration(milliseconds: 12));
         }
@@ -700,6 +880,10 @@ class WeaviewState extends ChangeNotifier {
     if (globalMemoryEnabled && memories.isNotEmpty) {
       prompt +=
           '\n\n[System directive: You have the following memories about the user:\n${memories.map((m) => '- $m').join('\n')}\nPlease take them into account when responding.]';
+    }
+    if (userProfile.trim().isNotEmpty) {
+      prompt +=
+          '\n\n[System directive: Current user profile:\n${userProfile.trim()}\nUse it only to personalize helpfulness; do not expose it unless the user asks.]';
     }
     if (referenceHistoryEnabled && chatSessions.isNotEmpty) {
       final recentTitles = chatSessions.take(4).map((s) => s.title).join('、');
@@ -851,6 +1035,20 @@ Treat background style, font/text style, bubble style, and message alignment as 
     return text.characters.take(4000).toString();
   }
 
+  static Color _readableVariantOf(Color requested, Color background) {
+    if (contrastRatio(background, requested) >= 4.5) return requested;
+    final backgroundIsLight = background.computeLuminance() >= 0.45;
+    final hsl = HSLColor.fromColor(requested);
+    for (var i = 1; i <= 14; i++) {
+      final nextLightness = backgroundIsLight
+          ? (hsl.lightness - i * 0.045).clamp(0.18, 0.82)
+          : (hsl.lightness + i * 0.045).clamp(0.18, 0.88);
+      final candidate = hsl.withLightness(nextLightness.toDouble()).toColor();
+      if (contrastRatio(background, candidate) >= 4.5) return candidate;
+    }
+    return readableTextFor(background);
+  }
+
   void _renameSession(String sessionId, String title) {
     final index = chatSessions.indexWhere((s) => s.id == sessionId);
     if (index < 0) return;
@@ -928,6 +1126,17 @@ Treat background style, font/text style, bubble style, and message alignment as 
     notifyListeners();
   }
 
+  void reorderProvider(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= providers.length) return;
+    var targetIndex = newIndex;
+    if (targetIndex > oldIndex) targetIndex -= 1;
+    targetIndex = targetIndex.clamp(0, providers.length - 1);
+    final next = [...providers];
+    final item = next.removeAt(oldIndex);
+    next.insert(targetIndex, item);
+    saveProviders(next);
+  }
+
   void _persistProviders() {
     _prefs?.saveProviders(providers);
   }
@@ -992,6 +1201,8 @@ Treat background style, font/text style, bubble style, and message alignment as 
       'ai_active_tts_id': activeTtsId,
       'ai_tts_providers': ttsProviders.map((p) => p.safeJson()).toList(),
       'user_name': userName,
+      'assistant_name': assistantName,
+      'user_profile': userProfile,
       'theme_mode': themeMode.name,
       'theme_bubble_style': bubbleStyle,
       'theme_message_alignment': messageAlignment,
@@ -1011,6 +1222,8 @@ Treat background style, font/text style, bubble style, and message alignment as 
     assistantAvatar = '';
     userAvatar = '';
     userName = '织梦者';
+    assistantName = '织境';
+    userProfile = '';
     providers = AiProvider.defaults();
     modelAssignments = ModelAssignment.defaults();
     memories = [];

@@ -13,7 +13,10 @@ class ChatBody extends StatelessWidget {
     required this.pendingAttachments,
     required this.onCopyMessage,
     required this.onRetryMessage,
+    required this.onEditMessage,
     required this.onTranslateMessage,
+    required this.onBranchMessage,
+    required this.onDeleteMessage,
     required this.onDownloadAttachment,
   });
 
@@ -23,7 +26,10 @@ class ChatBody extends StatelessWidget {
   final List<MessageAttachment> pendingAttachments;
   final Future<void> Function(ChatMessage message) onCopyMessage;
   final Future<void> Function(int index) onRetryMessage;
+  final Future<void> Function(int index) onEditMessage;
   final Future<void> Function(int index) onTranslateMessage;
+  final void Function(int index) onBranchMessage;
+  final Future<void> Function(int index) onDeleteMessage;
   final Future<void> Function(MessageAttachment attachment)
   onDownloadAttachment;
 
@@ -38,7 +44,7 @@ class ChatBody extends StatelessWidget {
         ? 48.0
         : 0.0;
     final bottomPad =
-        136.0 +
+        118.0 +
         keyboardInset +
         suggestionPad +
         (dockExpanded ? 92 : 0) +
@@ -102,11 +108,15 @@ class ChatBody extends StatelessWidget {
                     return MessageBubble(
                       state: state,
                       message: message,
+                      index: index,
                       assistantAvatar: state.assistantAvatar,
                       userAvatar: state.userAvatar,
                       onCopy: () => onCopyMessage(message),
                       onRetry: () => onRetryMessage(index),
+                      onEdit: () => onEditMessage(index),
                       onTranslate: () => onTranslateMessage(index),
+                      onBranch: () => onBranchMessage(index),
+                      onDelete: () => onDeleteMessage(index),
                       onDownloadAttachment: onDownloadAttachment,
                     );
                   },

@@ -27,6 +27,8 @@ class WeaviewPreferences {
       _prefs.getString(_PrefsKey.assistantAvatar) ?? '';
   String get userAvatar => _prefs.getString(_PrefsKey.userAvatar) ?? '';
   String get userName => _prefs.getString(_PrefsKey.userName) ?? '织梦者';
+  String get assistantName => _prefs.getString(_PrefsKey.assistantName) ?? '织境';
+  String get userProfile => _prefs.getString(_PrefsKey.userProfile) ?? '';
 
   ThemeMode get themeMode =>
       decodeThemeMode(_prefs.getString(_PrefsKey.themeMode));
@@ -211,6 +213,22 @@ class WeaviewPreferences {
     _prefs.setString(_PrefsKey.userName, value);
   }
 
+  void saveAssistantName(String value) {
+    _prefs.setString(
+      _PrefsKey.assistantName,
+      value.trim().isEmpty ? '织境' : value.trim(),
+    );
+  }
+
+  void saveUserProfile(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      _prefs.remove(_PrefsKey.userProfile);
+    } else {
+      _prefs.setString(_PrefsKey.userProfile, trimmed);
+    }
+  }
+
   void saveAssistantAvatar(String value) {
     if (value.isEmpty) {
       _prefs.remove(_PrefsKey.assistantAvatar);
@@ -290,6 +308,8 @@ abstract final class _PrefsKey {
   static const assistantAvatar = 'assistant_avatar';
   static const userAvatar = 'user_avatar';
   static const userName = 'user_name';
+  static const assistantName = 'assistant_name';
+  static const userProfile = 'user_profile';
   static const themeMode = 'theme_mode';
   static const themeBackground = 'theme_background';
   static const themeText = 'theme_text';

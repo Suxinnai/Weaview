@@ -40,6 +40,11 @@ class ModelAssignment {
         model: '',
         prompt: '你是一个专业的翻译人员，请将输入的文本翻译成目标语言，保持原意，语言流畅。',
       ),
+      'tool': ModelAssignment(
+        provider: '',
+        model: '',
+        prompt: '你是织境的工具模型，负责整理用户画像和长期记忆。只输出可直接保存的简洁中文结果，不要添加解释。',
+      ),
     };
   }
 

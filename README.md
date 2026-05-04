@@ -10,18 +10,22 @@
 
 - 多提供商 AI 对话，支持 OpenAI 兼容接口与 Gemini 等 provider。
 - 主对话、标题总结、后续建议、翻译等角色模型独立分配。
+- 工具模型可独立分配，用于人物画像补全和长期记忆整理。
 - 流式输出、思考状态、思考链解析与折叠展示。
-- 会话历史、长期记忆、参考历史记忆和本地数据管理。
-- 图片/文件附件入口、消息复制、重试、翻译。
+- 会话历史、会话分支、长期记忆、参考历史记忆和本地数据管理。
+- 图片/文件附件入口、消息复制、编辑、删除、重试、翻译。
 - Tavily 联网搜索配置入口。
 - Flutter 移动端 UI，包含 Android 原生语音识别 fallback。
 
 ## Features
 
 - 支持自定义 AI provider、Base URL、API Key 和模型列表。
+- 支持 provider 拖拽排序、长按显示删除控制和预设 provider 安全合并。
 - 支持 OpenAI-compatible `/v1/chat/completions` 流式响应。
 - 支持 Gemini `generateContent` 显式 provider 接入。
 - 支持 AI 生成主题指令的安全守卫，限制模型只能修改允许的聊天外观字段。
+- 支持本地自然语言外观指令解析，聊天样式变更不必进入远端模型。
+- 支持人物画像、助手昵称、用户资料和工具模型辅助整理。
 - 支持 Markdown、代码块、公式块、思考链、翻译块等富文本消息渲染。
 - 支持 SharedPreferences 本地持久化，不要求后端服务。
 - 支持 Flutter 单元测试与 widget 测试。
@@ -69,7 +73,7 @@ flutter pub get
 |---|---|---|
 | AI Provider API Key | 模型服务 API Key，仅保存在本机 SharedPreferences | 无 |
 | Base URL | OpenAI 兼容服务地址，例如 `https://api.openai.com/v1` | 按 provider 预设 |
-| 默认模型 | 主对话、标题总结、建议、翻译各自使用的模型 | 未分配 |
+| 默认模型 | 主对话、标题总结、建议、翻译、工具任务各自使用的模型 | 未分配 |
 | Tavily API Key | 联网搜索服务 Key | 无 |
 | TTS Provider | 语音合成服务配置 | 系统 TTS |
 
@@ -99,8 +103,10 @@ flutter run -d <device-id>
 1. 启动 App。
 2. 打开「设置 > 提供商」，配置一个 OpenAI 兼容 provider 或 Gemini provider。
 3. 打开「设置 > 默认模型」，为「主对话模型」选择 provider 和模型。
-4. 返回聊天页，输入消息并发送。
-5. 如需联网搜索，先在「设置 > 扩展服务」配置 Tavily API Key，再在输入栏启用联网搜索。
+4. 如需使用人物画像补全或记忆整理，继续为「工具模型」选择 provider 和模型。
+5. 返回聊天页，输入消息并发送。
+6. 长按消息可编辑、删除或从当前消息创建分支。
+7. 如需联网搜索，先在「设置 > 扩展服务」配置 Tavily API Key，再在输入栏启用联网搜索。
 
 OpenAI 兼容 provider 通常需要：
 
@@ -118,6 +124,7 @@ Chat API: POST /chat/completions
 ├── weaview_flutter/                 # Flutter App 主工程
 │   ├── lib/main.dart                # App 入口
 │   ├── lib/src/app/                 # 应用装配、状态、偏好设置、主题守卫
+│   │   └── prompt_appearance_intent.dart # 本地聊天外观提示解析
 │   ├── lib/src/core/                # 通用工具函数与扩展
 │   ├── lib/src/data/                # AI provider、搜索、流解析等外部服务接入
 │   ├── lib/src/domain/              # 领域模型
@@ -156,6 +163,8 @@ flutter test test/model_config_resolver_test.dart
 | `flutter build apk --release --split-per-abi` | 构建 Android release 分 ABI 包 |
 
 ## 构建与部署
+
+预览 APK 可在 [GitHub Releases](https://github.com/Suxinnai/Weaview/releases) 下载。当前 GitHub Release 包面向测试安装，仍使用仓库内 Android release 的调试签名配置，不等同于 Play Store 生产签名包。
 
 Android debug：
 

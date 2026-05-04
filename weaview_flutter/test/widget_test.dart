@@ -8,6 +8,7 @@ import 'package:weaview_flutter/src/core/app_utils.dart';
 import 'package:weaview_flutter/src/data/ai/ai_gateway.dart';
 import 'package:weaview_flutter/src/domain/models.dart';
 import 'package:weaview_flutter/src/features/chat/chat_home.dart';
+import 'package:weaview_flutter/src/features/settings/settings_sheet.dart';
 
 void main() {
   testWidgets('renders the Weaview chat shell', (WidgetTester tester) async {
@@ -53,6 +54,7 @@ $$E = mc^2$$'''),
       expect(assignment.provider, isEmpty);
       expect(assignment.model, isEmpty);
     }
+    expect(assignments.keys, contains('tool'));
   });
 
   test(
@@ -102,6 +104,98 @@ $$E = mc^2$$'''),
     final custom = state.providers.firstWhere((item) => item.name == 'Custom');
     expect(custom.models, hasLength(1));
     expect(custom.models.single.id, 'same/model');
+    state.dispose();
+  });
+
+  test('reorders providers and keeps order in state', () async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+
+    await state.load();
+    final first = state.providers.first.name;
+    final second = state.providers[1].name;
+
+    state.reorderProvider(0, 2);
+
+    expect(state.providers[0].name, second);
+    expect(state.providers[1].name, first);
+    state.dispose();
+  });
+
+  testWidgets(
+    'provider cards reveal delete on long press and hide on blank tap',
+    (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final state = WeaviewState();
+
+      await state.load();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SettingsSheet(
+            state: state,
+            open: true,
+            onClose: () {},
+            onPickAvatar: (_) async {},
+            showSnack: (_) {},
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('提供商'));
+      await tester.pumpAndSettle();
+      await tester.longPress(find.text('OpenAI'));
+      await tester.pumpAndSettle();
+
+      final sheetState = tester.state<SettingsSheetState>(
+        find.byType(SettingsSheet),
+      );
+      expect(sheetState.providerDeleteTarget, 'OpenAI');
+      expect(
+        find.byKey(const ValueKey('provider_delete_OpenAI')),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('模型提供商'));
+      await tester.pumpAndSettle();
+
+      expect(sheetState.providerDeleteTarget, isNull);
+      expect(
+        find.byKey(const ValueKey('provider_delete_OpenAI')),
+        findsNothing,
+      );
+      state.dispose();
+    },
+  );
+
+  test('creates conversation branch from selected message', () async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+
+    await state.load();
+    state.messages
+      ..add(ChatMessage.user('原始问题'))
+      ..add(ChatMessage.model('原始回答'))
+      ..add(ChatMessage.user('后续问题'));
+
+    state.createBranchAt(1);
+
+    expect(state.currentSessionId, startsWith('branch_'));
+    expect(state.messages, hasLength(2));
+    expect(state.chatSessions.first.title, startsWith('分支'));
+    state.dispose();
+  });
+
+  test('loads assistant name and user profile preferences', () async {
+    SharedPreferences.setMockInitialValues({
+      'assistant_name': '沐灵',
+      'user_profile': '用户正在开发 Flutter AI 助手。',
+    });
+    final state = WeaviewState();
+
+    await state.load();
+
+    expect(state.assistantName, '沐灵');
+    expect(state.userProfile, contains('Flutter'));
     state.dispose();
   });
 
@@ -224,6 +318,31 @@ $$E = mc^2$$'''),
     expect(state.messageAlignment, 'center');
     expect(state.fontStyleMood, 'italic');
     expect(state.fontWeightMood, 'bold');
+    state.dispose();
+  });
+
+  test('chat style prompt applies pink text locally', () async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+
+    await state.load();
+    await state.submitMessage('字体颜色改成粉色');
+
+    expect(state.textOverride, isNotNull);
+    expect(colorToHex(state.textOverride!), '#C9226C');
+    state.dispose();
+  });
+
+  test('chat style prompt can remove bubbles locally', () async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+
+    await state.load();
+    await state.submitMessage('对话气泡透明度调整为0');
+
+    expect(state.bubbleStyle, 'none');
+    expect(state.assistantBubbleOpacity, 0);
+    expect(state.userBubbleOpacity, 0);
     state.dispose();
   });
 

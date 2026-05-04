@@ -130,7 +130,7 @@ class SuggestionChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final dark = state.isDark(context);
     return Material(
-      color: state.text(context).withValues(alpha: dark ? 0.07 : 0.045),
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
@@ -139,6 +139,7 @@ class SuggestionChip extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 230),
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
           decoration: BoxDecoration(
+            color: state.layer(context).withValues(alpha: dark ? 0.22 : 0.34),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: state.accents[0].withValues(alpha: 0.32)),
             boxShadow: [

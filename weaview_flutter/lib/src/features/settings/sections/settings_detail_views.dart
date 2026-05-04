@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/app_constants.dart';
+import '../../../app/weaview_state.dart';
 import '../../../core/app_utils.dart';
 import '../../../domain/models.dart';
 import '../../../shared/widgets/shared_widgets.dart';
@@ -45,6 +46,67 @@ extension SettingsDetailViews on SettingsSheetState {
     ]);
   }
 
+  Widget userProfileView() {
+    final state = widget.state;
+    return bottomActionPage(
+      status: statusText,
+      children: [
+        Text(
+          '人物画像会作为长期上下文的一部分，用于让AI理解你的偏好、项目背景和沟通方式。',
+          style: state.textStyle(
+            context,
+            size: 13,
+            opacity: 0.55,
+            height: 1.55,
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.42,
+          child: TextField(
+            controller: profileController,
+            expands: true,
+            maxLines: null,
+            minLines: null,
+            textAlignVertical: TextAlignVertical.top,
+            style: state.textStyle(context, size: 14, height: 1.65),
+            decoration: inputDecoration(
+              state,
+              hint: '记录你的偏好、项目、沟通方式等...',
+            ).copyWith(contentPadding: const EdgeInsets.all(18)),
+            onChanged: state.updateUserProfile,
+          ),
+        ),
+      ],
+      actions: Row(
+        children: [
+          Expanded(
+            child: SoftButton(
+              state: state,
+              label: '清空',
+              danger: true,
+              onTap: () {
+                profileController.clear();
+                state.updateUserProfile('');
+              },
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: SoftButton(
+              state: state,
+              label: 'AI 补全人物画像',
+              icon: Icons.auto_fix_high_rounded,
+              accent: true,
+              onTap: completeUserProfile,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget memoryView() {
     final state = widget.state;
     return scrollContent([
@@ -83,7 +145,18 @@ extension SettingsDetailViews on SettingsSheetState {
         ),
       ),
       const SizedBox(height: 24),
-      SectionLabel(state: state, label: '用户记忆'),
+      Row(
+        children: [
+          Expanded(
+            child: SectionLabel(state: state, label: '用户记忆'),
+          ),
+          TextButton.icon(
+            onPressed: organizeMemories,
+            icon: const Icon(Icons.auto_fix_high_rounded, size: 16),
+            label: const Text('AI 整理'),
+          ),
+        ],
+      ),
       if (state.memories.isEmpty)
         CardShell(
           state: state,
@@ -261,7 +334,7 @@ extension SettingsDetailViews on SettingsSheetState {
         ),
         const SizedBox(height: 18),
         Text(
-          'Base URL (可选)',
+          'Base URL',
           style: state.textStyle(
             context,
             size: 13,
@@ -306,35 +379,14 @@ extension SettingsDetailViews on SettingsSheetState {
           for (final model in providerModels)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: CardShell(
+              child: _ProviderModelCard(
                 state: state,
-                child: SettingsRow(
-                  state: state,
-                  title: model.name,
-                  subtitle: model.id,
-                  leading: Icon(
-                    Icons.memory_rounded,
-                    color: state.text(context).withValues(alpha: 0.55),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TinyIcon(
-                        icon: Icons.edit_outlined,
-                        color: state.text(context),
-                        onTap: () => editModel(model),
-                      ),
-                      TinyIcon(
-                        icon: Icons.close_rounded,
-                        color: Colors.red,
-                        onTap: () => updateSheet(
-                          () => providerModels = providerModels
-                              .where((m) => m.id != model.id)
-                              .toList(),
-                        ),
-                      ),
-                    ],
-                  ),
+                model: model,
+                onEdit: () => editModel(model),
+                onDelete: () => updateSheet(
+                  () => providerModels = providerModels
+                      .where((m) => m.id != model.id)
+                      .toList(),
                 ),
               ),
             ),
@@ -736,6 +788,94 @@ extension SettingsDetailViews on SettingsSheetState {
           ),
         ]);
       },
+    );
+  }
+}
+
+class _ProviderModelCard extends StatelessWidget {
+  const _ProviderModelCard({
+    required this.state,
+    required this.model,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final WeaviewState state;
+  final AiModel model;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return CardShell(
+      state: state,
+      padding: const EdgeInsets.fromLTRB(14, 13, 8, 13),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: state.accents[0].withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Icons.memory_rounded,
+              color: state.text(context).withValues(alpha: 0.62),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  model.name,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: state.textStyle(
+                    context,
+                    size: 15,
+                    weight: FontWeight.w600,
+                    height: 1.25,
+                  ),
+                ),
+                if (model.id != model.name) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    model.id,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: state.textStyle(context, size: 11.5, opacity: 0.44),
+                  ),
+                ],
+                const SizedBox(height: 9),
+                ModelCapabilityChips(
+                  state: state,
+                  capabilities: model.capabilities,
+                  compact: true,
+                ),
+              ],
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TinyIcon(
+                icon: Icons.tune_rounded,
+                color: state.text(context),
+                onTap: onEdit,
+              ),
+              TinyIcon(
+                icon: Icons.close_rounded,
+                color: Colors.red,
+                onTap: onDelete,
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

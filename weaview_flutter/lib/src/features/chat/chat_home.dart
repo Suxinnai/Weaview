@@ -137,6 +137,63 @@ class _WeaviewHomeState extends State<WeaviewHome>
     );
   }
 
+  Future<void> _editMessage(int index) async {
+    if (index < 0 || index >= widget.state.messages.length) return;
+    final message = widget.state.messages[index];
+    final controller = TextEditingController(text: message.content);
+    final edited = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('编辑消息'),
+        content: TextField(
+          controller: controller,
+          minLines: 3,
+          maxLines: 8,
+          decoration: const InputDecoration(hintText: '输入消息内容'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (edited == null) return;
+    widget.state.editMessageAt(index, edited);
+  }
+
+  void _branchMessage(int index) {
+    widget.state.createBranchAt(index);
+    _snack('已从当前消息创建分支。');
+  }
+
+  Future<void> _deleteMessage(int index) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除消息'),
+        content: const Text('确定删除这条消息吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) widget.state.deleteMessageAt(index);
+  }
+
   Future<void> _translateMessage(int index) async {
     try {
       await widget.state.translateMessageAt(index);
@@ -423,7 +480,10 @@ class _WeaviewHomeState extends State<WeaviewHome>
                     pendingAttachments: _pendingAttachments,
                     onCopyMessage: _copyMessage,
                     onRetryMessage: _retryMessage,
+                    onEditMessage: _editMessage,
                     onTranslateMessage: _translateMessage,
+                    onBranchMessage: _branchMessage,
+                    onDeleteMessage: _deleteMessage,
                     onDownloadAttachment: _downloadAttachment,
                   ),
                   ChatHeader(

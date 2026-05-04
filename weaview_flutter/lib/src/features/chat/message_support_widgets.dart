@@ -61,7 +61,10 @@ class MessageActionBar extends StatelessWidget {
     required this.hasText,
     required this.onCopy,
     required this.onRetry,
+    required this.onEdit,
     required this.onTranslate,
+    required this.onBranch,
+    required this.onDelete,
   });
 
   final WeaviewState state;
@@ -69,7 +72,10 @@ class MessageActionBar extends StatelessWidget {
   final bool hasText;
   final VoidCallback onCopy;
   final VoidCallback onRetry;
+  final VoidCallback onEdit;
   final VoidCallback onTranslate;
+  final VoidCallback onBranch;
+  final VoidCallback onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -77,69 +83,112 @@ class MessageActionBar extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (isModel)
-          _MessageActionPill(
-            state: state,
-            icon: Icons.refresh_rounded,
-            label: '重试',
-            onTap: onRetry,
-          ),
-        _MessageActionPill(
+        _MessageIconAction(
           state: state,
           icon: Icons.content_copy_rounded,
-          label: '复制',
+          tooltip: '复制',
           onTap: onCopy,
         ),
-        _MessageActionPill(
+        _MessageIconAction(
           state: state,
-          icon: Icons.translate_rounded,
-          label: '翻译',
-          onTap: onTranslate,
+          icon: Icons.refresh_rounded,
+          tooltip: '重试',
+          onTap: onRetry,
+        ),
+        _MessageIconAction(
+          state: state,
+          icon: Icons.edit_outlined,
+          tooltip: '编辑',
+          onTap: onEdit,
+        ),
+        PopupMenuButton<String>(
+          tooltip: '更多',
+          padding: EdgeInsets.zero,
+          icon: Icon(
+            Icons.more_vert_rounded,
+            size: 18,
+            color: state.text(context).withValues(alpha: 0.62),
+          ),
+          color: state.layer(context),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          onSelected: (value) {
+            if (value == 'translate') onTranslate();
+            if (value == 'branch') onBranch();
+            if (value == 'delete') onDelete();
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(
+              value: 'translate',
+              child: Row(
+                children: [
+                  Icon(Icons.translate_rounded, size: 18),
+                  SizedBox(width: 10),
+                  Text('翻译'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'branch',
+              child: Row(
+                children: [
+                  Icon(Icons.call_split_rounded, size: 18),
+                  SizedBox(width: 10),
+                  Text('创建分支'),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'delete',
+              child: Row(
+                children: [
+                  Icon(Icons.delete_outline_rounded, size: 18),
+                  SizedBox(width: 10),
+                  Text('删除'),
+                ],
+              ),
+            ),
+          ],
         ),
       ],
     );
   }
 }
 
-class _MessageActionPill extends StatelessWidget {
-  const _MessageActionPill({
+class _MessageIconAction extends StatelessWidget {
+  const _MessageIconAction({
     required this.state,
     required this.icon,
-    required this.label,
+    required this.tooltip,
     required this.onTap,
   });
 
   final WeaviewState state;
   final IconData icon;
-  final String label;
+  final String tooltip;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: Material(
-        color: state.text(context).withValues(alpha: 0.045),
-        borderRadius: BorderRadius.circular(999),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(999),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 14,
-                  color: state.text(context).withValues(alpha: 0.55),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  label,
-                  style: state.textStyle(context, size: 11.5, opacity: 0.58),
-                ),
-              ],
+    return Tooltip(
+      message: tooltip,
+      child: Padding(
+        padding: const EdgeInsets.only(right: 4),
+        child: Material(
+          color: state.text(context).withValues(alpha: 0.045),
+          shape: const CircleBorder(),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: SizedBox(
+              width: 34,
+              height: 34,
+              child: Icon(
+                icon,
+                size: 17,
+                color: state.text(context).withValues(alpha: 0.62),
+              ),
             ),
           ),
         ),
@@ -255,24 +304,19 @@ class _ReasoningPanelState extends State<ReasoningPanel> {
                   ],
                 ],
               ),
-              AnimatedSize(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOutCubic,
-                child: expanded && hasReasoning
-                    ? Padding(
-                        padding: const EdgeInsets.only(top: 9),
-                        child: Text(
-                          widget.reasoning.trim(),
-                          style: widget.state.textStyle(
-                            context,
-                            size: 12.5,
-                            height: 1.55,
-                            opacity: 0.58,
-                          ),
-                        ),
-                      )
-                    : const SizedBox.shrink(),
-              ),
+              if (expanded && hasReasoning)
+                Padding(
+                  padding: const EdgeInsets.only(top: 9),
+                  child: Text(
+                    widget.reasoning.trim(),
+                    style: widget.state.textStyle(
+                      context,
+                      size: 12.5,
+                      height: 1.55,
+                      opacity: 0.58,
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
