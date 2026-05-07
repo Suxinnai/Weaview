@@ -9,9 +9,6 @@ on:
 jobs:
   analyze-test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: weaview_flutter
     steps:
       - name: Checkout
         uses: actions/checkout@v4

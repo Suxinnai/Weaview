@@ -44,7 +44,7 @@
 
 ## 环境要求
 
-- Flutter SDK：建议 `3.41.9` 或满足 `weaview_flutter/pubspec.yaml` 中 Dart `sdk: ^3.11.5` 的稳定版本
+- Flutter SDK：建议 `3.41.9` 或满足根目录 `pubspec.yaml` 中 Dart `sdk: ^3.11.5` 的稳定版本
 - Dart SDK：`3.11.5` 或兼容版本，随 Flutter SDK 安装
 - Android Studio / Xcode：按目标平台安装
 - Git
@@ -59,7 +59,7 @@ flutter doctor
 
 ```bash
 git clone https://github.com/Suxinnai/Weaview.git
-cd Weaview/weaview_flutter
+cd Weaview
 flutter pub get
 ```
 
@@ -87,7 +87,6 @@ flutter pub get
 开发运行：
 
 ```bash
-cd weaview_flutter
 flutter run
 ```
 
@@ -121,26 +120,30 @@ Chat API: POST /chat/completions
 ```text
 .
 ├── .github/                         # Issue/PR 模板与 CI
-├── weaview_flutter/                 # Flutter App 主工程
-│   ├── lib/main.dart                # App 入口
-│   ├── lib/src/app/                 # 应用装配、状态、偏好设置、主题守卫
-│   │   └── prompt_appearance_intent.dart # 本地聊天外观提示解析
-│   ├── lib/src/core/                # 通用工具函数与扩展
-│   ├── lib/src/data/                # AI provider、搜索、流解析等外部服务接入
-│   ├── lib/src/domain/              # 领域模型
-│   ├── lib/src/features/            # chat / history / settings 功能界面
-│   ├── lib/src/shared/              # 共享组件和 view model
-│   └── test/                        # 单元测试与 widget 测试
+├── android/                         # Flutter Android 宿主工程源码，不是 APK 产物
+├── assets/                          # App 图标与 provider 图标资源
+├── ios/                             # Flutter iOS 宿主工程源码，不是 IPA 产物
+├── lib/main.dart                    # App 入口
+├── lib/src/app/                     # 应用装配、状态、偏好设置、主题守卫
+│   └── prompt_appearance_intent.dart # 本地聊天外观提示解析
+├── lib/src/core/                    # 通用工具函数与扩展
+├── lib/src/data/                    # AI provider、搜索、流解析等外部服务接入
+├── lib/src/domain/                  # 领域模型
+├── lib/src/features/                # chat / history / settings 功能界面
+├── lib/src/shared/                  # 共享组件和 view model
+├── test/                            # 单元测试与 widget 测试
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── LICENSE
+├── pubspec.yaml
 └── README.md
 ```
+
+说明：`android/` 和 `ios/` 是 Flutter 项目必须提交的平台宿主源码，用于编译、权限、原生能力和签名配置；真正的 `.apk`、`.ipa`、`.aab`、`.xcarchive` 等包产物已在 `.gitignore` 中忽略，只通过 GitHub Releases 发布。
 
 ## 测试
 
 ```bash
-cd weaview_flutter
 flutter analyze
 flutter test
 ```
@@ -169,21 +172,18 @@ flutter test test/model_config_resolver_test.dart
 Android debug：
 
 ```bash
-cd weaview_flutter
 flutter build apk --debug
 ```
 
 Android release：
 
 ```bash
-cd weaview_flutter
 flutter build apk --release --split-per-abi
 ```
 
 iOS 需要在 macOS + Xcode 环境下配置签名后构建：
 
 ```bash
-cd weaview_flutter
 flutter build ios
 ```
 

@@ -1,7 +1,4 @@
 node_modules/
-build/
-dist/
-coverage/
 .DS_Store
 *.log
 .env*
@@ -10,8 +7,35 @@ coverage/
 # Local agent/workspace state
 .omx/
 
-# Flutter and local QA artifacts
-**/.dart_tool/
-**/.flutter-plugins-dependencies
-**/build/
+# IDE/local workspace files
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Flutter/Dart/Pub generated files
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+build/
+coverage/
+doc/api/
+ios/Flutter/.last_build_id
+
+# Native build output and installable packages
+dist/
+*.apk
+*.aab
+*.ipa
+*.xcarchive
+*.app
+app.*.symbols
+app.*.map.json
+android/app/debug/
+android/app/profile/
+android/app/release/
+
+# Local QA artifacts
 qa_*.png

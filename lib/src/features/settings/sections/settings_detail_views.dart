@@ -1,0 +1,1081 @@
+// ignore_for_file: use_key_in_widget_constructors
+
+import 'package:flutter/material.dart';
+
+import '../../../app/app_constants.dart';
+import '../../../app/weaview_state.dart';
+import '../../../core/app_utils.dart';
+import '../../../domain/models.dart';
+import '../../../shared/widgets/shared_widgets.dart';
+import '../settings_sheet.dart';
+
+extension SettingsDetailViews on SettingsSheetState {
+  Widget systemPromptView() {
+    final state = widget.state;
+    return scrollContent([
+      Text(
+        '修改此提示词将改变AI在此环境中的表现形态与语言风格。如果您想恢复，请清空内容。',
+        style: state.textStyle(context, size: 13, opacity: 0.55, height: 1.5),
+      ),
+      const SizedBox(height: 16),
+      SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.48,
+        child: TextField(
+          controller: systemPromptController,
+          expands: true,
+          maxLines: null,
+          minLines: null,
+          textAlignVertical: TextAlignVertical.top,
+          style: state.textStyle(context, size: 14, height: 1.65),
+          decoration: inputDecoration(
+            state,
+            hint: '在此输入全局系统提示词...',
+          ).copyWith(contentPadding: const EdgeInsets.all(18)),
+          onChanged: state.updateSystemPrompt,
+        ),
+      ),
+      const SizedBox(height: 12),
+      SoftButton(
+        state: state,
+        label: '恢复默认提示词',
+        onTap: () {
+          systemPromptController.text = defaultSystemInstruction;
+          state.updateSystemPrompt(defaultSystemInstruction);
+        },
+      ),
+    ]);
+  }
+
+  Widget userProfileView() {
+    final state = widget.state;
+    return bottomActionPage(
+      status: statusText,
+      children: [
+        Text(
+          '人物画像会作为长期上下文的一部分，用于让AI理解你的偏好、项目背景和沟通方式。',
+          style: state.textStyle(
+            context,
+            size: 13,
+            opacity: 0.55,
+            height: 1.55,
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: MediaQuery.sizeOf(context).height * 0.42,
+          child: TextField(
+            controller: profileController,
+            expands: true,
+            maxLines: null,
+            minLines: null,
+            textAlignVertical: TextAlignVertical.top,
+            style: state.textStyle(context, size: 14, height: 1.65),
+            decoration: inputDecoration(
+              state,
+              hint: '记录你的偏好、项目、沟通方式等...',
+            ).copyWith(contentPadding: const EdgeInsets.all(18)),
+            onChanged: state.updateUserProfile,
+          ),
+        ),
+      ],
+      actions: Row(
+        children: [
+          Expanded(
+            child: SoftButton(
+              state: state,
+              label: '清空',
+              danger: true,
+              onTap: () {
+                profileController.clear();
+                state.updateUserProfile('');
+              },
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: SoftButton(
+              state: state,
+              label: 'AI 补全人物画像',
+              icon: Icons.auto_fix_high_rounded,
+              accent: true,
+              onTap: completeUserProfile,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget memoryView() {
+    final state = widget.state;
+    return scrollContent([
+      Text(
+        'AI将会记住关于您的重要信息，以便提供更个性化的回应。',
+        textAlign: TextAlign.center,
+        style: state.textStyle(context, size: 13, opacity: 0.55),
+      ),
+      const SizedBox(height: 22),
+      CardShell(
+        state: state,
+        child: Column(
+          children: [
+            SettingsRow(
+              state: state,
+              title: '全局记忆',
+              subtitle: '将记录的记忆应用于所有对话',
+              trailing: WeaveSwitch(
+                state: state,
+                value: state.globalMemoryEnabled,
+                onChanged: state.setGlobalMemoryEnabled,
+              ),
+            ),
+            DividerLine(state: state),
+            SettingsRow(
+              state: state,
+              title: '参考历史记忆',
+              subtitle: '将最近的历史聊天用于当前上下文',
+              trailing: WeaveSwitch(
+                state: state,
+                value: state.referenceHistoryEnabled,
+                onChanged: state.setReferenceHistoryEnabled,
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 24),
+      Row(
+        children: [
+          Expanded(
+            child: SectionLabel(state: state, label: '用户记忆'),
+          ),
+          TextButton.icon(
+            onPressed: organizeMemories,
+            icon: const Icon(Icons.auto_fix_high_rounded, size: 16),
+            label: const Text('AI 整理'),
+          ),
+        ],
+      ),
+      if (state.memories.isEmpty)
+        CardShell(
+          state: state,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
+          child: Center(
+            child: Text(
+              '暂无记忆',
+              style: state.textStyle(context, size: 13, opacity: 0.42),
+            ),
+          ),
+        )
+      else
+        for (var i = 0; i < state.memories.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: CardShell(
+              state: state,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: state.accents[0].withValues(alpha: 0.16),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.auto_awesome_rounded,
+                      size: 15,
+                      color: state.text(context).withValues(alpha: 0.56),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      state.memories[i],
+                      style: state.textStyle(context, size: 14, height: 1.45),
+                    ),
+                  ),
+                  TinyIcon(
+                    icon: Icons.delete_outline_rounded,
+                    color: Colors.red,
+                    onTap: () => state.deleteMemory(i),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      const SizedBox(height: 24),
+      SectionLabel(state: state, label: '手动添加记忆'),
+      CardShell(
+        state: state,
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: memoryController,
+                style: state.textStyle(context, size: 14),
+                decoration: inputDecoration(state, hint: '输入需要记住的信息...'),
+                onSubmitted: (_) => addMemory(),
+              ),
+            ),
+            const SizedBox(width: 10),
+            SizedBox(
+              width: 112,
+              child: SoftButton(
+                state: state,
+                label: '添加',
+                icon: Icons.add_rounded,
+                accent: true,
+                onTap: addMemory,
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 22),
+      SoftButton(
+        state: state,
+        label: '清空所有记忆',
+        icon: Icons.delete_sweep_outlined,
+        danger: true,
+        onTap: state.clearMemories,
+      ),
+    ]);
+  }
+
+  Widget providerConfigView() {
+    final state = widget.state;
+    final content = [
+      SegmentedPills(
+        state: state,
+        value: providerTab,
+        items: const {'config': '配置', 'models': '模型'},
+        onChanged: (value) => updateSheet(() => providerTab = value),
+      ),
+      const SizedBox(height: 24),
+      Center(
+        child: Column(
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              alignment: Alignment.center,
+              child: editingProvider == null
+                  ? BrandIcon.named(
+                      label: providerName.isEmpty ? 'Provider' : providerName,
+                      color: state.accents[0],
+                      size: 64,
+                      radius: 24,
+                      padding: 13,
+                    )
+                  : BrandIcon.provider(
+                      provider: editingProvider!,
+                      size: 64,
+                      radius: 24,
+                      padding: 13,
+                    ),
+            ),
+            const SizedBox(height: 14),
+            if (editingProvider == null)
+              SizedBox(
+                width: 220,
+                child: TextField(
+                  textAlign: TextAlign.center,
+                  controller: TextEditingController(text: providerName)
+                    ..selection = TextSelection.collapsed(
+                      offset: providerName.length,
+                    ),
+                  onChanged: (value) => providerName = value,
+                  style: state.textStyle(
+                    context,
+                    size: 20,
+                    weight: FontWeight.w500,
+                  ),
+                  decoration: const InputDecoration(
+                    hintText: '自定义提供商名称',
+                    border: UnderlineInputBorder(),
+                  ),
+                ),
+              )
+            else
+              Text(
+                providerName,
+                style: state.textStyle(
+                  context,
+                  size: 20,
+                  weight: FontWeight.w500,
+                ),
+              ),
+            const SizedBox(height: 6),
+            Text(
+              '配置此提供商的API凭据以启用相关模型',
+              style: state.textStyle(context, size: 13, opacity: 0.52),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 26),
+      if (providerTab == 'config') ...[
+        Text(
+          'API Key',
+          style: state.textStyle(
+            context,
+            size: 13,
+            weight: FontWeight.w600,
+            opacity: 0.62,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: TextEditingController(text: providerKey)
+            ..selection = TextSelection.collapsed(offset: providerKey.length),
+          obscureText: true,
+          onChanged: (value) => providerKey = value,
+          style: state.textStyle(context, size: 14),
+          decoration: inputDecoration(state, hint: '请输入 Provider API Key...'),
+        ),
+        const SizedBox(height: 18),
+        Text(
+          'Base URL',
+          style: state.textStyle(
+            context,
+            size: 13,
+            weight: FontWeight.w600,
+            opacity: 0.62,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: TextEditingController(text: providerBaseUrl)
+            ..selection = TextSelection.collapsed(
+              offset: providerBaseUrl.length,
+            ),
+          onChanged: (value) => providerBaseUrl = value,
+          style: state.textStyle(context, size: 14),
+          decoration: inputDecoration(
+            state,
+            hint: 'https://api.example.com/v1',
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          'API Key 仅存储在本机 SharedPreferences 中，不会被发送给除所选模型服务外的第三方。',
+          style: state.textStyle(
+            context,
+            size: 11,
+            opacity: 0.42,
+            height: 1.45,
+          ),
+        ),
+      ] else ...[
+        if (providerModels.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(28),
+            child: Text(
+              '暂无可用模型，请拉取或手动添加',
+              textAlign: TextAlign.center,
+              style: state.textStyle(context, size: 13, opacity: 0.42),
+            ),
+          )
+        else
+          for (final model in providerModels)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Dismissible(
+                key: ValueKey('provider_model_${model.id}'),
+                direction: DismissDirection.endToStart,
+                confirmDismiss: (_) async {
+                  updateSheet(
+                    () => providerModels = providerModels
+                        .where((m) => m.id != model.id)
+                        .toList(),
+                  );
+                  return false;
+                },
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 18),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Icon(
+                    Icons.delete_outline_rounded,
+                    color: Colors.red.withValues(alpha: 0.82),
+                  ),
+                ),
+                child: _ProviderModelCard(
+                  state: state,
+                  model: model,
+                  providerName: providerName,
+                  onTap: () => editModel(model),
+                ),
+              ),
+            ),
+      ],
+    ];
+
+    return bottomActionPage(
+      children: content,
+      status: statusText,
+      actions: providerTab == 'config'
+          ? Row(
+              children: [
+                Expanded(
+                  child: SoftButton(
+                    state: state,
+                    label: '保存配置',
+                    accent: true,
+                    onTap: () => saveProvider(false),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SoftButton(
+                    state: state,
+                    label: '启用',
+                    onTap: () => saveProvider(true),
+                  ),
+                ),
+              ],
+            )
+          : Row(
+              children: [
+                Expanded(
+                  child: SoftButton(
+                    state: state,
+                    label: '添加模型',
+                    icon: Icons.add_rounded,
+                    accent: true,
+                    onTap: addManualModel,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SoftButton(
+                    state: state,
+                    label: '拉取',
+                    onTap: pullModels,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: SoftButton(
+                    state: state,
+                    label: '测试',
+                    onTap: testProvider,
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  Widget modelRoleConfigView() {
+    final state = widget.state;
+    final providers = [
+      ...state.enabledModelProviders,
+      if (roleDraft.provider.isNotEmpty &&
+          !state.enabledModelProviders.any((p) => p.name == roleDraft.provider))
+        ...state.providers.where((p) => p.name == roleDraft.provider),
+    ];
+    final providerModels =
+        providers
+            .firstWhereOrNull((p) => p.name == roleDraft.provider)
+            ?.models ??
+        const <AiModel>[];
+    return scrollContent([
+      SectionLabel(state: state, label: '默认模型'),
+      CardShell(
+        state: state,
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DropdownField(
+              state: state,
+              label: '提供商',
+              value: roleDraft.provider.isEmpty ? '未选择' : roleDraft.provider,
+              items: ['未选择', ...providers.map((p) => p.name)],
+              itemDescriptions: {
+                for (final provider in providers)
+                  provider.name: provider.status == '使用中'
+                      ? '当前启用'
+                      : '${provider.models.length} 个模型',
+              },
+              onChanged: (value) => updateSheet(() {
+                roleDraft = roleDraft.copyWith(
+                  provider: value == '未选择' ? '' : value,
+                  model: '',
+                );
+              }),
+            ),
+            const SizedBox(height: 14),
+            DropdownField(
+              state: state,
+              label: '模型',
+              value: roleDraft.model.isEmpty ? '未选择' : roleDraft.model,
+              items: ['未选择', ...providerModels.map((m) => m.name)],
+              itemDescriptions: {
+                for (final model in providerModels) model.name: model.id,
+              },
+              enabled: roleDraft.provider.isNotEmpty,
+              onChanged: (value) => updateSheet(() {
+                roleDraft = roleDraft.copyWith(
+                  model: value == '未选择' ? '' : value,
+                );
+              }),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 24),
+      SectionLabel(state: state, label: '系统提示词 (System Prompt)'),
+      CardShell(
+        state: state,
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            TextField(
+              controller: TextEditingController(text: roleDraft.prompt)
+                ..selection = TextSelection.collapsed(
+                  offset: roleDraft.prompt.length,
+                ),
+              maxLines: 7,
+              style: state.textStyle(context, size: 14, height: 1.55),
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                hintText: '输入自定义提示词...',
+              ),
+              onChanged: (value) =>
+                  roleDraft = roleDraft.copyWith(prompt: value),
+            ),
+            DividerLine(state: state),
+            Row(
+              children: [
+                Text(
+                  '${roleDraft.prompt.length} 字符',
+                  style: state.textStyle(context, size: 11, opacity: 0.42),
+                ),
+                const Spacer(),
+                TextButton(
+                  onPressed: () => updateSheet(() {
+                    roleDraft = roleDraft.copyWith(
+                      prompt: ModelAssignment.defaults()[editingRole]!.prompt,
+                    );
+                  }),
+                  child: const Text('恢复默认'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 22),
+      SoftButton(
+        state: state,
+        label: '保存设置',
+        accent: true,
+        onTap: () {
+          if (editingRole != null) {
+            state.saveModelAssignment(editingRole!, roleDraft);
+          }
+          goBack();
+        },
+      ),
+    ]);
+  }
+
+  Widget searchConfigView() {
+    final state = widget.state;
+    return scrollContent([
+      Text(
+        '配置默认的搜索引擎与对应的API Key。您可以自行注册并获取各个厂商的密钥。',
+        style: state.textStyle(context, size: 13, opacity: 0.55, height: 1.5),
+      ),
+      const SizedBox(height: 20),
+      for (final engine in SettingsSheetState.settingsEngines)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: CardShell(
+            state: state,
+            padding: const EdgeInsets.all(16),
+            borderColor: state.searchConfig.active == engine.$1
+                ? state.accents[0]
+                : null,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => state.saveSearchConfig(
+                    state.searchConfig.copyWith(active: engine.$1),
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Row(
+                      children: [
+                        RadioDot(
+                          active: state.searchConfig.active == engine.$1,
+                          color: state.accents[0],
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          engine.$2,
+                          style: state.textStyle(
+                            context,
+                            size: 15,
+                            weight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (state.searchConfig.active == engine.$1) ...[
+                  const SizedBox(height: 16),
+                  DividerLine(state: state),
+                  const SizedBox(height: 12),
+                  TextField(
+                    obscureText: true,
+                    controller: TextEditingController(
+                      text: state.searchConfig.keys[engine.$1] ?? '',
+                    ),
+                    onChanged: (value) {
+                      state.saveSearchConfig(
+                        state.searchConfig.copyWith(
+                          keys: {...state.searchConfig.keys, engine.$1: value},
+                        ),
+                      );
+                    },
+                    style: state.textStyle(context, size: 14),
+                    decoration: inputDecoration(
+                      state,
+                      hint: '输入 ${engine.$2} 的 API Key',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    engine.$3,
+                    style: state.textStyle(context, size: 12, opacity: 0.42),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+    ]);
+  }
+
+  Widget ttsConfigView() {
+    final state = widget.state;
+    var draft =
+        editingTts ??
+        TtsProviderConfig(
+          id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
+          type: 'openai',
+          name: '自定义 TTS',
+          apiKey: '',
+          baseUrl: 'https://api.openai.com/v1',
+          model: 'gpt-4o-mini-tts',
+          voice: 'alloy',
+        );
+    return StatefulBuilder(
+      builder: (context, setLocal) {
+        Widget field({
+          required String label,
+          required String value,
+          required ValueChanged<String> onChanged,
+          String hint = '',
+          bool obscure = false,
+        }) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: state.textStyle(
+                  context,
+                  size: 14,
+                  weight: FontWeight.w600,
+                  opacity: 0.6,
+                ),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: TextEditingController(text: value)
+                  ..selection = TextSelection.collapsed(offset: value.length),
+                obscureText: obscure,
+                onChanged: (value) => setLocal(() => onChanged(value)),
+                style: state.textStyle(context, size: 15),
+                decoration: inputDecoration(state, hint: hint),
+              ),
+              const SizedBox(height: 16),
+            ],
+          );
+        }
+
+        return scrollContent([
+          Text(
+            '提供商类型',
+            style: state.textStyle(
+              context,
+              size: 14,
+              weight: FontWeight.w600,
+              opacity: 0.6,
+            ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: draft.type,
+            decoration: inputDecoration(state),
+            items: const [
+              DropdownMenuItem(value: 'xiaomi', child: Text('Xiaomi MiMo TTS')),
+              DropdownMenuItem(value: 'openai', child: Text('OpenAI TTS')),
+              DropdownMenuItem(value: 'azure', child: Text('Azure TTS')),
+              DropdownMenuItem(value: 'edge', child: Text('Edge TTS')),
+              DropdownMenuItem(value: 'custom', child: Text('自定义 (Custom)')),
+            ],
+            onChanged: (value) => setLocal(() {
+              final nextType = value ?? draft.type;
+              draft = draft.copyWith(
+                type: nextType,
+                baseUrl: nextType == 'openai' && draft.baseUrl.trim().isEmpty
+                    ? 'https://api.openai.com/v1'
+                    : draft.baseUrl,
+                model: nextType == 'openai' && draft.model.trim().isEmpty
+                    ? 'gpt-4o-mini-tts'
+                    : draft.model,
+                voice: nextType == 'openai' && draft.voice.trim().isEmpty
+                    ? 'alloy'
+                    : draft.voice,
+              );
+              editingTts = draft;
+            }),
+          ),
+          const SizedBox(height: 16),
+          field(
+            label: '显示名称',
+            value: draft.name,
+            hint: '例如：OpenAI 语音',
+            onChanged: (value) {
+              draft = draft.copyWith(name: value);
+              editingTts = draft;
+            },
+          ),
+          if (draft.type != 'edge')
+            field(
+              label: 'API Key',
+              value: draft.apiKey,
+              hint: 'Bearer Token 或 API 密钥',
+              obscure: true,
+              onChanged: (value) {
+                draft = draft.copyWith(apiKey: value);
+                editingTts = draft;
+              },
+            ),
+          field(
+            label: 'Base URL',
+            value: draft.baseUrl,
+            hint: 'https://api.openai.com/v1',
+            onChanged: (value) {
+              draft = draft.copyWith(baseUrl: value);
+              editingTts = draft;
+            },
+          ),
+          field(
+            label: '模型名称 (Model)',
+            value: draft.model,
+            hint: '例如: tts-1, tts-1-hd',
+            onChanged: (value) {
+              draft = draft.copyWith(model: value);
+              editingTts = draft;
+            },
+          ),
+          field(
+            label: '合成语音 (Voice)',
+            value: draft.voice,
+            hint: '例如: alloy, echo, fable',
+            onChanged: (value) {
+              draft = draft.copyWith(voice: value);
+              editingTts = draft;
+            },
+          ),
+          if (draft.id != 'xiaomi')
+            TextButton.icon(
+              onPressed: () {
+                final next = state.ttsProviders
+                    .where((t) => t.id != draft.id)
+                    .toList();
+                state.saveTtsConfig(
+                  next,
+                  state.activeTtsId == draft.id ? '' : state.activeTtsId,
+                );
+                goBack();
+              },
+              icon: const Icon(Icons.delete_outline_rounded),
+              label: const Text('删除此提供商'),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+            ),
+          const SizedBox(height: 12),
+          SoftButton(
+            state: state,
+            label: '保存设置',
+            accent: true,
+            onTap: () {
+              final next = [...state.ttsProviders];
+              final index = next.indexWhere((t) => t.id == draft.id);
+              if (index >= 0) {
+                next[index] = draft;
+              } else {
+                next.add(draft);
+              }
+              state.saveTtsConfig(next, state.activeTtsId);
+              goBack();
+            },
+          ),
+        ]);
+      },
+    );
+  }
+
+  Widget feedbackView() {
+    final state = widget.state;
+    Widget field({
+      required String label,
+      required TextEditingController controller,
+      required String hint,
+      int minLines = 1,
+      int maxLines = 1,
+    }) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: state.textStyle(
+              context,
+              size: 13,
+              weight: FontWeight.w700,
+              opacity: 0.62,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: controller,
+            minLines: minLines,
+            maxLines: maxLines,
+            style: state.textStyle(context, size: 14, height: 1.55),
+            decoration: inputDecoration(state, hint: hint),
+          ),
+          const SizedBox(height: 16),
+        ],
+      );
+    }
+
+    Widget typeButton(String value, String label, IconData icon) {
+      final selected = feedbackType == value;
+      return Expanded(
+        child: GestureDetector(
+          onTap: () => updateSheet(() => feedbackType = value),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              color: selected
+                  ? state.accents[0].withValues(alpha: 0.18)
+                  : state.text(context).withValues(alpha: 0.035),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: selected
+                    ? state.accents[0].withValues(alpha: 0.62)
+                    : state.text(context).withValues(alpha: 0.055),
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 17,
+                  color: selected
+                      ? state.accents[0]
+                      : state.text(context).withValues(alpha: 0.46),
+                ),
+                const SizedBox(width: 7),
+                Text(
+                  label,
+                  style: state.textStyle(
+                    context,
+                    size: 13,
+                    weight: FontWeight.w700,
+                    opacity: selected ? 0.94 : 0.54,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return bottomActionPage(
+      status: statusText,
+      children: [
+        Text(
+          '把问题、建议或体验反馈整理成结构化表单。后续接入邮箱后，这里会直接发送到反馈邮箱。',
+          style: state.textStyle(
+            context,
+            size: 13,
+            opacity: 0.56,
+            height: 1.55,
+          ),
+        ),
+        const SizedBox(height: 18),
+        SectionLabel(state: state, label: '反馈类型'),
+        Row(
+          children: [
+            typeButton('问题反馈', '问题', Icons.bug_report_outlined),
+            const SizedBox(width: 10),
+            typeButton('功能建议', '建议', Icons.lightbulb_outline_rounded),
+            const SizedBox(width: 10),
+            typeButton('体验优化', '体验', Icons.auto_awesome_outlined),
+          ],
+        ),
+        const SizedBox(height: 22),
+        field(
+          label: '标题',
+          controller: feedbackTitleController,
+          hint: '例如：语音输入无法识别',
+        ),
+        field(
+          label: '详细描述',
+          controller: feedbackDetailController,
+          hint: '描述你遇到的问题、期望效果或改进建议...',
+          minLines: 5,
+          maxLines: 8,
+        ),
+        field(
+          label: '复现步骤 / 建议说明',
+          controller: feedbackStepsController,
+          hint: '1. 打开...\n2. 点击...\n3. 出现...',
+          minLines: 4,
+          maxLines: 7,
+        ),
+        field(
+          label: '联系方式（可选）',
+          controller: feedbackContactController,
+          hint: '邮箱、QQ 或其他联系方式',
+        ),
+      ],
+      actions: Row(
+        children: [
+          Expanded(
+            child: SoftButton(state: state, label: '取消', onTap: goBack),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: SoftButton(
+              state: state,
+              label: '提交',
+              icon: Icons.send_rounded,
+              accent: true,
+              onTap: submitFeedbackForm,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProviderModelCard extends StatelessWidget {
+  const _ProviderModelCard({
+    required this.state,
+    required this.model,
+    required this.providerName,
+    required this.onTap,
+  });
+
+  final WeaviewState state;
+  final AiModel model;
+  final String providerName;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(24),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: onTap,
+        child: CardShell(
+          state: state,
+          padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              BrandIcon.model(
+                model: model,
+                providerName: providerName,
+                size: 38,
+                radius: 14,
+                padding: 7,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      model.name,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: state.textStyle(
+                        context,
+                        size: 15,
+                        weight: FontWeight.w600,
+                        height: 1.25,
+                      ),
+                    ),
+                    if (model.id != model.name) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        model.id,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: state.textStyle(
+                          context,
+                          size: 11.5,
+                          opacity: 0.44,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 9),
+                    ModelCapabilityChips(
+                      state: state,
+                      capabilities: model.capabilities,
+                      compact: true,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: state.text(context).withValues(alpha: 0.32),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

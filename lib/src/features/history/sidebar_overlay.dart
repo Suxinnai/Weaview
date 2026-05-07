@@ -1,0 +1,404 @@
+// ignore_for_file: use_key_in_widget_constructors
+
+import 'dart:math' as math;
+import 'dart:ui';
+
+import 'package:flutter/material.dart';
+
+import '../../app/weaview_state.dart';
+import '../../domain/models.dart';
+import '../../shared/widgets/shared_widgets.dart';
+
+class SidebarOverlay extends StatelessWidget {
+  const SidebarOverlay({
+    required this.state,
+    required this.open,
+    required this.onClose,
+    required this.onSettings,
+  });
+
+  final WeaviewState state;
+  final bool open;
+  final VoidCallback onClose;
+  final VoidCallback onSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = math.min(286.0, MediaQuery.sizeOf(context).width * 0.84);
+    return IgnorePointer(
+      ignoring: !open,
+      child: Stack(
+        children: [
+          AnimatedOpacity(
+            opacity: open ? 1 : 0,
+            duration: const Duration(milliseconds: 180),
+            child: GestureDetector(
+              onTap: onClose,
+              child: Container(
+                color: Colors.black.withValues(
+                  alpha: state.isDark(context) ? 0.42 : 0.12,
+                ),
+              ),
+            ),
+          ),
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeOutCubic,
+            top: 0,
+            bottom: 0,
+            left: open ? 0 : -width,
+            width: width,
+            child: ClipRRect(
+              borderRadius: const BorderRadius.only(
+                topRight: Radius.circular(28),
+                bottomRight: Radius.circular(28),
+              ),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: state.layer(context).withValues(alpha: 0.92),
+                    border: Border(
+                      right: BorderSide(
+                        color: state.text(context).withValues(alpha: 0.07),
+                      ),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.20),
+                        blurRadius: 36,
+                        offset: const Offset(16, 0),
+                      ),
+                    ],
+                  ),
+                  child: SafeArea(
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(22, 20, 14, 14),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 28,
+                                height: 28,
+                                padding: const EdgeInsets.all(3),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: state.accents[0],
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: LinearGradient(
+                                      colors: state.accents,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                '织境',
+                                style: state
+                                    .textStyle(
+                                      context,
+                                      size: 13,
+                                      weight: FontWeight.w600,
+                                      opacity: 0.82,
+                                    )
+                                    .copyWith(letterSpacing: 3),
+                              ),
+                              const Spacer(),
+                              IconCircleButton(
+                                icon: Icons.close_rounded,
+                                onTap: onClose,
+                                color: state.text(context),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: state.accents[0].withValues(
+                                alpha: 0.16,
+                              ),
+                              foregroundColor: state.text(context),
+                              elevation: 0,
+                              minimumSize: const Size.fromHeight(46),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(18),
+                              ),
+                            ),
+                            onPressed: () {
+                              state.newSession();
+                              onClose();
+                            },
+                            icon: const Icon(Icons.add_rounded, size: 19),
+                            label: const Text('新的织梦'),
+                          ),
+                        ),
+                        Expanded(
+                          child: ListView(
+                            padding: const EdgeInsets.fromLTRB(14, 24, 14, 12),
+                            physics: const BouncingScrollPhysics(),
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                ),
+                                child: Text(
+                                  '历史梦境',
+                                  style: state
+                                      .textStyle(
+                                        context,
+                                        size: 10,
+                                        weight: FontWeight.w700,
+                                        opacity: 0.36,
+                                      )
+                                      .copyWith(letterSpacing: 1.8),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              if (state.chatSessions.isEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.all(18),
+                                  child: Text(
+                                    '暂无历史记录',
+                                    textAlign: TextAlign.center,
+                                    style: state.textStyle(
+                                      context,
+                                      size: 12,
+                                      opacity: 0.4,
+                                    ),
+                                  ),
+                                )
+                              else
+                                for (final session in state.chatSessions)
+                                  HistoryTile(
+                                    state: state,
+                                    session: session,
+                                    selected:
+                                        session.id == state.currentSessionId,
+                                    onTap: () {
+                                      state.selectSession(session);
+                                      onClose();
+                                    },
+                                    onLongPress: (tileContext) =>
+                                        _showHistoryActions(
+                                          context,
+                                          tileContext,
+                                          session,
+                                        ),
+                                  ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(18, 8, 18, 18),
+                          child: Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: state
+                                  .text(context)
+                                  .withValues(alpha: 0.06),
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                            child: Row(
+                              children: [
+                                AvatarDot(
+                                  value: state.userAvatar,
+                                  fallbackIcon: Icons.person_outline_rounded,
+                                  imageSize: 42,
+                                  accent: state.accents[0],
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        state.userName,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: state.textStyle(
+                                          context,
+                                          size: 13,
+                                          weight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Pro Plan',
+                                        style: state.textStyle(
+                                          context,
+                                          size: 10,
+                                          opacity: 0.4,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                IconCircleButton(
+                                  icon: Icons.settings_outlined,
+                                  onTap: onSettings,
+                                  color: state.text(context),
+                                  size: 34,
+                                  opacity: 0.62,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showHistoryActions(
+    BuildContext context,
+    BuildContext tileContext,
+    ChatSession session,
+  ) async {
+    final tileBox = tileContext.findRenderObject() as RenderBox?;
+    final overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox?;
+    final overlaySize = overlay?.size ?? MediaQuery.sizeOf(context);
+    final tileSize = tileBox?.size ?? Size.zero;
+    final tileOffset =
+        tileBox?.localToGlobal(Offset.zero, ancestor: overlay) ?? Offset.zero;
+    const menuWidth = 222.0;
+    final menuHeight = session.pinned ? 156.0 : 156.0;
+    final left = math
+        .min(tileOffset.dx + 10, overlaySize.width - menuWidth - 10)
+        .clamp(10.0, overlaySize.width - menuWidth - 10);
+    final top = math
+        .min(
+          tileOffset.dy + tileSize.height - 2,
+          overlaySize.height - menuHeight - 12,
+        )
+        .clamp(10.0, overlaySize.height - menuHeight - 12);
+    final action = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        left,
+        top,
+        overlaySize.width - left - menuWidth,
+        overlaySize.height - top,
+      ),
+      color: state.layer(context),
+      elevation: 12,
+      constraints: const BoxConstraints(
+        minWidth: menuWidth,
+        maxWidth: menuWidth,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      items: [
+        _historyMenuItem(
+          context,
+          value: 'pin',
+          icon: session.pinned
+              ? Icons.push_pin_outlined
+              : Icons.push_pin_rounded,
+          label: session.pinned ? '取消置顶梦境' : '置顶梦境',
+        ),
+        _historyMenuItem(
+          context,
+          value: 'title',
+          icon: Icons.auto_fix_high_rounded,
+          label: '重新生成标题',
+        ),
+        _historyMenuItem(
+          context,
+          value: 'delete',
+          icon: Icons.delete_outline_rounded,
+          label: '删除梦境',
+          danger: true,
+        ),
+      ],
+    );
+    if (!context.mounted || action == null) return;
+    if (action == 'pin') {
+      state.togglePinSession(session.id);
+      return;
+    }
+    if (action == 'title') {
+      try {
+        final changed = await state.regenerateSessionTitle(session.id);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(changed ? '标题已重新生成。' : '请先配置标题总结模型。')),
+          );
+        }
+      } catch (error) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(error.toString().replaceFirst('Exception: ', '')),
+            ),
+          );
+        }
+      }
+      return;
+    }
+    if (action == 'delete') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('删除梦境'),
+          content: Text('确定删除「${session.title}」吗？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('删除'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed == true) state.deleteSession(session.id);
+    }
+  }
+
+  PopupMenuItem<String> _historyMenuItem(
+    BuildContext context, {
+    required String value,
+    required IconData icon,
+    required String label,
+    bool danger = false,
+  }) {
+    final color = danger ? Colors.redAccent : state.text(context);
+    return PopupMenuItem<String>(
+      value: value,
+      height: 48,
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 19,
+            color: color.withValues(alpha: danger ? 0.92 : 0.7),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: state
+                .textStyle(context, size: 14, weight: FontWeight.w600)
+                .copyWith(color: color),
+          ),
+        ],
+      ),
+    );
+  }
+}

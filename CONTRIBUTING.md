@@ -14,7 +14,7 @@
 
 ```bash
 git clone https://github.com/Suxinnai/Weaview.git
-cd Weaview/weaview_flutter
+cd Weaview
 flutter pub get
 flutter analyze
 flutter test
@@ -62,6 +62,7 @@ PR 合并前至少需要：
 - `lib/src/domain/`：领域模型和序列化。
 - `lib/src/features/`：聊天、设置、历史等功能界面。
 - `lib/src/shared/`：跨 feature 复用的 UI 和 view model。
+- `android/`、`ios/`：Flutter 平台宿主工程源码，必须保留在仓库中；真正的 APK、IPA、AAB、xcarchive 等构建产物不得提交。
 
 ## 测试建议
 
