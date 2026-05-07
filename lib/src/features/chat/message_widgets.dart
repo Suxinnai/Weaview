@@ -51,9 +51,38 @@ class MessageBubble extends StatefulWidget {
 
 class _MessageBubbleState extends State<MessageBubble> {
   bool _actionsVisible = false;
+  bool _inlineEditing = false;
+  TextEditingController? _inlineEditController;
 
   void _toggleActions() {
     setState(() => _actionsVisible = !_actionsVisible);
+  }
+
+  void _startInlineEdit() {
+    _inlineEditController?.dispose();
+    _inlineEditController = TextEditingController(text: widget.message.content);
+    setState(() {
+      _actionsVisible = false;
+      _inlineEditing = true;
+    });
+  }
+
+  void _cancelInlineEdit() {
+    setState(() => _inlineEditing = false);
+  }
+
+  void _saveInlineEdit() {
+    final value = _inlineEditController?.text.trim() ?? '';
+    if (value.isNotEmpty) {
+      widget.state.editMessageAt(widget.index, value);
+    }
+    setState(() => _inlineEditing = false);
+  }
+
+  @override
+  void dispose() {
+    _inlineEditController?.dispose();
+    super.dispose();
   }
 
   @override
@@ -154,7 +183,7 @@ class _MessageBubbleState extends State<MessageBubble> {
           Listener(
             behavior: HitTestBehavior.translucent,
             onPointerUp: (_) {
-              if (!message.isThinking) _toggleActions();
+              if (!message.isThinking && !_inlineEditing) _toggleActions();
             },
             child: Column(
               crossAxisAlignment: _messageColumnAlignment(state),
@@ -187,7 +216,14 @@ class _MessageBubbleState extends State<MessageBubble> {
                           if (message.content.trim().isNotEmpty)
                             const SizedBox(height: 12),
                         ],
-                        if (message.content.trim().isNotEmpty ||
+                        if (_inlineEditing)
+                          _InlineModelEditor(
+                            state: state,
+                            controller: _inlineEditController!,
+                            onCancel: _cancelInlineEdit,
+                            onSave: _saveInlineEdit,
+                          )
+                        else if (message.content.trim().isNotEmpty ||
                             message.attachments.isEmpty)
                           _AiMarkdown(
                             state: state,
@@ -207,7 +243,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                     hasText: message.content.trim().isNotEmpty,
                     onCopy: widget.onCopy,
                     onRetry: widget.onRetry,
-                    onEdit: widget.onEdit,
+                    onEdit: _startInlineEdit,
                     onTranslate: widget.onTranslate,
                     onBranch: widget.onBranch,
                     onDelete: widget.onDelete,
@@ -402,6 +438,70 @@ class _StyledMessageSurface extends StatelessWidget {
       );
     }
     return content;
+  }
+}
+
+class _InlineModelEditor extends StatelessWidget {
+  const _InlineModelEditor({
+    required this.state,
+    required this.controller,
+    required this.onCancel,
+    required this.onSave,
+  });
+
+  final WeaviewState state;
+  final TextEditingController controller;
+  final VoidCallback onCancel;
+  final VoidCallback onSave;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = state.text(context);
+    final dark = state.isDark(context);
+    final borderColor = text.withValues(alpha: dark ? 0.14 : 0.10);
+    final inputBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide(color: borderColor),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 4,
+          maxLines: 14,
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          style: state.textStyle(context, size: 14.5, height: 1.55),
+          decoration: InputDecoration(
+            hintText: '编辑 AI 回复内容',
+            hintStyle: state.textStyle(context, size: 14.5, opacity: 0.42),
+            filled: true,
+            fillColor: text.withValues(alpha: dark ? 0.08 : 0.035),
+            contentPadding: const EdgeInsets.all(13),
+            border: inputBorder,
+            enabledBorder: inputBorder,
+            focusedBorder: inputBorder.copyWith(
+              borderSide: BorderSide(
+                color: state.accents[0].withValues(alpha: 0.55),
+                width: 1.2,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            TextButton(onPressed: onCancel, child: const Text('取消')),
+            const SizedBox(width: 8),
+            FilledButton(onPressed: onSave, child: const Text('保存')),
+          ],
+        ),
+      ],
+    );
   }
 }
 

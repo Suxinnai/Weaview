@@ -149,6 +149,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
     await widget.state.retryMessageAt(
       index,
       useWebSearch: _webSearchEnabled && widget.state.hasActiveSearchKey,
+      imageGeneration: _imageGenerationMode,
     );
   }
 
@@ -160,35 +161,8 @@ class _WeaviewHomeState extends State<WeaviewHome>
       _input.selection = TextSelection.collapsed(offset: _input.text.length);
       setState(() => _dockExpanded = false);
       _inputFocus.requestFocus();
-      _snack('已填入输入框，可修改后重新发送。');
       return;
     }
-    final controller = TextEditingController(text: message.content);
-    final edited = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('编辑消息'),
-        content: TextField(
-          controller: controller,
-          minLines: 3,
-          maxLines: 8,
-          decoration: const InputDecoration(hintText: '输入消息内容'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('保存'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (edited == null) return;
-    widget.state.editMessageAt(index, edited);
   }
 
   void _branchMessage(int index) {
@@ -256,6 +230,28 @@ class _WeaviewHomeState extends State<WeaviewHome>
         _snack('当前 TTS 服务不存在，请重新选择。');
         return;
       }
+      if (_isPcm16StreamingTts(provider)) {
+        await _nativeTts.invokeMethod<void>('startPcm16Stream', {
+          'sampleRate': 24000,
+        });
+        try {
+          await AiGateway.streamSpeechPcm16(
+            config: provider,
+            text: text,
+            onChunk: (chunk) async {
+              if (chunk.isEmpty) return;
+              await _nativeTts.invokeMethod<void>('appendPcm16', {
+                'bytes': chunk,
+              });
+            },
+          );
+          await _nativeTts.invokeMethod<void>('finishPcm16Stream');
+        } catch (_) {
+          await _nativeTts.invokeMethod<void>('stop').catchError((_) {});
+          rethrow;
+        }
+        return;
+      }
       final audio = await AiGateway.synthesizeSpeech(
         config: provider,
         text: text,
@@ -272,6 +268,14 @@ class _WeaviewHomeState extends State<WeaviewHome>
     } catch (error) {
       _snack('语音播报不可用：${error.toString().replaceFirst('Exception: ', '')}');
     }
+  }
+
+  bool _isPcm16StreamingTts(TtsProviderConfig provider) {
+    final lower = '${provider.type} ${provider.name} ${provider.baseUrl}'
+        .toLowerCase();
+    return lower.contains('xiaomi') ||
+        lower.contains('mimo') ||
+        lower.contains('xiaomimimo');
   }
 
   Future<void> _downloadAttachment(MessageAttachment attachment) async {

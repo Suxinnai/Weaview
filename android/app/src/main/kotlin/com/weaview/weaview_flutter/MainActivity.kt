@@ -5,7 +5,10 @@ import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.AudioFormat
 import android.media.MediaPlayer
+import android.media.AudioTrack
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -19,6 +22,8 @@ import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.util.Locale
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
     private val speechRequestCode = 42017
@@ -31,6 +36,8 @@ class MainActivity : FlutterActivity() {
     private var ttsReady = false
     private var mediaPlayer: MediaPlayer? = null
     private var ttsAudioFile: File? = null
+    private var pcmAudioTrack: AudioTrack? = null
+    private var pcmExecutor: ExecutorService? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -64,9 +71,19 @@ class MainActivity : FlutterActivity() {
                     call.argument<String>("mimeType") ?: "audio/mpeg",
                     result
                 )
+                "startPcm16Stream" -> startPcm16Stream(
+                    call.argument<Int>("sampleRate") ?: 24000,
+                    result
+                )
+                "appendPcm16" -> appendPcm16(
+                    call.argument<ByteArray>("bytes"),
+                    result
+                )
+                "finishPcm16Stream" -> finishPcm16Stream(result)
                 "stop" -> {
                     tts?.stop()
                     stopAudioPlayback()
+                    stopPcm16Stream()
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -136,6 +153,11 @@ class MainActivity : FlutterActivity() {
                         return
                     }
                     if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+                        if (hasRecordAudioPermission()) {
+                            destroySpeechRecognizer()
+                            startSpeechIntent(pendingSpeechLocale)
+                            return
+                        }
                         finishSpeechError(
                             "PERMISSION_DENIED",
                             "缺少麦克风权限，请在系统权限中允许麦克风后重试"
@@ -360,6 +382,100 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun startPcm16Stream(sampleRate: Int, result: MethodChannel.Result) {
+        try {
+            tts?.stop()
+            stopAudioPlayback()
+            stopPcm16Stream()
+            val minBuffer = AudioTrack.getMinBufferSize(
+                sampleRate,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT
+            )
+            val bufferSize = maxOf(minBuffer, sampleRate)
+            val track = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                AudioTrack.Builder()
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .setAudioFormat(
+                        AudioFormat.Builder()
+                            .setSampleRate(sampleRate)
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            .build()
+                    )
+                    .setBufferSizeInBytes(bufferSize)
+                    .setTransferMode(AudioTrack.MODE_STREAM)
+                    .build()
+            } else {
+                @Suppress("DEPRECATION")
+                AudioTrack(
+                    android.media.AudioManager.STREAM_MUSIC,
+                    sampleRate,
+                    AudioFormat.CHANNEL_OUT_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT,
+                    bufferSize,
+                    AudioTrack.MODE_STREAM
+                )
+            }
+            pcmAudioTrack = track
+            pcmExecutor = Executors.newSingleThreadExecutor()
+            track.play()
+            result.success(null)
+        } catch (error: Exception) {
+            stopPcm16Stream()
+            result.error("PCM_STREAM_START_FAILED", error.message ?: "流式语音播放启动失败", null)
+        }
+    }
+
+    private fun appendPcm16(bytes: ByteArray?, result: MethodChannel.Result) {
+        val chunk = bytes
+        val track = pcmAudioTrack
+        val executor = pcmExecutor
+        if (chunk == null || chunk.isEmpty()) {
+            result.success(null)
+            return
+        }
+        if (track == null || executor == null) {
+            result.error("PCM_STREAM_NOT_READY", "流式语音播放器未启动", null)
+            return
+        }
+        executor.execute {
+            try {
+                track.write(chunk, 0, chunk.size)
+            } catch (_: Exception) {
+            }
+        }
+        result.success(null)
+    }
+
+    private fun finishPcm16Stream(result: MethodChannel.Result) {
+        val track = pcmAudioTrack
+        val executor = pcmExecutor
+        if (track == null || executor == null) {
+            result.success(null)
+            return
+        }
+        executor.execute {
+            try {
+                track.stop()
+            } catch (_: Exception) {
+            }
+            try {
+                track.release()
+            } catch (_: Exception) {
+            }
+        }
+        pcmAudioTrack = null
+        pcmExecutor = null
+        executor.shutdown()
+        result.success(null)
+    }
+
     private fun stopAudioPlayback() {
         try {
             mediaPlayer?.stop()
@@ -375,6 +491,29 @@ class MainActivity : FlutterActivity() {
         } catch (_: Exception) {
         }
         ttsAudioFile = null
+    }
+
+    private fun stopPcm16Stream() {
+        val track = pcmAudioTrack
+        val executor = pcmExecutor
+        pcmAudioTrack = null
+        pcmExecutor = null
+        try {
+            executor?.shutdownNow()
+        } catch (_: Exception) {
+        }
+        try {
+            track?.pause()
+        } catch (_: Exception) {
+        }
+        try {
+            track?.flush()
+        } catch (_: Exception) {
+        }
+        try {
+            track?.release()
+        } catch (_: Exception) {
+        }
     }
 
     private fun openUrl(url: String, result: MethodChannel.Result) {
@@ -415,6 +554,7 @@ class MainActivity : FlutterActivity() {
         tts?.shutdown()
         tts = null
         stopAudioPlayback()
+        stopPcm16Stream()
         super.onDestroy()
     }
 }

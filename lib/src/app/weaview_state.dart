@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../core/app_utils.dart';
 import '../core/zip_writer.dart';
 import '../data/ai/ai_gateway.dart';
+import '../data/ai/image_tool_call_parser.dart';
 import '../data/ai/openai_compatible_client.dart' show GeneratedImageResult;
 import '../domain/models.dart';
 import 'ai_theme_guard.dart';
@@ -839,6 +840,7 @@ ${_compactConversation(messages)}
     }
 
     var targetContent = '';
+    var rawTargetContent = '';
     var targetReasoning = '';
     var remoteThinking = true;
     var streamDone = false;
@@ -908,7 +910,8 @@ ${_compactConversation(messages)}
         onThemeUpdate: (args) => applyAiTheme(args, userPrompt: content),
         shouldCancel: () => runId != _streamRunId || _cancelStreamRequested,
         onSnapshot: (content, reasoning, thinking) {
-          targetContent = content;
+          rawTargetContent = content;
+          targetContent = stripImageToolCalls(content);
           targetReasoning = reasoning;
           remoteThinking = thinking;
           unawaited(pumpTypewriter());
@@ -919,6 +922,18 @@ ${_compactConversation(messages)}
       if (runId != _streamRunId || _cancelStreamRequested) {
         messages.last.isThinking = false;
         flush(force: true);
+        return;
+      }
+      final imageToolCall = parseImageToolCall(rawTargetContent);
+      if (imageToolCall != null) {
+        messages.last
+          ..content = '正在生成图片，请稍候。'
+          ..isThinking = true;
+        flush(force: true);
+        await _generateImageIntoCurrentResponse(
+          prompt: imageToolCall.prompt,
+          runId: runId,
+        );
         return;
       }
       messages.last.isThinking = false;
@@ -953,25 +968,6 @@ ${_compactConversation(messages)}
     final content = value.trim();
     if (content.isEmpty || isStreaming) return;
 
-    final imageAssignment = _effectiveImageAssignment();
-    final imageProvider = imageAssignment == null
-        ? null
-        : _providerForAssignment(imageAssignment);
-    final configIssue = _modelConfigIssue(
-      assignment: imageAssignment,
-      provider: imageProvider,
-      roleLabel: '生图模型',
-    );
-    if (configIssue != null) {
-      messages
-        ..add(ChatMessage.user(content))
-        ..add(ChatMessage.model(configIssue));
-      suggestions = [];
-      _persistCurrentSession();
-      notifyListeners();
-      return;
-    }
-
     messages
       ..add(ChatMessage.user(content))
       ..add(ChatMessage.model('', isThinking: true));
@@ -983,10 +979,45 @@ ${_compactConversation(messages)}
     notifyListeners();
 
     try {
+      await _generateImageIntoCurrentResponse(prompt: content, runId: runId);
+    } finally {
+      if (runId == _streamRunId) {
+        isStreaming = false;
+        _cancelStreamRequested = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> _generateImageIntoCurrentResponse({
+    required String prompt,
+    required int runId,
+  }) async {
+    final imageAssignment = _effectiveImageAssignment();
+    final imageProvider = imageAssignment == null
+        ? null
+        : _providerForAssignment(imageAssignment);
+    final configIssue = _modelConfigIssue(
+      assignment: imageAssignment,
+      provider: imageProvider,
+      roleLabel: '生图模型',
+    );
+    if (configIssue != null) {
+      if (messages.isNotEmpty && messages.last.role == 'model') {
+        messages.last
+          ..content = configIssue
+          ..isThinking = false;
+      }
+      _persistCurrentSession();
+      notifyListeners();
+      return;
+    }
+
+    try {
       final result = await AiGateway.generateImage(
         provider: imageProvider!,
         assignment: imageAssignment!,
-        prompt: content,
+        prompt: prompt,
       );
       if (runId != _streamRunId || _cancelStreamRequested) {
         messages.last.isThinking = false;
@@ -1017,12 +1048,6 @@ ${_compactConversation(messages)}
         ..isThinking = false;
       _persistCurrentSession();
       notifyListeners();
-    } finally {
-      if (runId == _streamRunId) {
-        isStreaming = false;
-        _cancelStreamRequested = false;
-        notifyListeners();
-      }
     }
   }
 
@@ -1292,7 +1317,11 @@ Treat background style, font/text style, bubble style, and message alignment as 
   TtsProviderConfig? get activeTtsProvider =>
       ttsProviders.firstWhereOrNull((provider) => provider.id == activeTtsId);
 
-  Future<void> retryMessageAt(int index, {bool useWebSearch = false}) async {
+  Future<void> retryMessageAt(
+    int index, {
+    bool useWebSearch = false,
+    bool imageGeneration = false,
+  }) async {
     if (isStreaming || index < 0 || index >= messages.length) return;
     var userIndex = index;
     if (messages[userIndex].role != 'user') {
@@ -1312,6 +1341,10 @@ Treat background style, font/text style, bubble style, and message alignment as 
       ..addAll(prefix);
     suggestions = [];
     notifyListeners();
+    if (imageGeneration) {
+      await submitImageGeneration(original.content);
+      return;
+    }
     await submitMessage(
       original.content,
       attachments: original.attachments.map((item) => item.copy()).toList(),

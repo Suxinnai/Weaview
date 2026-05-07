@@ -133,6 +133,47 @@ data: [DONE]
     },
   );
 
+  test('streams Xiaomi MiMo pcm16 chunks as they arrive', () async {
+    final firstChunk = base64Encode([1, 0, 2, 0]);
+    final secondChunk = base64Encode([3, 0, 4, 0]);
+    final client = TtsClient(
+      client: MockClient(
+        (_) async => http.Response(
+          '''
+data: {"choices":[{"delta":{"audio":{"data":"$firstChunk"}}}]}
+
+data: {"choices":[{"delta":{"audio":"$secondChunk"}}]}
+
+data: [DONE]
+''',
+          200,
+          headers: {'content-type': 'text/event-stream'},
+        ),
+      ),
+    );
+    final chunks = <List<int>>[];
+
+    await client.streamPcm16(
+      config: const TtsProviderConfig(
+        id: 'xiaomi',
+        type: 'xiaomi',
+        name: 'Xiaomi MiMo TTS',
+        apiKey: 'mimo-key',
+        baseUrl: 'https://api.xiaomimimo.com/v1',
+        model: 'mimo-v2-tts',
+        voice: 'default_en',
+      ),
+      text: 'hello',
+      timeout: const Duration(seconds: 1),
+      onChunk: (chunk) async => chunks.add(chunk.toList()),
+    );
+
+    expect(chunks, [
+      [1, 0, 2, 0],
+      [3, 0, 4, 0],
+    ]);
+  });
+
   test('rejects missing remote TTS configuration', () async {
     final client = TtsClient(
       client: MockClient((_) async => http.Response('', 500)),

@@ -82,8 +82,10 @@ class MessageActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!hasText) return const SizedBox.shrink();
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      alignment: isModel ? WrapAlignment.start : WrapAlignment.end,
       children: [
         _MessageIconAction(
           state: state,
@@ -109,24 +111,96 @@ class MessageActionBar extends StatelessWidget {
           tooltip: '朗读',
           onTap: onSpeak,
         ),
-        PopupMenuButton<String>(
-          tooltip: '更多',
-          padding: EdgeInsets.zero,
-          icon: Icon(
-            Icons.more_vert_rounded,
-            size: 18,
-            color: state.text(context).withValues(alpha: 0.62),
+        _MessageMoreAction(
+          state: state,
+          onTranslate: onTranslate,
+          onBranch: onBranch,
+          onDelete: onDelete,
+        ),
+      ],
+    );
+  }
+}
+
+class _MessageIconAction extends StatelessWidget {
+  const _MessageIconAction({
+    required this.state,
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final WeaviewState state;
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = state.isDark(context);
+    final text = state.text(context);
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: state.layer(context).withValues(alpha: dark ? 0.62 : 0.74),
+        shape: const CircleBorder(),
+        elevation: dark ? 0 : 4,
+        shadowColor: Colors.black.withValues(alpha: 0.08),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            width: 34,
+            height: 34,
+            child: Icon(icon, size: 16.5, color: text.withValues(alpha: 0.62)),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageMoreAction extends StatelessWidget {
+  const _MessageMoreAction({
+    required this.state,
+    required this.onTranslate,
+    required this.onBranch,
+    required this.onDelete,
+  });
+
+  final WeaviewState state;
+  final VoidCallback onTranslate;
+  final VoidCallback onBranch;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return _MessageIconAction(
+      state: state,
+      icon: Icons.more_vert_rounded,
+      tooltip: '更多',
+      onTap: () async {
+        final box = context.findRenderObject() as RenderBox?;
+        final overlay =
+            Navigator.of(context).overlay?.context.findRenderObject()
+                as RenderBox?;
+        if (box == null || overlay == null) return;
+        final topLeft = box.localToGlobal(Offset.zero, ancestor: overlay);
+        final bottomRight = box.localToGlobal(
+          box.size.bottomRight(Offset.zero),
+          ancestor: overlay,
+        );
+        final selected = await showMenu<String>(
+          context: context,
           color: state.layer(context),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          onSelected: (value) {
-            if (value == 'translate') onTranslate();
-            if (value == 'branch') onBranch();
-            if (value == 'delete') onDelete();
-          },
-          itemBuilder: (context) => const [
+          position: RelativeRect.fromRect(
+            Rect.fromPoints(topLeft, bottomRight),
+            Offset.zero & overlay.size,
+          ),
+          items: const [
             PopupMenuItem(
               value: 'translate',
               child: Row(
@@ -158,49 +232,11 @@ class MessageActionBar extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      ],
-    );
-  }
-}
-
-class _MessageIconAction extends StatelessWidget {
-  const _MessageIconAction({
-    required this.state,
-    required this.icon,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final WeaviewState state;
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Padding(
-        padding: const EdgeInsets.only(right: 4),
-        child: Material(
-          color: state.text(context).withValues(alpha: 0.045),
-          shape: const CircleBorder(),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onTap,
-            child: SizedBox(
-              width: 34,
-              height: 34,
-              child: Icon(
-                icon,
-                size: 17,
-                color: state.text(context).withValues(alpha: 0.62),
-              ),
-            ),
-          ),
-        ),
-      ),
+        );
+        if (selected == 'translate') onTranslate();
+        if (selected == 'branch') onBranch();
+        if (selected == 'delete') onDelete();
+      },
     );
   }
 }

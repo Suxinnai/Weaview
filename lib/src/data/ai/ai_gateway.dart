@@ -193,6 +193,19 @@ class AiGateway {
     );
   }
 
+  static Future<void> streamSpeechPcm16({
+    required TtsProviderConfig config,
+    required String text,
+    required Pcm16ChunkHandler onChunk,
+  }) {
+    return _ttsClient.streamPcm16(
+      config: config,
+      text: text,
+      timeout: ttsRequestTimeout,
+      onChunk: onChunk,
+    );
+  }
+
   static String _geminiModelId(
     ModelAssignment assignment,
     AiProvider provider,

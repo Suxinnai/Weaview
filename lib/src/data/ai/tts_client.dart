@@ -12,6 +12,8 @@ class TtsAudioResult {
   final String mimeType;
 }
 
+typedef Pcm16ChunkHandler = Future<void> Function(Uint8List chunk);
+
 class TtsClient {
   const TtsClient({http.Client? client}) : _client = client;
 
@@ -66,6 +68,46 @@ class TtsClient {
         voice: voice,
         input: input,
         timeout: timeout,
+      );
+    } finally {
+      if (ownsClient) client.close();
+    }
+  }
+
+  Future<void> streamPcm16({
+    required TtsProviderConfig config,
+    required String text,
+    required Duration timeout,
+    required Pcm16ChunkHandler onChunk,
+  }) async {
+    final input = text.trim();
+    if (input.isEmpty) {
+      throw Exception('没有可朗读的文本。');
+    }
+    if (!_isMimoTts(config)) {
+      throw Exception('当前 TTS 服务不支持 PCM16 流式播放。');
+    }
+    final baseUrl = config.baseUrl.trim();
+    final apiKey = config.apiKey.trim();
+    final model = config.model.trim();
+    final voice = config.voice.trim();
+    if (baseUrl.isEmpty) throw Exception('请先配置 TTS Base URL。');
+    if (apiKey.isEmpty) throw Exception('请先配置 TTS API Key。');
+    if (model.isEmpty) throw Exception('请先配置 TTS 模型名称。');
+    if (voice.isEmpty) throw Exception('请先配置 TTS 合成语音。');
+
+    final ownsClient = _client == null;
+    final client = _client ?? http.Client();
+    try {
+      await _streamMimoPcm16(
+        client: client,
+        baseUrl: baseUrl,
+        apiKey: apiKey,
+        model: model,
+        voice: voice,
+        input: input,
+        timeout: timeout,
+        onChunk: onChunk,
       );
     } finally {
       if (ownsClient) client.close();
@@ -164,6 +206,76 @@ class TtsClient {
     return TtsAudioResult(bytes: _pcm16ToWav(pcm), mimeType: 'audio/wav');
   }
 
+  Future<void> _streamMimoPcm16({
+    required http.Client client,
+    required String baseUrl,
+    required String apiKey,
+    required String model,
+    required String voice,
+    required String input,
+    required Duration timeout,
+    required Pcm16ChunkHandler onChunk,
+  }) async {
+    final request =
+        http.Request('POST', Uri.parse(_chatCompletionsEndpoint(baseUrl)))
+          ..headers.addAll({
+            'api-key': apiKey,
+            'Content-Type': 'application/json',
+            'Accept': 'text/event-stream, application/json',
+          })
+          ..body = jsonEncode({
+            'model': model,
+            'messages': [
+              {'role': 'assistant', 'content': input},
+            ],
+            'audio': {'format': 'pcm16', 'voice': voice},
+            'stream': true,
+          });
+
+    final response = await client.send(request).timeout(timeout);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final bodyBytes = await response.stream.toBytes().timeout(timeout);
+      throw Exception(
+        'HTTP ${response.statusCode}: ${_compactBytesBody(response, bodyBytes)}',
+      );
+    }
+
+    final contentType = response.headers['content-type'] ?? '';
+    if (contentType.toLowerCase().startsWith('audio/')) {
+      final bytes = await response.stream.toBytes().timeout(timeout);
+      if (bytes.isEmpty) throw Exception('MiMo TTS 服务没有返回音频数据。');
+      await onChunk(_isWaveBytes(bytes) ? _stripWaveHeader(bytes) : bytes);
+      return;
+    }
+
+    var receivedAudio = false;
+    final pending = StringBuffer();
+    await for (final chunk in response.stream.timeout(timeout)) {
+      pending.write(utf8.decode(chunk, allowMalformed: true));
+      final lines = pending.toString().split(RegExp(r'\r?\n'));
+      pending
+        ..clear()
+        ..write(lines.removeLast());
+      for (final line in lines) {
+        final audio = _extractMimoPcmBytesFromLine(line);
+        if (audio.isEmpty) continue;
+        receivedAudio = true;
+        await onChunk(audio);
+      }
+    }
+    final tail = pending.toString();
+    if (tail.trim().isNotEmpty) {
+      final audio = _extractMimoPcmBytesFromLine(tail);
+      if (audio.isNotEmpty) {
+        receivedAudio = true;
+        await onChunk(audio);
+      }
+    }
+    if (!receivedAudio) {
+      throw Exception('MiMo TTS 没有返回可播放的音频分片。');
+    }
+  }
+
   bool _isMimoTts(TtsProviderConfig config) {
     final lower = '${config.type} ${config.name} ${config.baseUrl}'
         .toLowerCase();
@@ -212,6 +324,20 @@ class TtsClient {
       } catch (_) {
         _appendDecodedAudio(text, audio);
       }
+    }
+    return audio.takeBytes();
+  }
+
+  Uint8List _extractMimoPcmBytesFromLine(String line) {
+    final trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) return Uint8List(0);
+    final data = trimmed.substring(5).trim();
+    if (data.isEmpty || data == '[DONE]') return Uint8List(0);
+    final audio = BytesBuilder(copy: false);
+    try {
+      _collectAudioBytes(jsonDecode(data), audio);
+    } catch (_) {
+      _appendDecodedAudio(data, audio);
     }
     return audio.takeBytes();
   }
@@ -330,6 +456,11 @@ class TtsClient {
         bytes[9] == 0x41 &&
         bytes[10] == 0x56 &&
         bytes[11] == 0x45;
+  }
+
+  Uint8List _stripWaveHeader(Uint8List bytes) {
+    if (!_isWaveBytes(bytes) || bytes.length <= 44) return bytes;
+    return Uint8List.sublistView(bytes, 44);
   }
 
   String _mimeType(http.Response response) {

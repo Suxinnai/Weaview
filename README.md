@@ -6,7 +6,7 @@
 
 织境提供一个可本地配置的多模型聊天环境。它不内置任何真实 API Key，所有模型服务、搜索服务和语音服务凭据都需要用户在 App 设置中显式配置。
 
-Latest preview / 最新预览版：`v1.0.3-preview.1`
+Latest preview / 最新预览版：`v1.0.4-preview.1`
 
 主要能力包括：
 
@@ -221,21 +221,25 @@ flutter build ios
 
 ## Latest Release Notes / 最新更新日志
 
-### v1.0.3-preview.1
+### v1.0.4-preview.1
 
 中文：
 
-- 新增对话式生图模式，兼容 OpenAI Responses API 与 Codex `/v1/images/generations`，并将生图请求超时时间延长到 300 秒。
-- 底部输入栏改为透明悬浮样式，顶部栏收窄，减少聊天内容遮挡。
-- 新增小米 MiMo `mimo-v2-tts` 流式 TTS 适配，TTS 需要在设置中手动启用。
-- 修复 Android 语音输入缺少麦克风权限时的恢复路径，拒绝权限后可直接跳转系统权限设置。
+- 修复模型输出 `<tool_call name="sync_gen_images">` 时只显示工具调用文本、未真正发起生图的问题。
+- 优化 AI 回复消息操作栏位置与更多菜单定位，避免复制、重试、编辑、更多等按钮被输入栏遮挡。
+- 消息操作按钮恢复到回复下方，并改为独立圆形按钮；用户消息编辑只预填输入框，不再额外弹提示。
+- TTS 新增小米 MiMo PCM16 分块播放路径，收到音频片段后立即写入 Android `AudioTrack`，减少等待整段音频完成的问题。
+- 修复 Android 语音识别已授权但仍被系统识别器回报缺少权限时的回退路径。
+- 去除聊天输入栏上方多余留白，并支持在 AI 回复正文位置直接编辑 AI 消息。
 
 English:
 
-- Added conversational image generation with OpenAI Responses API and Codex `/v1/images/generations` support, with a 300-second timeout for long image jobs.
-- Changed the input dock to a floating transparent surface and tightened the header to reduce content obstruction.
-- Added Xiaomi MiMo `mimo-v2-tts` streaming TTS support. TTS remains opt-in and must be enabled in settings.
-- Fixed Android microphone-permission recovery for voice input, including a direct shortcut to system permission settings after denial.
+- Fixed pseudo tool-call image requests such as `<tool_call name="sync_gen_images">` being rendered as text instead of starting image generation.
+- Repositioned AI message actions and anchored the overflow menu correctly so copy, retry, edit, and more actions are not hidden by the input dock.
+- Restored message actions below replies as separate circular buttons. Editing a user message now only pre-fills the input without an extra toast.
+- Added a Xiaomi MiMo PCM16 chunk playback path that writes streaming TTS chunks directly to Android `AudioTrack`.
+- Added a fallback for Android speech recognition cases where the app has microphone permission but the platform recognizer still reports insufficient permissions.
+- Removed extra chat bottom whitespace and added direct inline editing for AI replies.
 
 ## 贡献指南
 
