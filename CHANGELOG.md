@@ -2,6 +2,24 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.5-preview.1 - 2026-05-08
+
+### 中文
+
+- 修复 AI 思考中 / 生图中状态被底部输入栏遮挡的问题，聊天列表底部会为悬浮输入栏保留稳定空间。
+- 修复模型选择弹层中搜索框与模型列表之间异常留白的问题。
+- 新增 MiniMax 图标资源，并修复 `nvidia/minimaxai/...` 被误匹配为 xAI 图标的问题。
+- 生图过程改为专用的图片生成动画，不再复用思考链动画。
+- 生成后的图片支持点击进入全屏预览，仍保留下载按钮。
+
+### English
+
+- Fixed thinking / image-generation states being covered by the floating input dock by reserving stable bottom space in the chat list.
+- Removed excessive whitespace between the model search field and the model list.
+- Added a MiniMax icon asset and fixed `nvidia/minimaxai/...` being incorrectly matched to the xAI icon.
+- Replaced the image-generation thinking indicator with a dedicated image generation animation.
+- Generated images now support fullscreen tap-to-preview while keeping the download action.
+
 ## 1.0.4-preview.1 - 2026-05-07
 
 ### 中文

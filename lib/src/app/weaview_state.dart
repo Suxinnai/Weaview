@@ -927,8 +927,9 @@ ${_compactConversation(messages)}
       final imageToolCall = parseImageToolCall(rawTargetContent);
       if (imageToolCall != null) {
         messages.last
-          ..content = '正在生成图片，请稍候。'
-          ..isThinking = true;
+          ..content = ''
+          ..isThinking = true
+          ..activity = 'imageGeneration';
         flush(force: true);
         await _generateImageIntoCurrentResponse(
           prompt: imageToolCall.prompt,
@@ -970,7 +971,9 @@ ${_compactConversation(messages)}
 
     messages
       ..add(ChatMessage.user(content))
-      ..add(ChatMessage.model('', isThinking: true));
+      ..add(
+        ChatMessage.model('', isThinking: true, activity: 'imageGeneration'),
+      );
     suggestions = [];
     isStreaming = true;
     _cancelStreamRequested = false;
@@ -1006,7 +1009,8 @@ ${_compactConversation(messages)}
       if (messages.isNotEmpty && messages.last.role == 'model') {
         messages.last
           ..content = configIssue
-          ..isThinking = false;
+          ..isThinking = false
+          ..activity = '';
       }
       _persistCurrentSession();
       notifyListeners();
@@ -1020,7 +1024,9 @@ ${_compactConversation(messages)}
         prompt: prompt,
       );
       if (runId != _streamRunId || _cancelStreamRequested) {
-        messages.last.isThinking = false;
+        messages.last
+          ..isThinking = false
+          ..activity = '';
         notifyListeners();
         return;
       }
@@ -1032,20 +1038,24 @@ ${_compactConversation(messages)}
             ? '已生成图片。'
             : '已生成图片。\n\n优化提示词：$revisedPrompt'
         ..attachments = [attachment]
-        ..isThinking = false;
+        ..isThinking = false
+        ..activity = '';
       _persistCurrentSession();
       await _refreshCurrentSessionTitle();
       notifyListeners();
     } catch (error) {
       if (runId != _streamRunId || _cancelStreamRequested) {
-        messages.last.isThinking = false;
+        messages.last
+          ..isThinking = false
+          ..activity = '';
         notifyListeners();
         return;
       }
       messages.last
         ..content =
             '生图失败：${_friendlyAiError(error, timeout: imageRequestTimeout)}\n\n请确认提供商支持 Responses API 或 Codex /v1/images/generations 路由，并检查 API Key。'
-        ..isThinking = false;
+        ..isThinking = false
+        ..activity = '';
       _persistCurrentSession();
       notifyListeners();
     }
@@ -1058,6 +1068,7 @@ ${_compactConversation(messages)}
     if (messages.isNotEmpty && messages.last.role == 'model') {
       final current = messages.last;
       current.isThinking = false;
+      current.activity = '';
       if (current.content.trim().isEmpty) {
         current.content = '已停止本次回复。';
       }

@@ -8,6 +8,7 @@ class ChatMessage {
     this.reasoning = '',
     this.translation = '',
     this.isThinking = false,
+    this.activity = '',
   });
 
   factory ChatMessage.user(
@@ -19,11 +20,13 @@ class ChatMessage {
     String content, {
     String reasoning = '',
     bool isThinking = false,
+    String activity = '',
   }) => ChatMessage(
     role: 'model',
     content: content,
     reasoning: reasoning,
     isThinking: isThinking,
+    activity: activity,
   );
 
   factory ChatMessage.fromJson(dynamic json) {
@@ -33,6 +36,7 @@ class ChatMessage {
       content: map['content']?.toString() ?? '',
       reasoning: map['reasoning']?.toString() ?? '',
       translation: map['translation']?.toString() ?? '',
+      activity: map['activity']?.toString() ?? '',
       attachments: (map['attachments'] as List? ?? [])
           .map(MessageAttachment.fromJson)
           .toList(),
@@ -44,7 +48,10 @@ class ChatMessage {
   String reasoning;
   String translation;
   bool isThinking;
+  String activity;
   List<MessageAttachment> attachments;
+
+  bool get isImageGenerating => isThinking && activity == 'imageGeneration';
 
   ChatMessage copy() => ChatMessage(
     role: role,
@@ -52,6 +59,7 @@ class ChatMessage {
     reasoning: reasoning,
     translation: translation,
     isThinking: isThinking,
+    activity: activity,
     attachments: attachments.map((a) => a.copy()).toList(),
   );
 
@@ -60,6 +68,7 @@ class ChatMessage {
     'content': content,
     'reasoning': reasoning,
     'translation': translation,
+    'activity': activity,
     'attachments': attachments.map((a) => a.toJson()).toList(),
   };
 }

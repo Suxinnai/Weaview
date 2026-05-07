@@ -303,86 +303,176 @@ class MessageAttachmentGrid extends StatelessWidget {
       runSpacing: 8,
       children: [
         for (final attachment in attachments)
-          Stack(
-            children: [
-              Container(
-                width: attachment.isImage ? 118 : 190,
-                height: attachment.isImage ? 118 : 54,
-                decoration: BoxDecoration(
-                  color: state.text(context).withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: state.text(context).withValues(alpha: 0.07),
-                  ),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: attachment.isImage
-                    ? _AttachmentVisual(attachment: attachment)
-                    : Row(
-                        children: [
-                          const SizedBox(width: 12),
-                          Icon(
-                            Icons.description_outlined,
-                            size: 22,
-                            color: state.text(context).withValues(alpha: 0.56),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  attachment.name,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: state.textStyle(
-                                    context,
-                                    size: 12,
-                                    weight: FontWeight.w600,
-                                  ),
-                                ),
-                                Text(
-                                  formatBytes(attachment.size ?? 0),
-                                  style: state.textStyle(
-                                    context,
-                                    size: 10,
-                                    opacity: 0.45,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                        ],
-                      ),
-              ),
-              if (onDownload != null)
-                Positioned(
-                  right: 6,
-                  top: 6,
-                  child: GestureDetector(
-                    onTap: () => onDownload!(attachment),
-                    child: Container(
-                      width: 26,
-                      height: 26,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.48),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.download_rounded,
-                        size: 15,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+          _AttachmentTile(
+            state: state,
+            attachment: attachment,
+            onDownload: onDownload,
           ),
       ],
     );
   }
+}
+
+class _AttachmentTile extends StatelessWidget {
+  const _AttachmentTile({
+    required this.state,
+    required this.attachment,
+    required this.onDownload,
+  });
+
+  final WeaviewState state;
+  final MessageAttachment attachment;
+  final ValueChanged<MessageAttachment>? onDownload;
+
+  @override
+  Widget build(BuildContext context) {
+    final card = Container(
+      width: attachment.isImage ? 118 : 190,
+      height: attachment.isImage ? 118 : 54,
+      decoration: BoxDecoration(
+        color: state.text(context).withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: state.text(context).withValues(alpha: 0.07)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: attachment.isImage
+          ? _AttachmentVisual(attachment: attachment)
+          : Row(
+              children: [
+                const SizedBox(width: 12),
+                Icon(
+                  Icons.description_outlined,
+                  size: 22,
+                  color: state.text(context).withValues(alpha: 0.56),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        attachment.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: state.textStyle(
+                          context,
+                          size: 12,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        formatBytes(attachment.size ?? 0),
+                        style: state.textStyle(
+                          context,
+                          size: 10,
+                          opacity: 0.45,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
+            ),
+    );
+
+    return Stack(
+      children: [
+        attachment.isImage
+            ? Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => _openImagePreview(context, state, attachment),
+                  child: card,
+                ),
+              )
+            : card,
+        if (onDownload != null)
+          Positioned(
+            right: 6,
+            top: 6,
+            child: GestureDetector(
+              onTap: () => onDownload!(attachment),
+              child: Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.48),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.download_rounded,
+                  size: 15,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+void _openImagePreview(
+  BuildContext context,
+  WeaviewState state,
+  MessageAttachment attachment,
+) {
+  final file = File(attachment.path);
+  if (!attachment.isImage || !file.existsSync()) return;
+  showDialog<void>(
+    context: context,
+    barrierColor: Colors.black.withValues(alpha: 0.82),
+    builder: (context) {
+      return Dialog.fullscreen(
+        backgroundColor: Colors.black,
+        child: SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: InteractiveViewer(
+                  minScale: 0.7,
+                  maxScale: 4,
+                  child: Center(
+                    child: Image.file(
+                      file,
+                      fit: BoxFit.contain,
+                      filterQuality: FilterQuality.high,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 12,
+                left: 12,
+                child: IconButton.filledTonal(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ),
+              Positioned(
+                left: 18,
+                right: 18,
+                bottom: 18,
+                child: Text(
+                  attachment.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: state
+                      .textStyle(context, size: 12, weight: FontWeight.w600)
+                      .copyWith(color: Colors.white70),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
 }
 
 class _AttachmentVisual extends StatelessWidget {

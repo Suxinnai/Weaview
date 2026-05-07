@@ -188,7 +188,10 @@ class _MessageBubbleState extends State<MessageBubble> {
             child: Column(
               crossAxisAlignment: _messageColumnAlignment(state),
               children: [
-                if (message.reasoning.trim().isNotEmpty ||
+                if (message.isImageGenerating) ...[
+                  ImageGenerationPanel(state: state),
+                  const SizedBox(height: 10),
+                ] else if (message.reasoning.trim().isNotEmpty ||
                     message.isThinking) ...[
                   ReasoningPanel(
                     state: state,

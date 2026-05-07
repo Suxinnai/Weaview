@@ -158,6 +158,9 @@ class BrandIconRegistry {
     }
     if (_has(text, const ['gemini'])) return 'assets/icons/gemini-color.png';
     if (_has(text, const ['google'])) return 'assets/icons/google-color.png';
+    if (_has(text, const ['minimax', 'mini-max'])) {
+      return 'assets/icons/minimax-color.png';
+    }
     if (_has(text, const ['gpt-image', 'dall-e', 'openai', 'chatgpt'])) {
       return 'assets/icons/openai.png';
     }

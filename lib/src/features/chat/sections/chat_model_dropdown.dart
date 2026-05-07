@@ -59,7 +59,7 @@ class ChatModelDropdown extends StatelessWidget {
               ),
             ),
             Positioned(
-              top: safeTop + 50,
+              top: safeTop + 44,
               left: 0,
               right: 0,
               child: Center(
@@ -129,12 +129,12 @@ class ChatModelDropdown extends StatelessWidget {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 4),
                           ConstrainedBox(
                             constraints: BoxConstraints(
                               maxHeight: math.min(
-                                286.0,
-                                MediaQuery.sizeOf(context).height * 0.34,
+                                318.0,
+                                MediaQuery.sizeOf(context).height * 0.42,
                               ),
                             ),
                             child: filtered.isEmpty
@@ -160,6 +160,8 @@ class ChatModelDropdown extends StatelessWidget {
                                     ),
                                   )
                                 : ListView.builder(
+                                    padding: EdgeInsets.zero,
+                                    primary: false,
                                     shrinkWrap: true,
                                     itemCount: filtered.length,
                                     itemBuilder: (context, index) {
