@@ -2,10 +2,11 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
-## Unreleased
+## 1.0.2 - 2026-05-07
 
 - 将 Flutter 工程从 `weaview_flutter/` 上移到仓库根目录，开发者 clone 后可直接运行 `flutter pub get`、`flutter run`。
 - 明确 `android/` 与 `ios/` 是平台宿主源码目录，并通过 `.gitignore` 屏蔽 APK、IPA、AAB、xcarchive 等构建产物。
+- 发布基于根目录 Flutter 工程结构的 Android 预览安装包。
 
 ## 1.0.1 - 2026-05-04
 
