@@ -1013,7 +1013,7 @@ ${_compactConversation(messages)}
       }
       messages.last
         ..content =
-            '生图失败：${_friendlyAiError(error)}\n\n请确认提供商支持 Responses API 或 Codex /v1/images/generations 路由，并检查 API Key。'
+            '生图失败：${_friendlyAiError(error, timeout: imageRequestTimeout)}\n\n请确认提供商支持 Responses API 或 Codex /v1/images/generations 路由，并检查 API Key。'
         ..isThinking = false;
       _persistCurrentSession();
       notifyListeners();
@@ -1232,10 +1232,10 @@ Treat background style, font/text style, bubble style, and message alignment as 
     );
   }
 
-  String _friendlyAiError(Object error) {
+  String _friendlyAiError(Object error, {Duration? timeout}) {
     return ModelConfigResolver.friendlyAiError(
       error,
-      chatRequestTimeout: chatRequestTimeout,
+      chatRequestTimeout: timeout ?? chatRequestTimeout,
     );
   }
 
@@ -1426,7 +1426,9 @@ Treat background style, font/text style, bubble style, and message alignment as 
       final preset = defaultsById[provider.id];
       if (preset == null) return provider;
       return provider.copyWith(
-        type: provider.type.isEmpty ? preset.type : provider.type,
+        type: provider.id == 'xiaomi' || provider.type.isEmpty
+            ? preset.type
+            : provider.type,
         name: provider.name.isEmpty ? preset.name : provider.name,
         baseUrl: provider.baseUrl.isEmpty ? preset.baseUrl : provider.baseUrl,
         model: provider.model.isEmpty ? preset.model : provider.model,

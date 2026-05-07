@@ -46,15 +46,15 @@ class ChatBody extends StatelessWidget {
         ? 48.0
         : 0.0;
     final bottomPad =
-        88.0 +
+        74.0 +
         keyboardInset +
         suggestionPad +
-        (dockExpanded ? 76 : 0) +
-        (pendingAttachments.isEmpty ? 0 : 70);
+        (dockExpanded ? 66 : 0) +
+        (pendingAttachments.isEmpty ? 0 : 58);
     return Positioned.fill(
       child: SafeArea(
         child: Padding(
-          padding: EdgeInsets.only(top: 86, bottom: bottomPad),
+          padding: EdgeInsets.only(top: 64, bottom: bottomPad),
           child: state.messages.isEmpty
               ? Center(
                   child: TweenAnimationBuilder<double>(

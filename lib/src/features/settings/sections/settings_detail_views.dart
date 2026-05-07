@@ -673,6 +673,31 @@ extension SettingsDetailViews on SettingsSheetState {
 
   Widget ttsConfigView() {
     final state = widget.state;
+    TtsProviderConfig withTtsPreset(TtsProviderConfig source, String type) {
+      if (type == 'xiaomi') {
+        return source.copyWith(
+          type: type,
+          name: source.name.trim().isEmpty ? 'Xiaomi MiMo TTS' : source.name,
+          baseUrl: source.baseUrl.trim().isEmpty
+              ? 'https://api.xiaomimimo.com/v1'
+              : source.baseUrl,
+          model: source.model.trim().isEmpty ? 'mimo-v2-tts' : source.model,
+          voice: source.voice.trim().isEmpty ? 'default_en' : source.voice,
+        );
+      }
+      if (type == 'openai') {
+        return source.copyWith(
+          type: type,
+          baseUrl: source.baseUrl.trim().isEmpty
+              ? 'https://api.openai.com/v1'
+              : source.baseUrl,
+          model: source.model.trim().isEmpty ? 'gpt-4o-mini-tts' : source.model,
+          voice: source.voice.trim().isEmpty ? 'alloy' : source.voice,
+        );
+      }
+      return source.copyWith(type: type);
+    }
+
     var draft =
         editingTts ??
         TtsProviderConfig(
@@ -742,18 +767,7 @@ extension SettingsDetailViews on SettingsSheetState {
             ],
             onChanged: (value) => setLocal(() {
               final nextType = value ?? draft.type;
-              draft = draft.copyWith(
-                type: nextType,
-                baseUrl: nextType == 'openai' && draft.baseUrl.trim().isEmpty
-                    ? 'https://api.openai.com/v1'
-                    : draft.baseUrl,
-                model: nextType == 'openai' && draft.model.trim().isEmpty
-                    ? 'gpt-4o-mini-tts'
-                    : draft.model,
-                voice: nextType == 'openai' && draft.voice.trim().isEmpty
-                    ? 'alloy'
-                    : draft.voice,
-              );
+              draft = withTtsPreset(draft, nextType);
               editingTts = draft;
             }),
           ),
@@ -781,7 +795,9 @@ extension SettingsDetailViews on SettingsSheetState {
           field(
             label: 'Base URL',
             value: draft.baseUrl,
-            hint: 'https://api.openai.com/v1',
+            hint: draft.type == 'xiaomi'
+                ? 'https://api.xiaomimimo.com/v1'
+                : 'https://api.openai.com/v1',
             onChanged: (value) {
               draft = draft.copyWith(baseUrl: value);
               editingTts = draft;
@@ -790,7 +806,9 @@ extension SettingsDetailViews on SettingsSheetState {
           field(
             label: '模型名称 (Model)',
             value: draft.model,
-            hint: '例如: tts-1, tts-1-hd',
+            hint: draft.type == 'xiaomi'
+                ? 'mimo-v2-tts'
+                : '例如: tts-1, tts-1-hd',
             onChanged: (value) {
               draft = draft.copyWith(model: value);
               editingTts = draft;
@@ -799,7 +817,9 @@ extension SettingsDetailViews on SettingsSheetState {
           field(
             label: '合成语音 (Voice)',
             value: draft.voice,
-            hint: '例如: alloy, echo, fable',
+            hint: draft.type == 'xiaomi'
+                ? 'default_en'
+                : '例如: alloy, echo, fable',
             onChanged: (value) {
               draft = draft.copyWith(voice: value);
               editingTts = draft;

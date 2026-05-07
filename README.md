@@ -6,23 +6,35 @@
 
 织境提供一个可本地配置的多模型聊天环境。它不内置任何真实 API Key，所有模型服务、搜索服务和语音服务凭据都需要用户在 App 设置中显式配置。
 
+Latest preview / 最新预览版：`v1.0.3-preview.1`
+
 主要能力包括：
 
 - 多提供商 AI 对话，支持 OpenAI 兼容接口与 Gemini 等 provider。
 - 主对话、标题总结、后续建议、翻译等角色模型独立分配。
 - 工具模型可独立分配，用于人物画像补全和长期记忆整理。
 - 流式输出、思考状态、思考链解析与折叠展示。
+- 生图对话模式，支持 OpenAI Responses API 与 Codex 兼容 `/v1/images/generations`。
 - 会话历史、会话分支、长期记忆、参考历史记忆和本地数据管理。
 - 图片/文件附件入口、消息复制、编辑、删除、重试、翻译。
 - Tavily 联网搜索配置入口。
-- Flutter 移动端 UI，包含 Android 原生语音识别 fallback。
+- 手动启用的 TTS 服务配置，支持系统 TTS fallback 与远程 TTS provider。
+- Flutter 移动端 UI，包含 Android 原生语音识别 fallback 与麦克风权限恢复引导。
+
+English summary:
+
+- Weaview is a Flutter AI chat app with configurable providers, role-based model assignment, streaming chat, memory, search, translation, image generation, TTS, and mobile-first interaction design.
+- API keys are never bundled. Configure AI, search, image, and speech providers explicitly inside the app settings.
+- Android voice input uses a native fallback and guides users to system microphone permissions when authorization is missing.
 
 ## Features
 
 - 支持自定义 AI provider、Base URL、API Key 和模型列表。
 - 支持 provider 拖拽排序、长按显示删除控制和预设 provider 安全合并。
 - 支持 OpenAI-compatible `/v1/chat/completions` 流式响应。
+- 支持 OpenAI-compatible `/v1/responses` 生图响应解析与 Codex-compatible `/v1/images/generations` 生图响应解析。
 - 支持 Gemini `generateContent` 显式 provider 接入。
+- 支持小米 MiMo `mimo-v2-tts` 流式 TTS 返回的 PCM16 音频，并自动封装为 WAV 播放。
 - 支持 AI 生成主题指令的安全守卫，限制模型只能修改允许的聊天外观字段。
 - 支持本地自然语言外观指令解析，聊天样式变更不必进入远端模型。
 - 支持人物画像、助手昵称、用户资料和工具模型辅助整理。
@@ -75,7 +87,8 @@ flutter pub get
 | Base URL | OpenAI 兼容服务地址，例如 `https://api.openai.com/v1` | 按 provider 预设 |
 | 默认模型 | 主对话、标题总结、建议、翻译、工具任务各自使用的模型 | 未分配 |
 | Tavily API Key | 联网搜索服务 Key | 无 |
-| TTS Provider | 语音合成服务配置 | 系统 TTS |
+| TTS Provider | 语音合成服务配置，可手动启用系统或远程 TTS | 未启用 |
+| Image Model | 生图模型，用于对话式生图 | 未分配 |
 
 安全约定：
 
@@ -106,6 +119,8 @@ flutter run -d <device-id>
 5. 返回聊天页，输入消息并发送。
 6. 长按消息可编辑、删除或从当前消息创建分支。
 7. 如需联网搜索，先在「设置 > 扩展服务」配置 Tavily API Key，再在输入栏启用联网搜索。
+8. 如需语音播报，先在「设置 > 扩展服务 > 语音服务」手动启用系统 TTS 或远程 TTS provider。
+9. 如需生图，选择已配置的生图模型后直接在输入框中描述图片需求并发送。
 
 OpenAI 兼容 provider 通常需要：
 
@@ -199,6 +214,28 @@ flutter build ios
 | OpenAI-compatible | `POST /chat/completions` | 对话与流式输出 |
 | Gemini | `POST /v1beta/models/{model}:generateContent` | Gemini 对话生成 |
 | Tavily | Search API | 联网搜索 |
+| OpenAI Responses-compatible | `POST /responses` | 生图与多模态输出 |
+| Codex image-compatible | `POST /images/generations` | 生图输出 |
+| OpenAI Speech-compatible | `POST /audio/speech` | 远程语音合成 |
+| Xiaomi MiMo TTS | `POST /chat/completions` | 流式 PCM16 语音合成 |
+
+## Latest Release Notes / 最新更新日志
+
+### v1.0.3-preview.1
+
+中文：
+
+- 新增对话式生图模式，兼容 OpenAI Responses API 与 Codex `/v1/images/generations`，并将生图请求超时时间延长到 300 秒。
+- 底部输入栏改为透明悬浮样式，顶部栏收窄，减少聊天内容遮挡。
+- 新增小米 MiMo `mimo-v2-tts` 流式 TTS 适配，TTS 需要在设置中手动启用。
+- 修复 Android 语音输入缺少麦克风权限时的恢复路径，拒绝权限后可直接跳转系统权限设置。
+
+English:
+
+- Added conversational image generation with OpenAI Responses API and Codex `/v1/images/generations` support, with a 300-second timeout for long image jobs.
+- Changed the input dock to a floating transparent surface and tightened the header to reduce content obstruction.
+- Added Xiaomi MiMo `mimo-v2-tts` streaming TTS support. TTS remains opt-in and must be enabled in settings.
+- Fixed Android microphone-permission recovery for voice input, including a direct shortcut to system permission settings after denial.
 
 ## 贡献指南
 

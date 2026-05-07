@@ -48,12 +48,12 @@ class TtsProviderConfig {
       ),
       TtsProviderConfig(
         id: 'xiaomi',
-        type: 'custom',
+        type: 'xiaomi',
         name: 'Xiaomi MiMo TTS',
         apiKey: '',
-        baseUrl: '',
-        model: '',
-        voice: '',
+        baseUrl: 'https://api.xiaomimimo.com/v1',
+        model: 'mimo-v2-tts',
+        voice: 'default_en',
       ),
     ];
   }

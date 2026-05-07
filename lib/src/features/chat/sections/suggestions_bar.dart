@@ -31,7 +31,7 @@ class SuggestionsBar extends StatelessWidget {
       curve: Curves.easeOutCubic,
       left: 14,
       right: 14,
-      bottom: 92 + MediaQuery.paddingOf(context).bottom,
+      bottom: 80 + MediaQuery.paddingOf(context).bottom,
       child: IgnorePointer(
         ignoring: state.suggestions.isEmpty,
         child: AnimatedOpacity(

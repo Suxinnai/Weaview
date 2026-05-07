@@ -382,12 +382,54 @@ class _WeaviewHomeState extends State<WeaviewHome>
       final message = error.message?.trim().isNotEmpty == true
           ? error.message!
           : reason;
+      if (_isMicrophonePermissionError(error, message)) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_showMicrophonePermissionDialog(message));
+        });
+        return;
+      }
       _snack('语音输入不可用：$message');
     } finally {
       if (mounted) {
         _wave.stop();
         setState(() => _recording = false);
       }
+    }
+  }
+
+  bool _isMicrophonePermissionError(PlatformException error, String message) {
+    return error.code == 'PERMISSION_DENIED' ||
+        message.contains('麦克风权限') ||
+        message.contains('缺少麦克风权限');
+  }
+
+  Future<void> _showMicrophonePermissionDialog(String message) async {
+    final openSettings = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('需要麦克风权限'),
+        content: Text('$message\n\n请在系统权限中允许麦克风后，再返回织境使用语音输入。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('去授权'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (openSettings != true) return;
+    try {
+      await _nativeSpeech.invokeMethod<void>('openAppSettings');
+    } on PlatformException catch (error) {
+      final detail = error.message?.trim().isNotEmpty == true
+          ? error.message!
+          : error.code;
+      if (mounted) _snack('无法打开权限设置：$detail');
     }
   }
 

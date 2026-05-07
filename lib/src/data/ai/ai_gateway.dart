@@ -16,7 +16,7 @@ const searchRequestTimeout = Duration(seconds: 30);
 const chatRequestTimeout = Duration(seconds: 180);
 const roleRequestTimeout = Duration(seconds: 75);
 const modelFetchTimeout = Duration(seconds: 45);
-const imageRequestTimeout = Duration(seconds: 240);
+const imageRequestTimeout = Duration(seconds: 300);
 const ttsRequestTimeout = Duration(seconds: 75);
 
 class AiGateway {

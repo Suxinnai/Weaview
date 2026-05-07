@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
@@ -56,26 +57,27 @@ class ChatInputDock extends StatelessWidget {
     final canSubmit = imageGenerationMode
         ? hasText
         : hasText || pendingAttachments.isNotEmpty;
+    final radius = BorderRadius.circular(dockExpanded ? 22 : 28);
     final dockSurface = AnimatedContainer(
       duration: const Duration(milliseconds: 120),
       curve: Curves.easeOut,
       decoration: BoxDecoration(
-        color: (dark ? Colors.black : state.layer(context)).withValues(
-          alpha: dark ? 0.44 : 0.30,
+        color: (dark ? Colors.black : Colors.white).withValues(
+          alpha: dark ? 0.32 : 0.22,
         ),
-        borderRadius: BorderRadius.circular(dockExpanded ? 22 : 28),
+        borderRadius: radius,
         border: Border.all(
-          color: (dark ? Colors.white : Colors.black).withValues(
-            alpha: dark ? 0.06 : 0.07,
+          color: (dark ? Colors.white : state.text(context)).withValues(
+            alpha: dark ? 0.08 : 0.08,
           ),
         ),
         boxShadow: [
-          if (!keyboardOpen)
-            BoxShadow(
-              color: Colors.black.withValues(alpha: dark ? 0.14 : 0.055),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
+          BoxShadow(
+            color: Colors.black.withValues(alpha: dark ? 0.18 : 0.075),
+            blurRadius: keyboardOpen ? 18 : 26,
+            spreadRadius: -8,
+            offset: Offset(0, keyboardOpen ? 8 : 14),
+          ),
         ],
       ),
       child: Column(
@@ -229,8 +231,11 @@ class ChatInputDock extends StatelessWidget {
       ),
     );
     final dock = ClipRRect(
-      borderRadius: BorderRadius.circular(dockExpanded ? 22 : 28),
-      child: dockSurface,
+      borderRadius: radius,
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+        child: dockSurface,
+      ),
     );
     return AnimatedPadding(
       duration: const Duration(milliseconds: 90),
@@ -240,10 +245,8 @@ class ChatInputDock extends StatelessWidget {
         alignment: Alignment.bottomCenter,
         child: SafeArea(
           top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
-            child: dock,
-          ),
+          minimum: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+          child: Padding(padding: EdgeInsets.zero, child: dock),
         ),
       ),
     );

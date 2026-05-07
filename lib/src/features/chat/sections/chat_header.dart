@@ -35,7 +35,7 @@ class ChatHeader extends StatelessWidget {
         alignment: Alignment.topCenter,
         child: SizedBox(
           width: double.infinity,
-          height: 74,
+          height: 58,
           child: Stack(
             alignment: Alignment.center,
             children: [
@@ -51,8 +51,8 @@ class ChatHeader extends StatelessWidget {
                 onTap: onToggleModelDropdown,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
+                    horizontal: 12,
+                    vertical: 4,
                   ),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(16),
@@ -72,18 +72,18 @@ class ChatHeader extends StatelessWidget {
                                         ?.title ??
                                     '未命名梦境'
                               : '新梦境',
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,
                           style: state.textStyle(
                             context,
-                            size: 15,
+                            size: 14,
                             weight: FontWeight.w500,
-                            height: 1.15,
+                            height: 1.1,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -112,7 +112,7 @@ class ChatHeader extends StatelessWidget {
                               style: state
                                   .textStyle(
                                     context,
-                                    size: 10,
+                                    size: 9.5,
                                     weight: FontWeight.w600,
                                     opacity: 0.55,
                                   )

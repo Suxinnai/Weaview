@@ -93,6 +93,32 @@ $$E = mc^2$$'''),
           .baseUrl,
       'https://api.openai.com/v1',
     );
+    final xiaomi = state.ttsProviders.firstWhere(
+      (provider) => provider.id == 'xiaomi',
+    );
+    expect(xiaomi.type, 'xiaomi');
+    expect(xiaomi.baseUrl, 'https://api.xiaomimimo.com/v1');
+    expect(xiaomi.model, 'mimo-v2-tts');
+    expect(xiaomi.voice, 'default_en');
+    state.dispose();
+  });
+
+  test('fills existing Xiaomi TTS config from official preset', () async {
+    SharedPreferences.setMockInitialValues({
+      'ai_tts_providers':
+          '[{"id":"xiaomi","type":"custom","name":"Xiaomi MiMo TTS","apiKey":"","baseUrl":"","model":"","voice":""}]',
+    });
+    final state = WeaviewState();
+
+    await state.load();
+
+    final xiaomi = state.ttsProviders.firstWhere(
+      (provider) => provider.id == 'xiaomi',
+    );
+    expect(xiaomi.type, 'xiaomi');
+    expect(xiaomi.baseUrl, 'https://api.xiaomimimo.com/v1');
+    expect(xiaomi.model, 'mimo-v2-tts');
+    expect(xiaomi.voice, 'default_en');
     state.dispose();
   });
 

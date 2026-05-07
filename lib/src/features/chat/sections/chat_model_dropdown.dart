@@ -59,7 +59,7 @@ class ChatModelDropdown extends StatelessWidget {
               ),
             ),
             Positioned(
-              top: safeTop + 62,
+              top: safeTop + 50,
               left: 0,
               right: 0,
               child: Center(

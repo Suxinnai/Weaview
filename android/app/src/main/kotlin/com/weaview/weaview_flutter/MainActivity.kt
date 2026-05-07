@@ -9,6 +9,7 @@ import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -39,6 +40,8 @@ class MainActivity : FlutterActivity() {
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "listen" -> startNativeSpeech(call.argument<String>("locale") ?: "zh-CN", result)
+                "hasRecordAudioPermission" -> result.success(hasRecordAudioPermission())
+                "openAppSettings" -> openAppPermissionSettings(result)
                 "cancel" -> {
                     cancelNativeSpeech()
                     result.success(null)
@@ -89,10 +92,7 @@ class MainActivity : FlutterActivity() {
         pendingSpeechLocale = locale
         lastPartialSpeech = ""
 
-        if (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-            checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (!hasRecordAudioPermission()) {
             requestPermissions(
                 arrayOf(Manifest.permission.RECORD_AUDIO),
                 speechPermissionRequestCode
@@ -133,6 +133,13 @@ class MainActivity : FlutterActivity() {
                 override fun onError(error: Int) {
                     if (lastPartialSpeech.isNotBlank()) {
                         finishSpeechSuccess(lastPartialSpeech)
+                        return
+                    }
+                    if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
+                        finishSpeechError(
+                            "PERMISSION_DENIED",
+                            "缺少麦克风权限，请在系统权限中允许麦克风后重试"
+                        )
                         return
                     }
                     finishSpeechError("RECOGNITION_ERROR", speechErrorMessage(error))
@@ -231,6 +238,25 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun hasRecordAudioPermission(): Boolean {
+        return Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun openAppPermissionSettings(result: MethodChannel.Result) {
+        try {
+            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.parse("package:$packageName")
+                addCategory(Intent.CATEGORY_DEFAULT)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+            result.success(null)
+        } catch (error: Exception) {
+            result.error("OPEN_SETTINGS_FAILED", error.message ?: "无法打开系统权限设置", null)
+        }
+    }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -243,7 +269,15 @@ class MainActivity : FlutterActivity() {
         if (granted) {
             startInlineSpeech(pendingSpeechLocale)
         } else {
-            finishSpeechError("PERMISSION_DENIED", "需要麦克风权限才能使用语音输入")
+            val message = if (
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)
+            ) {
+                "麦克风权限已被拒绝，请在系统设置中允许后重试"
+            } else {
+                "需要麦克风权限才能使用语音输入"
+            }
+            finishSpeechError("PERMISSION_DENIED", message)
         }
     }
 
