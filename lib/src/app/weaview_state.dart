@@ -1053,7 +1053,7 @@ ${_compactConversation(messages)}
       }
       messages.last
         ..content =
-            '生图失败：${_friendlyAiError(error, timeout: imageRequestTimeout)}\n\n请确认提供商支持 Responses API 或 Codex /v1/images/generations 路由，并检查 API Key。'
+            '生图失败：${_friendlyAiError(error, timeout: imageRequestTimeout)}\n\n请确认当前模型支持生图接口，模型能力已标记为 image，并检查 Base URL、证书和 API Key。'
         ..isThinking = false
         ..activity = '';
       _persistCurrentSession();

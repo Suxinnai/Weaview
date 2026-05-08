@@ -46,7 +46,7 @@ class ChatBody extends StatelessWidget {
         ? 48.0
         : 0.0;
     final bottomPad =
-        106.0 +
+        68.0 +
         keyboardInset +
         suggestionPad +
         (dockExpanded ? 66 : 0) +

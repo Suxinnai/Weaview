@@ -137,12 +137,6 @@ class AiGateway {
     required ModelAssignment assignment,
     required String prompt,
   }) async {
-    final providerName = assignment.provider.isNotEmpty
-        ? assignment.provider
-        : provider.name;
-    if (_isGeminiProvider(providerName)) {
-      throw Exception('生图暂只支持 OpenAI / Codex 兼容接口，请选择非 Gemini 提供商。');
-    }
     final apiKey = provider.apiKey;
     if (apiKey.isEmpty) {
       throw Exception('请先在「设置 > 提供商」中为 ${provider.name} 配置 API Key。');
@@ -152,7 +146,7 @@ class AiGateway {
       apiKey: apiKey,
       baseUrl: _effectiveOpenAiBaseUrl(provider),
       prompt: prompt,
-      responseModel: 'gpt-5.5',
+      responseModel: _responseModelForImageTool(configuredModel),
       imageModel: configuredModel,
       timeout: imageRequestTimeout,
     );
@@ -246,6 +240,10 @@ class AiGateway {
 
   static bool _isGeminiProvider(String providerName) {
     return providerName.toLowerCase().contains('gemini');
+  }
+
+  static String _responseModelForImageTool(String imageModel) {
+    return shouldUseResponsesImageTool(imageModel) ? 'gpt-5.5' : imageModel;
   }
 
   static String _effectiveOpenAiBaseUrl(AiProvider provider) {

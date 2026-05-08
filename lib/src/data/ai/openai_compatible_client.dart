@@ -165,7 +165,25 @@ class OpenAiCompatibleClient {
     required Duration timeout,
     String size = '1024x1024',
   }) async {
-    Object? responsesError;
+    Object? imagesError;
+    try {
+      return await _generateImageWithImagesRoute(
+        apiKey: apiKey,
+        baseUrl: baseUrl,
+        prompt: prompt,
+        imageModel: imageModel,
+        timeout: timeout,
+        size: size,
+      );
+    } catch (error) {
+      imagesError = error;
+      if (!shouldUseResponsesImageTool(imageModel)) {
+        throw Exception(
+          '生图失败。/v1/images/generations：${_compactError(imagesError)}',
+        );
+      }
+    }
+
     try {
       return await _generateImageWithResponses(
         apiKey: apiKey,
@@ -176,24 +194,11 @@ class OpenAiCompatibleClient {
         timeout: timeout,
         size: size,
       );
-    } catch (error) {
-      responsesError = error;
-    }
-
-    try {
-      return await _generateImageWithImagesRoute(
-        apiKey: apiKey,
-        baseUrl: baseUrl,
-        prompt: prompt,
-        imageModel: imageModel,
-        timeout: timeout,
-        size: size,
-      );
-    } catch (imagesError) {
-      final responsesMessage = _compactError(responsesError);
+    } catch (responsesError) {
       final imagesMessage = _compactError(imagesError);
+      final responsesMessage = _compactError(responsesError);
       throw Exception(
-        '生图失败。Responses API：$responsesMessage；/v1/images 路由：$imagesMessage',
+        '生图失败。/v1/images/generations：$imagesMessage；Responses API：$responsesMessage',
       );
     }
   }
@@ -344,7 +349,11 @@ class OpenAiCompatibleClient {
           ? (item['id'] ?? item['name'] ?? item).toString()
           : item.toString();
       final name = item is Map ? (item['name'] ?? id).toString() : id;
-      return AiModel(id: id, name: name, capabilities: _guessCaps(id));
+      return AiModel(
+        id: id,
+        name: name,
+        capabilities: guessModelCapabilities(id, name: name),
+      );
     }).toList();
     if (models.isEmpty) {
       throw Exception('模型接口返回为空，请确认 Base URL 指向兼容 OpenAI 的 /v1 服务。');
@@ -370,24 +379,6 @@ class OpenAiCompatibleClient {
     final answer = splitReasoning(text).answer;
     final elapsed = DateTime.now().difference(start).inMilliseconds;
     return '连接成功，模型响应正常：${answer.trim().isEmpty ? 'OK' : answer.trim()}（${elapsed}ms）';
-  }
-
-  static List<String> _guessCaps(String id) {
-    final lower = id.toLowerCase();
-    final caps = <String>[];
-    if (lower.contains('vision') ||
-        lower.contains('vl') ||
-        lower.contains('omni')) {
-      caps.add('vision');
-    }
-    if (lower.contains('image') ||
-        lower.contains('gpt-image') ||
-        lower.contains('dall-e')) {
-      caps.add('image');
-    }
-    if (lower.contains('tool') || lower.contains('function')) caps.add('tool');
-    if (lower.contains('reason') || lower.contains('think')) caps.add('reason');
-    return caps.isEmpty ? ['chat'] : caps;
   }
 
   static String _trimSlash(String value) => app_utils.normalizeBaseUrl(value);

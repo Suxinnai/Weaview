@@ -6,7 +6,7 @@
 
 织境提供一个可本地配置的多模型聊天环境。它不内置任何真实 API Key，所有模型服务、搜索服务和语音服务凭据都需要用户在 App 设置中显式配置。
 
-Latest preview / 最新预览版：`v1.0.5-preview.1`
+Latest preview / 最新预览版：`v1.0.6-preview.1`
 
 主要能力包括：
 
@@ -14,7 +14,7 @@ Latest preview / 最新预览版：`v1.0.5-preview.1`
 - 主对话、标题总结、后续建议、翻译等角色模型独立分配。
 - 工具模型可独立分配，用于人物画像补全和长期记忆整理。
 - 流式输出、思考状态、思考链解析与折叠展示。
-- 生图对话模式，支持 OpenAI Responses API 与 Codex 兼容 `/v1/images/generations`。
+- 生图对话模式，优先支持 OpenAI-compatible `/v1/images/generations`，并对 OpenAI 图片模型保留 Responses image tool fallback。
 - 会话历史、会话分支、长期记忆、参考历史记忆和本地数据管理。
 - 图片/文件附件入口、消息复制、编辑、删除、重试、翻译。
 - Tavily 联网搜索配置入口。
@@ -32,7 +32,7 @@ English summary:
 - 支持自定义 AI provider、Base URL、API Key 和模型列表。
 - 支持 provider 拖拽排序、长按显示删除控制和预设 provider 安全合并。
 - 支持 OpenAI-compatible `/v1/chat/completions` 流式响应。
-- 支持 OpenAI-compatible `/v1/responses` 生图响应解析与 Codex-compatible `/v1/images/generations` 生图响应解析。
+- 支持 OpenAI-compatible `/v1/images/generations` 生图响应解析，并支持 OpenAI Responses image tool fallback。
 - 支持 Gemini `generateContent` 显式 provider 接入。
 - 支持小米 MiMo `mimo-v2-tts` 流式 TTS 返回的 PCM16 音频，并自动封装为 WAV 播放。
 - 支持 AI 生成主题指令的安全守卫，限制模型只能修改允许的聊天外观字段。
@@ -214,30 +214,28 @@ flutter build ios
 | OpenAI-compatible | `POST /chat/completions` | 对话与流式输出 |
 | Gemini | `POST /v1beta/models/{model}:generateContent` | Gemini 对话生成 |
 | Tavily | Search API | 联网搜索 |
-| OpenAI Responses-compatible | `POST /responses` | 生图与多模态输出 |
-| Codex image-compatible | `POST /images/generations` | 生图输出 |
+| OpenAI-compatible image | `POST /images/generations` | 生图输出，适配 GPT Image、Imagen、Nano Banana、FLUX、Qwen Image、Grok Imagine 等模型 |
+| OpenAI Responses-compatible | `POST /responses` | OpenAI 图片模型的 fallback 生图路径 |
 | OpenAI Speech-compatible | `POST /audio/speech` | 远程语音合成 |
 | Xiaomi MiMo TTS | `POST /chat/completions` | 流式 PCM16 语音合成 |
 
 ## Latest Release Notes / 最新更新日志
 
-### v1.0.5-preview.1
+### v1.0.6-preview.1
 
 中文：
 
-- 修复 AI 正在思考 / 生图状态被底部输入栏遮挡的问题。
-- 模型选择弹层去除搜索框与模型列表之间的异常留白，并修复 MiniMax 模型图标误识别为 xAI 的问题。
-- 新增 MiniMax provider / model 图标资源。
-- 生图过程改为专用生成动画，不再复用思考链动画。
-- 已生成图片支持点击打开全屏预览，保留下载按钮。
+- 修复底部输入框上方固定留白过大，在浅色主题下形成白色蒙层并遮挡回复内容的问题。
+- 扩展生图模型识别范围，覆盖 GPT Image / ChatGPT Images、Imagen、Gemini Image / Nano Banana、FLUX、Qwen Image、Grok Imagine 等模型。
+- 所有生图模型优先走 `/v1/images/generations`；GPT Image / DALL-E / ChatGPT Images 仅在该路由失败后 fallback 到 Responses image tool，其它生图模型不再误走 Responses 工具协议。
+- 生图失败提示改为通用诊断信息，提示检查模型能力、Base URL、证书和 API Key。
 
 English:
 
-- Fixed thinking / image-generation state being hidden behind the bottom input dock.
-- Removed excessive whitespace between the model search field and model list, and fixed MiniMax models being matched to the xAI icon.
-- Added MiniMax provider / model icon assets.
-- Replaced the image-generation thinking indicator with a dedicated generation animation.
-- Generated images can now be tapped for fullscreen preview while keeping the download action.
+- Fixed excessive space above the bottom input dock that appeared as a white overlay in light themes.
+- Expanded image-model detection across GPT Image / ChatGPT Images, Imagen, Gemini Image / Nano Banana, FLUX, Qwen Image, Grok Imagine, and related model families.
+- Every image model now tries `/v1/images/generations` first; GPT Image / DALL-E / ChatGPT Images only fall back to the Responses image tool when that route fails.
+- Image-generation errors now point to model capability, Base URL, certificate, and API Key checks.
 
 ## 贡献指南
 

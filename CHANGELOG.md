@@ -2,6 +2,22 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.6-preview.1 - 2026-05-08
+
+### 中文
+
+- 修复聊天底部输入框上方固定留白过大，在浅色主题下形成白色蒙层并遮挡回复内容的问题。
+- 扩展生图模型识别范围，支持 GPT Image / ChatGPT Images、Google Imagen、Gemini Image / Nano Banana、FLUX、Qwen Image、Grok Imagine、Seedream、Stable Diffusion 等常见模型名称。
+- 调整生图请求路由：所有生图模型优先使用 OpenAI-compatible `/v1/images/generations`；GPT Image / DALL-E / ChatGPT Images 在该路由失败后才 fallback 到 Responses image tool，避免其它生图模型错误走 Responses 工具协议。
+- 优化生图失败提示，去除 Codex 专属表述，改为提示检查模型能力、Base URL、证书和 API Key。
+
+### English
+
+- Fixed excessive reserved space above the bottom input dock, which appeared as a white overlay and covered reply text in light themes.
+- Expanded image-model detection to cover GPT Image / ChatGPT Images, Google Imagen, Gemini Image / Nano Banana, FLUX, Qwen Image, Grok Imagine, Seedream, Stable Diffusion, and related names.
+- Updated image generation routing so every image model tries the OpenAI-compatible `/v1/images/generations` route first; GPT Image / DALL-E / ChatGPT Images only fall back to the Responses image tool when that route fails.
+- Improved image-generation failure copy to point users at model capability, Base URL, certificate, and API Key checks.
+
 ## 1.0.5-preview.1 - 2026-05-08
 
 ### 中文
