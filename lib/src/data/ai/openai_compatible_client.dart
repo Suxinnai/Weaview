@@ -268,6 +268,7 @@ class OpenAiCompatibleClient {
             'prompt': prompt,
             'size': size,
             'output_format': 'png',
+            'response_format': 'b64_json',
             'n': 1,
           }),
         )

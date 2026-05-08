@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:weaview_flutter/src/app/app_constants.dart';
 import 'package:weaview_flutter/src/app/weaview_app.dart';
 import 'package:weaview_flutter/src/app/weaview_state.dart';
 import 'package:weaview_flutter/src/core/app_utils.dart';
@@ -11,6 +12,11 @@ import 'package:weaview_flutter/src/features/chat/chat_home.dart';
 import 'package:weaview_flutter/src/features/settings/settings_sheet.dart';
 
 void main() {
+  test('exposes the current preview version in app constants', () {
+    expect(appVersionTag, 'v1.0.8-preview.1');
+    expect(appVersionDisplay, contains('v1.0.8'));
+  });
+
   testWidgets('renders the Weaview chat shell', (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
 
@@ -326,6 +332,40 @@ $$E = mc^2$$'''),
       state.dispose();
     },
   );
+
+  testWidgets('provider cards mark assigned providers as selected', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+
+    await state.load();
+    state.saveModelAssignment(
+      'image',
+      const ModelAssignment(
+        provider: 'OpenAI',
+        model: 'gpt-image-2',
+        prompt: '',
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsSheet(
+          state: state,
+          open: true,
+          onClose: () {},
+          onPickAvatar: (_) async {},
+          showSnack: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('提供商'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('已选择'), findsOneWidget);
+    state.dispose();
+  });
 
   test('creates conversation branch from selected message', () async {
     SharedPreferences.setMockInitialValues({});

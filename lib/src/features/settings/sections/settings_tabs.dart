@@ -183,6 +183,10 @@ extension SettingsTabs on SettingsSheetState {
 
   Widget providersTab() {
     final state = widget.state;
+    final assignedProviderNames = state.modelAssignments.values
+        .map((assignment) => assignment.provider.trim())
+        .where((provider) => provider.isNotEmpty)
+        .toSet();
     void clearDeleteTarget() {
       if (providerDeleteTarget == null && draggingProviderName == null) return;
       updateSheet(() {
@@ -234,8 +238,17 @@ extension SettingsTabs on SettingsSheetState {
                     key: ValueKey('provider_${state.providers[index].name}'),
                     builder: (context) {
                       final provider = state.providers[index];
-                      final active =
+                      final isCurrent =
                           provider.current || provider.status == '使用中';
+                      final assigned = assignedProviderNames.contains(
+                        provider.name,
+                      );
+                      final active = isCurrent || assigned;
+                      final activeLabel = isCurrent
+                          ? '当前'
+                          : assigned
+                          ? '已选择'
+                          : null;
                       final controlsVisible =
                           providerDeleteTarget == provider.name;
                       return DragTarget<String>(
@@ -271,6 +284,7 @@ extension SettingsTabs on SettingsSheetState {
                                 state: state,
                                 provider: provider,
                                 active: active,
+                                activeLabel: activeLabel,
                                 controlsVisible: controlsVisible,
                                 highlighted: hovering || controlsVisible,
                                 onDelete: () =>
@@ -825,6 +839,7 @@ class _ProviderGridCard extends StatelessWidget {
     required this.state,
     required this.provider,
     required this.active,
+    required this.activeLabel,
     required this.controlsVisible,
     required this.onDelete,
     this.highlighted = false,
@@ -833,6 +848,7 @@ class _ProviderGridCard extends StatelessWidget {
   final WeaviewState state;
   final AiProvider provider;
   final bool active;
+  final String? activeLabel;
   final bool controlsVisible;
   final VoidCallback onDelete;
   final bool highlighted;
@@ -890,9 +906,9 @@ class _ProviderGridCard extends StatelessWidget {
                       padding: 5,
                     ),
                     const Spacer(),
-                    if (active && !controlsVisible)
+                    if (activeLabel != null && !controlsVisible)
                       Text(
-                        'CURRENT',
+                        activeLabel!,
                         style: state
                             .textStyle(
                               context,
@@ -901,7 +917,7 @@ class _ProviderGridCard extends StatelessWidget {
                             )
                             .copyWith(
                               color: state.accents[0].withValues(alpha: 0.58),
-                              letterSpacing: 2,
+                              letterSpacing: 0.8,
                             ),
                       ),
                     if (controlsVisible) const SizedBox(width: 36),

@@ -2,6 +2,22 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.8-preview.1 - 2026-05-08
+
+### 中文
+
+- 修复关于页版本号仍显示旧预览版的问题。
+- OpenAI-compatible 生图请求会显式要求 `b64_json`，减少图片结果 URL 在真机端二次下载失败导致的生图失败。
+- 点击 AI 回复后展开的复制、重试、编辑、朗读等按钮会自动滚入可见区域，避免被底部输入栏遮挡。
+- 提供商页面会高亮当前使用中或已被默认模型/生图模型分配使用的提供商。
+
+### English
+
+- Fixed the About page showing an outdated preview version.
+- OpenAI-compatible image requests now explicitly ask for `b64_json`, reducing failures caused by downloading provider-hosted image URLs on real devices.
+- Message action buttons now scroll into view after tapping an AI reply, preventing them from being hidden behind the bottom input dock.
+- The provider page now highlights providers that are currently active or assigned to a default/image model role.
+
 ## 1.0.7-preview.1 - 2026-05-08
 
 ### 中文

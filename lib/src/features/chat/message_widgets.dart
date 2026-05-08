@@ -50,12 +50,26 @@ class MessageBubble extends StatefulWidget {
 }
 
 class _MessageBubbleState extends State<MessageBubble> {
+  final GlobalKey _actionsKey = GlobalKey();
   bool _actionsVisible = false;
   bool _inlineEditing = false;
   TextEditingController? _inlineEditController;
 
   void _toggleActions() {
-    setState(() => _actionsVisible = !_actionsVisible);
+    final nextVisible = !_actionsVisible;
+    setState(() => _actionsVisible = nextVisible);
+    if (nextVisible) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final context = _actionsKey.currentContext;
+        if (context == null || !mounted) return;
+        Scrollable.ensureVisible(
+          context,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+        );
+      });
+    }
   }
 
   void _startInlineEdit() {
@@ -140,6 +154,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               ),
             ),
             _ActionReveal(
+              key: _actionsKey,
               visible: _actionsVisible,
               alignRight: true,
               child: MessageActionBar(
@@ -239,6 +254,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                     ),
                   ),
                 _ActionReveal(
+                  key: _actionsKey,
                   visible: _actionsVisible,
                   child: MessageActionBar(
                     state: state,
@@ -268,6 +284,7 @@ class _MessageBubbleState extends State<MessageBubble> {
 
 class _ActionReveal extends StatelessWidget {
   const _ActionReveal({
+    super.key,
     required this.visible,
     required this.child,
     this.alignRight = false,
