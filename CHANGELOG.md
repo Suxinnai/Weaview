@@ -2,6 +2,16 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.9-preview.1 - 2026-05-08
+
+### 中文
+
+- 生图成功后不再把 provider 返回的长篇优化提示词展开到聊天流中，只保留简洁的“已生成图片。”状态和图片附件。
+
+### English
+
+- Image-generation replies no longer render long provider-returned revised prompts in the chat stream; they now keep only the concise "Image generated" status and the image attachment.
+
 ## 1.0.8-preview.1 - 2026-05-08
 
 ### 中文

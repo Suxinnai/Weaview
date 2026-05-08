@@ -1031,12 +1031,9 @@ ${_compactConversation(messages)}
         return;
       }
       final attachment = await _writeGeneratedImageAttachment(result);
-      final revisedPrompt = result.revisedPrompt?.trim();
       final current = messages.last;
       current
-        ..content = revisedPrompt == null || revisedPrompt.isEmpty
-            ? '已生成图片。'
-            : '已生成图片。\n\n优化提示词：$revisedPrompt'
+        ..content = '已生成图片。'
         ..attachments = [attachment]
         ..isThinking = false
         ..activity = '';

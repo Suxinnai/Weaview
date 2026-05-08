@@ -6,7 +6,7 @@
 
 织境提供一个可本地配置的多模型聊天环境。它不内置任何真实 API Key，所有模型服务、搜索服务和语音服务凭据都需要用户在 App 设置中显式配置。
 
-Latest preview / 最新预览版：`v1.0.8-preview.1`
+Latest preview / 最新预览版：`v1.0.9-preview.1`
 
 主要能力包括：
 
@@ -222,21 +222,15 @@ flutter build ios
 
 ## Latest Release Notes / 最新更新日志
 
-### v1.0.8-preview.1
+### v1.0.9-preview.1
 
 中文：
 
-- 修复关于页版本号仍显示旧预览版的问题。
-- OpenAI-compatible 生图请求会显式要求 `b64_json`，减少真机端二次下载图片 URL 失败导致的生图失败。
-- 点击 AI 回复后展开的复制、重试、编辑、朗读等按钮会自动滚入可见区域，避免被底部输入栏遮挡。
-- 提供商页面会高亮当前使用中或已被默认模型/生图模型分配使用的提供商。
+- 生图成功后不再把 provider 返回的长篇优化提示词展开到聊天流中，只保留简洁的“已生成图片。”状态和图片附件。
 
 English:
 
-- Fixed the About page showing an outdated preview version.
-- OpenAI-compatible image requests now explicitly ask for `b64_json`, reducing failures caused by downloading provider-hosted image URLs on real devices.
-- Message action buttons now scroll into view after tapping an AI reply, preventing them from being hidden behind the bottom input dock.
-- The provider page now highlights providers that are currently active or assigned to a default/image model role.
+- Image-generation replies no longer render long provider-returned revised prompts in the chat stream; they now keep only the concise generated status and the image attachment.
 
 ## 贡献指南
 
