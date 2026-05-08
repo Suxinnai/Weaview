@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../../app/weaview_state.dart';
@@ -10,6 +11,7 @@ class ChatBody extends StatelessWidget {
     required this.state,
     required this.scrollController,
     required this.dockExpanded,
+    required this.dockHeight,
     required this.pendingAttachments,
     required this.onCopyMessage,
     required this.onRetryMessage,
@@ -24,6 +26,7 @@ class ChatBody extends StatelessWidget {
   final WeaviewState state;
   final ScrollController scrollController;
   final bool dockExpanded;
+  final double dockHeight;
   final List<MessageAttachment> pendingAttachments;
   final Future<void> Function(ChatMessage message) onCopyMessage;
   final Future<void> Function(int index) onRetryMessage;
@@ -38,19 +41,17 @@ class ChatBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+    final navBarHeight = MediaQuery.paddingOf(context).bottom;
     final suggestionPad =
         state.suggestions.isNotEmpty &&
             !state.isStreaming &&
             !dockExpanded &&
             keyboardInset == 0
-        ? 48.0
+        ? 38.0
         : 0.0;
+    final safeDockGap = math.max(0.0, 8.0 - navBarHeight);
     final bottomPad =
-        68.0 +
-        keyboardInset +
-        suggestionPad +
-        (dockExpanded ? 66 : 0) +
-        (pendingAttachments.isEmpty ? 0 : 58);
+        dockHeight + keyboardInset + safeDockGap + suggestionPad + 8.0;
     return Positioned.fill(
       child: SafeArea(
         child: Padding(

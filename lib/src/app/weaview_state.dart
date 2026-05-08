@@ -942,6 +942,11 @@ ${_compactConversation(messages)}
         messages.last.content = '我在，但这一缕回应没有形成文字。';
       }
       flush(force: true);
+      if (runId == _streamRunId) {
+        isStreaming = false;
+        _persistCurrentSession();
+        notifyListeners();
+      }
       await _refreshCurrentSessionTitle();
       await _refreshSuggestions();
       unawaited(_refreshMemoryFromConversation());
@@ -957,7 +962,7 @@ ${_compactConversation(messages)}
       notifyListeners();
     } finally {
       if (runId == _streamRunId) {
-        isStreaming = false;
+        if (isStreaming) isStreaming = false;
         _cancelStreamRequested = false;
         _persistCurrentSession();
         notifyListeners();

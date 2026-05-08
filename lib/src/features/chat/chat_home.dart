@@ -49,6 +49,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
   int _seenMessageCount = 0;
   DateTime _lastAutoScroll = DateTime.fromMillisecondsSinceEpoch(0);
   List<MessageAttachment> _pendingAttachments = [];
+  double _dockHeight = 68.0;
 
   @override
   void initState() {
@@ -392,6 +393,12 @@ class _WeaviewHomeState extends State<WeaviewHome>
         });
         return;
       }
+      if (error.code == 'SPEECH_ENGINE_AUTH_REQUIRED') {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_showSpeechEngineDialog(message));
+        });
+        return;
+      }
       _snack('语音输入不可用：$message');
     } finally {
       if (mounted) {
@@ -405,6 +412,24 @@ class _WeaviewHomeState extends State<WeaviewHome>
     return error.code == 'PERMISSION_DENIED' ||
         message.contains('麦克风权限') ||
         message.contains('缺少麦克风权限');
+  }
+
+  Future<void> _showSpeechEngineDialog(String message) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('语音引擎需要授权'),
+        content: Text(
+          '$message\n\n这是系统语音识别服务的授权，不是织境的麦克风权限。完成授权后再点击麦克风即可继续使用。',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('知道了'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _showMicrophonePermissionDialog(String message) async {
@@ -604,6 +629,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
                     state: state,
                     scrollController: _scroll,
                     dockExpanded: _dockExpanded,
+                    dockHeight: _dockHeight,
                     pendingAttachments: _pendingAttachments,
                     onCopyMessage: _copyMessage,
                     onRetryMessage: _retryMessage,
@@ -634,7 +660,9 @@ class _WeaviewHomeState extends State<WeaviewHome>
                   SuggestionsBar(
                     state: state,
                     inputController: _input,
+                    inputFocusNode: _inputFocus,
                     dockExpanded: _dockExpanded,
+                    dockHeight: _dockHeight,
                     onSuggestionSelected: () => setState(() {}),
                   ),
                   ChatInputDock(
@@ -656,6 +684,11 @@ class _WeaviewHomeState extends State<WeaviewHome>
                     onPickChatFiles: _pickChatFiles,
                     onRemoveAttachment: _removePendingAttachment,
                     onTextChanged: () => setState(() {}),
+                    onHeightChanged: (size) {
+                      if (_dockHeight != size.height) {
+                        setState(() => _dockHeight = size.height);
+                      }
+                    },
                   ),
                   ChatModelDropdown(
                     state: state,

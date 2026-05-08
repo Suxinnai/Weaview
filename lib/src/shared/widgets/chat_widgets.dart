@@ -10,6 +10,7 @@ import '../../core/app_utils.dart';
 import '../../domain/models.dart';
 import '../view_models/provider_model.dart';
 import 'brand_icon.dart';
+import 'model_capability_chips.dart';
 
 class SendButton extends StatelessWidget {
   const SendButton({
@@ -504,7 +505,6 @@ class ModelDropdownItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imageModel = item.supportsImageGeneration;
     return Material(
       color: selected
           ? state.accents[0].withValues(alpha: 0.12)
@@ -540,16 +540,17 @@ class ModelDropdownItem extends StatelessWidget {
                     ),
                     const SizedBox(height: 3),
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        _ModelCapabilityPill(
-                          state: state,
-                          label: imageModel ? '生图' : '聊天',
-                          icon: imageModel
-                              ? Icons.image_outlined
-                              : Icons.chat_bubble_outline_rounded,
+                        Flexible(
+                          child: ModelCapabilityChips(
+                            state: state,
+                            capabilities: item.model.capabilities,
+                            compact: true,
+                          ),
                         ),
                         const SizedBox(width: 7),
-                        Expanded(
+                        Flexible(
                           child: Text(
                             item.provider.name,
                             overflow: TextOverflow.ellipsis,
@@ -577,42 +578,6 @@ class ModelDropdownItem extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _ModelCapabilityPill extends StatelessWidget {
-  const _ModelCapabilityPill({
-    required this.state,
-    required this.label,
-    required this.icon,
-  });
-
-  final WeaviewState state;
-  final String label;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: state.accents[0].withValues(alpha: 0.13),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 10, color: state.accents[0]),
-          const SizedBox(width: 3),
-          Text(
-            label,
-            style: state
-                .textStyle(context, size: 9.5, weight: FontWeight.w700)
-                .copyWith(color: state.accents[0]),
-          ),
-        ],
       ),
     );
   }

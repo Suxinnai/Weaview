@@ -353,7 +353,9 @@ class OpenAiCompatibleClient {
       return AiModel(
         id: id,
         name: name,
-        capabilities: guessModelCapabilities(id, name: name),
+        capabilities: item is Map
+            ? modelCapabilitiesFromRecord({...item, 'id': id, 'name': name})
+            : guessModelCapabilities(id, name: name),
       );
     }).toList();
     if (models.isEmpty) {

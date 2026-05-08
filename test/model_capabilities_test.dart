@@ -63,5 +63,31 @@ void main() {
 
       expect(item.supportsImageGeneration, isTrue);
     });
+
+    test('extracts explicit capabilities from model list records', () {
+      final capabilities = modelCapabilitiesFromRecord({
+        'id': 'provider/custom-omni-tool',
+        'name': 'Custom Omni Tool',
+        'capabilities': ['chat', 'function_calling'],
+        'input_modalities': ['text', 'image'],
+        'output_modalities': ['text', 'image'],
+      });
+
+      expect(
+        capabilities,
+        containsAllInOrder(['chat', 'vision', 'image', 'tool']),
+      );
+    });
+
+    test('does not treat image input alone as image generation', () {
+      final capabilities = modelCapabilitiesFromRecord({
+        'id': 'provider/vision-chat',
+        'input_modalities': ['text', 'image'],
+        'output_modalities': ['text'],
+      });
+
+      expect(capabilities, containsAll(['chat', 'vision']));
+      expect(capabilities, isNot(contains('image')));
+    });
   });
 }

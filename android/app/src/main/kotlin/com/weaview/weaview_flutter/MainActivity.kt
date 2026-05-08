@@ -122,7 +122,10 @@ class MainActivity : FlutterActivity() {
 
     private fun startInlineSpeech(locale: String) {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            startSpeechIntent(locale)
+            finishSpeechError(
+                "NO_RECOGNIZER",
+                "系统没有可用的后台语音识别服务，请先启用或授权系统语音引擎"
+            )
             return
         }
         destroySpeechRecognizer()
@@ -153,14 +156,14 @@ class MainActivity : FlutterActivity() {
                         return
                     }
                     if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
-                        if (hasRecordAudioPermission()) {
-                            destroySpeechRecognizer()
-                            startSpeechIntent(pendingSpeechLocale)
-                            return
-                        }
+                        val appHasPermission = hasRecordAudioPermission()
                         finishSpeechError(
-                            "PERMISSION_DENIED",
-                            "缺少麦克风权限，请在系统权限中允许麦克风后重试"
+                            if (appHasPermission) "SPEECH_ENGINE_AUTH_REQUIRED" else "PERMISSION_DENIED",
+                            if (appHasPermission) {
+                                "系统语音引擎需要授权，请在系统语音服务或小爱语音中完成授权后重试"
+                            } else {
+                                "缺少麦克风权限，请在系统权限中允许麦克风后重试"
+                            }
                         )
                         return
                     }
@@ -170,7 +173,7 @@ class MainActivity : FlutterActivity() {
             recognizer.startListening(speechIntent(locale, partialResults = true))
         } catch (error: Exception) {
             destroySpeechRecognizer()
-            startSpeechIntent(locale)
+            finishSpeechError("RECOGNIZER_START_FAILED", error.message ?: "语音识别启动失败")
         }
     }
 
@@ -248,7 +251,7 @@ class MainActivity : FlutterActivity() {
     private fun speechErrorMessage(error: Int): String {
         return when (error) {
             SpeechRecognizer.ERROR_AUDIO -> "录音失败，请检查麦克风权限或系统录音状态"
-            SpeechRecognizer.ERROR_CLIENT -> "语音识别客户端异常"
+            SpeechRecognizer.ERROR_CLIENT -> "系统语音引擎异常或未授权，请确认语音服务可用后重试"
             SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "缺少麦克风权限"
             SpeechRecognizer.ERROR_NETWORK -> "语音识别网络连接失败"
             SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "语音识别网络超时"

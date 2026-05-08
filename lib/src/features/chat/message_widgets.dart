@@ -183,101 +183,116 @@ class _MessageBubbleState extends State<MessageBubble> {
       );
     }
 
-    return Align(
-      alignment: _messageShellAlignment(state, isUser: false),
+    final assistantContent = Listener(
+      behavior: HitTestBehavior.translucent,
+      onPointerUp: (_) {
+        if (!message.isThinking && !_inlineEditing) _toggleActions();
+      },
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: _messageColumnAlignment(state),
         children: [
-          AvatarDot(
-            value: widget.assistantAvatar,
-            fallbackIcon: Icons.auto_awesome_rounded,
-            imageSize: 28,
-            accent: state.accents[0],
-          ),
-          const SizedBox(height: 8),
-          Listener(
-            behavior: HitTestBehavior.translucent,
-            onPointerUp: (_) {
-              if (!message.isThinking && !_inlineEditing) _toggleActions();
-            },
-            child: Column(
-              crossAxisAlignment: _messageColumnAlignment(state),
-              children: [
-                if (message.isImageGenerating) ...[
-                  ImageGenerationPanel(state: state),
-                  const SizedBox(height: 10),
-                ] else if (message.reasoning.trim().isNotEmpty ||
-                    message.isThinking) ...[
-                  ReasoningPanel(
-                    state: state,
-                    reasoning: message.reasoning,
-                    thinking: message.isThinking,
-                  ),
-                  const SizedBox(height: 10),
-                ],
-                if (message.attachments.isNotEmpty ||
-                    message.content.trim().isNotEmpty ||
-                    !message.isThinking)
-                  _StyledMessageSurface(
-                    state: state,
-                    isUser: false,
-                    maxWidth: maxWidth,
-                    child: Column(
-                      crossAxisAlignment: _messageColumnAlignment(state),
-                      children: [
-                        if (message.attachments.isNotEmpty) ...[
-                          MessageAttachmentGrid(
-                            state: state,
-                            attachments: message.attachments,
-                            onDownload: widget.onDownloadAttachment,
-                          ),
-                          if (message.content.trim().isNotEmpty)
-                            const SizedBox(height: 12),
-                        ],
-                        if (_inlineEditing)
-                          _InlineModelEditor(
-                            state: state,
-                            controller: _inlineEditController!,
-                            onCancel: _cancelInlineEdit,
-                            onSave: _saveInlineEdit,
-                          )
-                        else if (message.content.trim().isNotEmpty ||
-                            message.attachments.isEmpty)
-                          _AiMarkdown(
-                            state: state,
-                            data: message.content.isEmpty
-                                ? ' '
-                                : message.content,
-                            textAlign: textAlign,
-                          ),
-                      ],
+          if (message.isImageGenerating) ...[
+            ImageGenerationPanel(state: state),
+            const SizedBox(height: 10),
+          ] else if (message.reasoning.trim().isNotEmpty ||
+              message.isThinking) ...[
+            ReasoningPanel(
+              state: state,
+              reasoning: message.reasoning,
+              thinking: message.isThinking,
+            ),
+            const SizedBox(height: 10),
+          ],
+          if (message.attachments.isNotEmpty ||
+              message.content.trim().isNotEmpty ||
+              !message.isThinking)
+            _StyledMessageSurface(
+              state: state,
+              isUser: false,
+              maxWidth: maxWidth,
+              child: Column(
+                crossAxisAlignment: _messageColumnAlignment(state),
+                children: [
+                  if (message.attachments.isNotEmpty) ...[
+                    MessageAttachmentGrid(
+                      state: state,
+                      attachments: message.attachments,
+                      onDownload: widget.onDownloadAttachment,
                     ),
-                  ),
-                _ActionReveal(
-                  key: _actionsKey,
-                  visible: _actionsVisible,
-                  child: MessageActionBar(
-                    state: state,
-                    isModel: true,
-                    hasText: message.content.trim().isNotEmpty,
-                    onCopy: widget.onCopy,
-                    onRetry: widget.onRetry,
-                    onEdit: _startInlineEdit,
-                    onTranslate: widget.onTranslate,
-                    onBranch: widget.onBranch,
-                    onDelete: widget.onDelete,
-                    onSpeak: widget.onSpeak,
-                  ),
-                ),
-                if (message.translation.trim().isNotEmpty) ...[
-                  const SizedBox(height: 10),
-                  TranslationBlock(state: state, text: message.translation),
+                    if (message.content.trim().isNotEmpty)
+                      const SizedBox(height: 12),
+                  ],
+                  if (_inlineEditing)
+                    _InlineModelEditor(
+                      state: state,
+                      controller: _inlineEditController!,
+                      onCancel: _cancelInlineEdit,
+                      onSave: _saveInlineEdit,
+                    )
+                  else if (message.content.trim().isNotEmpty ||
+                      message.attachments.isEmpty)
+                    _AiMarkdown(
+                      state: state,
+                      data: message.content.isEmpty ? ' ' : message.content,
+                      textAlign: textAlign,
+                    ),
                 ],
-              ],
+              ),
+            ),
+          _ActionReveal(
+            key: _actionsKey,
+            visible: _actionsVisible,
+            child: MessageActionBar(
+              state: state,
+              isModel: true,
+              hasText: message.content.trim().isNotEmpty,
+              onCopy: widget.onCopy,
+              onRetry: widget.onRetry,
+              onEdit: _startInlineEdit,
+              onTranslate: widget.onTranslate,
+              onBranch: widget.onBranch,
+              onDelete: widget.onDelete,
+              onSpeak: widget.onSpeak,
             ),
           ),
+          if (message.translation.trim().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            TranslationBlock(state: state, text: message.translation),
+          ],
         ],
       ),
+    );
+    final useAssistantGuide =
+        state.messageAlignment == 'left' || state.messageAlignment == 'auto';
+    return Align(
+      alignment: _messageShellAlignment(state, isUser: false),
+      child: useAssistantGuide
+          ? Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AvatarDot(
+                  value: widget.assistantAvatar,
+                  fallbackIcon: Icons.auto_awesome_rounded,
+                  imageSize: 28,
+                  accent: state.accents[0],
+                ),
+                const SizedBox(width: 14),
+                Flexible(child: assistantContent),
+              ],
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AvatarDot(
+                  value: widget.assistantAvatar,
+                  fallbackIcon: Icons.auto_awesome_rounded,
+                  imageSize: 28,
+                  accent: state.accents[0],
+                ),
+                const SizedBox(height: 8),
+                assistantContent,
+              ],
+            ),
     );
   }
 }

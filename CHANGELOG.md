@@ -2,6 +2,24 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.10-preview.1 - 2026-05-08
+
+### 中文
+
+- 修复模型能力拉取与手动能力保存后，聊天模型选择器不显示能力标签的问题。
+- 优化 AI 回复布局，头像、思考链、回复内容和后续文字使用更稳定的左侧视觉基准线。
+- 修复回复完成后发送按钮需要等待聊天建议生成才恢复的问题。
+- 优化底部输入栏与聊天建议间距，减少遮挡和异常留白。
+- 改进 Android 语音输入错误提示，区分 App 麦克风权限与系统语音引擎授权异常。
+
+### English
+
+- Fixed model capability detection and ensured manually saved capabilities appear in the chat model picker.
+- Improved AI reply alignment so avatars, reasoning chips, reply content, and follow-up text share a steadier left reading guide.
+- Fixed the send button staying in the generating state until chat suggestions finished.
+- Tuned bottom input and suggestion spacing to reduce overlap and excessive blank space.
+- Improved Android voice input errors by separating app microphone permission issues from system speech-engine authorization failures.
+
 ## 1.0.9-preview.1 - 2026-05-08
 
 ### 中文

@@ -28,6 +28,7 @@ class ChatInputDock extends StatelessWidget {
     required this.onPickChatFiles,
     required this.onRemoveAttachment,
     required this.onTextChanged,
+    required this.onHeightChanged,
   });
 
   final WeaviewState state;
@@ -47,6 +48,7 @@ class ChatInputDock extends StatelessWidget {
   final Future<void> Function() onPickChatFiles;
   final ValueChanged<MessageAttachment> onRemoveAttachment;
   final VoidCallback onTextChanged;
+  final ValueChanged<Size> onHeightChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -230,22 +232,25 @@ class ChatInputDock extends StatelessWidget {
         ],
       ),
     );
-    final dock = ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-        child: dockSurface,
+    final dock = MeasureSize(
+      onChange: onHeightChanged,
+      child: ClipRRect(
+        borderRadius: radius,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+          child: dockSurface,
+        ),
       ),
     );
     return AnimatedPadding(
-      duration: const Duration(milliseconds: 90),
-      curve: Curves.easeOut,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
       padding: EdgeInsets.only(bottom: keyboardInset),
       child: Align(
         alignment: Alignment.bottomCenter,
         child: SafeArea(
           top: false,
-          minimum: const EdgeInsets.fromLTRB(14, 0, 14, 8),
+          minimum: const EdgeInsets.fromLTRB(14, 0, 14, 12),
           child: Padding(padding: EdgeInsets.zero, child: dock),
         ),
       ),

@@ -9,12 +9,13 @@ import 'package:weaview_flutter/src/core/app_utils.dart';
 import 'package:weaview_flutter/src/data/ai/ai_gateway.dart';
 import 'package:weaview_flutter/src/domain/models.dart';
 import 'package:weaview_flutter/src/features/chat/chat_home.dart';
+import 'package:weaview_flutter/src/features/chat/sections/chat_model_dropdown.dart';
 import 'package:weaview_flutter/src/features/settings/settings_sheet.dart';
 
 void main() {
   test('exposes the current preview version in app constants', () {
-    expect(appVersionTag, 'v1.0.9-preview.1');
-    expect(appVersionDisplay, contains('v1.0.9'));
+    expect(appVersionTag, 'v1.0.10-preview.1');
+    expect(appVersionDisplay, contains('v1.0.10'));
   });
 
   testWidgets('renders the Weaview chat shell', (WidgetTester tester) async {
@@ -287,6 +288,60 @@ $$E = mc^2$$'''),
       state.dispose();
     },
   );
+
+  testWidgets('chat model picker displays saved model capabilities', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+    final search = TextEditingController();
+
+    await state.load();
+    state.saveProviders([
+      AiProvider.defaults().first.copyWith(
+        apiKey: 'key',
+        status: '使用中',
+        current: true,
+        models: const [
+          AiModel(
+            id: 'custom-vision-tool',
+            name: 'custom-vision-tool',
+            capabilities: ['chat', 'vision', 'tool', 'reason'],
+          ),
+        ],
+      ),
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Stack(
+            children: [
+              ChatModelDropdown(
+                state: state,
+                modelSearchController: search,
+                open: true,
+                imageGenerationMode: false,
+                onClose: () {},
+                onOpenSettings: () {},
+                onSearchChanged: () {},
+                onSelectModel: (_) {},
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('custom-vision-tool'), findsOneWidget);
+    expect(find.text('视觉'), findsOneWidget);
+    expect(find.text('工具'), findsOneWidget);
+    expect(find.text('推理'), findsOneWidget);
+
+    search.dispose();
+    state.dispose();
+  });
 
   testWidgets(
     'provider cards reveal delete on long press and hide on blank tap',

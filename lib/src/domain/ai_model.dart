@@ -1,3 +1,5 @@
+import 'model_capabilities.dart';
+
 class AiModel {
   const AiModel({
     required this.id,
@@ -7,12 +9,16 @@ class AiModel {
 
   factory AiModel.fromJson(dynamic json) {
     final map = json as Map<String, dynamic>;
+    final id = map['id']?.toString() ?? map['name']?.toString() ?? '';
+    final name = map['name']?.toString() ?? id;
     return AiModel(
-      id: map['id']?.toString() ?? map['name']?.toString() ?? '',
-      name: map['name']?.toString() ?? map['id']?.toString() ?? '',
-      capabilities: (map['capabilities'] as List? ?? ['chat'])
-          .map((item) => item.toString())
-          .toList(),
+      id: id,
+      name: name,
+      capabilities: modelCapabilitiesFromRecord({
+        ...map,
+        'id': id,
+        'name': name,
+      }),
     );
   }
 
@@ -48,7 +54,7 @@ List<AiModel> dedupeModels(Iterable<AiModel> models) {
       model.copyWith(
         id: id.isEmpty ? name : id,
         name: name.isEmpty ? id : name,
-        capabilities: model.capabilities.toSet().toList(),
+        capabilities: normalizeModelCapabilities(model.capabilities),
       ),
     );
   }
