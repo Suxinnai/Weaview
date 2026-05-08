@@ -12,6 +12,7 @@ void main() {
         'ChatGPT Images 2.0',
         'imagen-4',
         'gemini-3-pro-image',
+        'gemini-3.1-flash-image-preview',
         'nano-banana-pro',
         'FLUX.2',
         'qwen-image-edit',

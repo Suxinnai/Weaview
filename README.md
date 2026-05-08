@@ -6,7 +6,7 @@
 
 织境提供一个可本地配置的多模型聊天环境。它不内置任何真实 API Key，所有模型服务、搜索服务和语音服务凭据都需要用户在 App 设置中显式配置。
 
-Latest preview / 最新预览版：`v1.0.6-preview.1`
+Latest preview / 最新预览版：`v1.0.7-preview.1`
 
 主要能力包括：
 
@@ -14,7 +14,7 @@ Latest preview / 最新预览版：`v1.0.6-preview.1`
 - 主对话、标题总结、后续建议、翻译等角色模型独立分配。
 - 工具模型可独立分配，用于人物画像补全和长期记忆整理。
 - 流式输出、思考状态、思考链解析与折叠展示。
-- 生图对话模式，优先支持 OpenAI-compatible `/v1/images/generations`，并对 OpenAI 图片模型保留 Responses image tool fallback。
+- 生图对话模式，优先支持 OpenAI-compatible `/v1/images/generations`，对 OpenAI 图片模型保留 Responses image tool fallback，并支持 Gemini / Nano Banana 原生 `generateContent` 生图。
 - 会话历史、会话分支、长期记忆、参考历史记忆和本地数据管理。
 - 图片/文件附件入口、消息复制、编辑、删除、重试、翻译。
 - Tavily 联网搜索配置入口。
@@ -32,7 +32,7 @@ English summary:
 - 支持自定义 AI provider、Base URL、API Key 和模型列表。
 - 支持 provider 拖拽排序、长按显示删除控制和预设 provider 安全合并。
 - 支持 OpenAI-compatible `/v1/chat/completions` 流式响应。
-- 支持 OpenAI-compatible `/v1/images/generations` 生图响应解析，并支持 OpenAI Responses image tool fallback。
+- 支持 OpenAI-compatible `/v1/images/generations` 生图响应解析、OpenAI Responses image tool fallback，以及 Gemini 原生 `generateContent` 生图响应解析。
 - 支持 Gemini `generateContent` 显式 provider 接入。
 - 支持小米 MiMo `mimo-v2-tts` 流式 TTS 返回的 PCM16 音频，并自动封装为 WAV 播放。
 - 支持 AI 生成主题指令的安全守卫，限制模型只能修改允许的聊天外观字段。
@@ -216,18 +216,20 @@ flutter build ios
 | Tavily | Search API | 联网搜索 |
 | OpenAI-compatible image | `POST /images/generations` | 生图输出，适配 GPT Image、Imagen、Nano Banana、FLUX、Qwen Image、Grok Imagine 等模型 |
 | OpenAI Responses-compatible | `POST /responses` | OpenAI 图片模型的 fallback 生图路径 |
+| Gemini native image | `POST /v1beta/models/{model}:generateContent` | Gemini / Nano Banana 原生生图，使用 `responseModalities` |
 | OpenAI Speech-compatible | `POST /audio/speech` | 远程语音合成 |
 | Xiaomi MiMo TTS | `POST /chat/completions` | 流式 PCM16 语音合成 |
 
 ## Latest Release Notes / 最新更新日志
 
-### v1.0.6-preview.1
+### v1.0.7-preview.1
 
 中文：
 
 - 修复底部输入框上方固定留白过大，在浅色主题下形成白色蒙层并遮挡回复内容的问题。
 - 扩展生图模型识别范围，覆盖 GPT Image / ChatGPT Images、Imagen、Gemini Image / Nano Banana、FLUX、Qwen Image、Grok Imagine 等模型。
 - 所有生图模型优先走 `/v1/images/generations`；GPT Image / DALL-E / ChatGPT Images 仅在该路由失败后 fallback 到 Responses image tool，其它生图模型不再误走 Responses 工具协议。
+- Gemini / Nano Banana 原生模型会走 Google `generateContent` 生图接口。
 - 生图失败提示改为通用诊断信息，提示检查模型能力、Base URL、证书和 API Key。
 
 English:
@@ -235,6 +237,7 @@ English:
 - Fixed excessive space above the bottom input dock that appeared as a white overlay in light themes.
 - Expanded image-model detection across GPT Image / ChatGPT Images, Imagen, Gemini Image / Nano Banana, FLUX, Qwen Image, Grok Imagine, and related model families.
 - Every image model now tries `/v1/images/generations` first; GPT Image / DALL-E / ChatGPT Images only fall back to the Responses image tool when that route fails.
+- Gemini / Nano Banana native models now use Google's `generateContent` image API.
 - Image-generation errors now point to model capability, Base URL, certificate, and API Key checks.
 
 ## 贡献指南

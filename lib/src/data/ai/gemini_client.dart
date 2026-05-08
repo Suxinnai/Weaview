@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../../domain/models.dart';
 import 'chat_message_payloads.dart';
+import 'openai_compatible_client.dart';
 
 class GeminiClient {
   const GeminiClient();
@@ -120,6 +121,111 @@ class GeminiClient {
     return _GeminiResult(text: text.toString(), functionCalls: functionCalls);
   }
 
+  Future<GeneratedImageResult> generateImage({
+    required String apiKey,
+    required String model,
+    required String prompt,
+    required Duration timeout,
+    String baseUrl = '',
+  }) async {
+    final uri = _generateContentUri(baseUrl: baseUrl, model: model);
+    final response = await http
+        .post(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'x-goog-api-key': apiKey,
+          },
+          body: jsonEncode({
+            'contents': [
+              {
+                'role': 'user',
+                'parts': [
+                  {'text': prompt},
+                ],
+              },
+            ],
+            'generationConfig': {
+              'responseModalities': ['TEXT', 'IMAGE'],
+            },
+          }),
+        )
+        .timeout(timeout);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Gemini image HTTP ${response.statusCode}: ${response.body}',
+      );
+    }
+    final parsed = _parseGeminiImageResponse(jsonDecode(response.body));
+    if (parsed == null) {
+      throw Exception(
+        'Gemini image response did not include inline image data.',
+      );
+    }
+    return GeneratedImageResult(
+      bytes: parsed.bytes,
+      mimeType: parsed.mimeType,
+      route: '/v1beta/models/${_normalizeGeminiModel(model)}:generateContent',
+      revisedPrompt: parsed.text.trim().isEmpty ? null : parsed.text.trim(),
+    );
+  }
+
+  static Uri _generateContentUri({
+    required String baseUrl,
+    required String model,
+  }) {
+    final base = Uri.parse(
+      baseUrl.trim().isEmpty
+          ? 'https://generativelanguage.googleapis.com'
+          : baseUrl.trim(),
+    );
+    var apiPath = base.path.replaceFirst(RegExp(r'/+$'), '');
+    if (apiPath.endsWith('/openai')) {
+      apiPath = apiPath.substring(0, apiPath.length - '/openai'.length);
+    }
+    if (!RegExp(r'/v\d').hasMatch(apiPath)) {
+      apiPath = '$apiPath/v1beta';
+    }
+    return base.replace(
+      path: '$apiPath/models/${_normalizeGeminiModel(model)}:generateContent',
+      queryParameters: base.queryParameters.isEmpty
+          ? null
+          : base.queryParameters,
+    );
+  }
+
+  static _GeminiImagePayload? _parseGeminiImageResponse(dynamic decoded) {
+    final map = decoded as Map<String, dynamic>;
+    final candidates = map['candidates'] as List? ?? [];
+    final parts = candidates.isEmpty
+        ? const []
+        : ((candidates.first as Map)['content'] as Map?)?['parts'] as List? ??
+              const [];
+    final text = StringBuffer();
+    for (final part in parts) {
+      if (part is! Map) continue;
+      final textPart = part['text']?.toString();
+      if (textPart != null) text.write(textPart);
+      final inlineData = part['inlineData'] ?? part['inline_data'];
+      if (inlineData is! Map) continue;
+      final data = inlineData['data']?.toString();
+      if (data == null || data.trim().isEmpty) continue;
+      final mimeType =
+          inlineData['mimeType']?.toString() ??
+          inlineData['mime_type']?.toString() ??
+          'image/png';
+      return _GeminiImagePayload(
+        bytes: Uint8List.fromList(
+          base64Decode(data.replaceAll(RegExp(r'\s+'), '')),
+        ),
+        mimeType: mimeType,
+        text: text.toString(),
+      );
+    }
+    return null;
+  }
+
   static String _normalizeGeminiModel(String model) {
     return model.startsWith('models/') ? model.substring(7) : model;
   }
@@ -209,6 +315,18 @@ class GeminiClient {
       ],
     };
   }
+}
+
+class _GeminiImagePayload {
+  const _GeminiImagePayload({
+    required this.bytes,
+    required this.mimeType,
+    required this.text,
+  });
+
+  final Uint8List bytes;
+  final String mimeType;
+  final String text;
 }
 
 class _GeminiResult {

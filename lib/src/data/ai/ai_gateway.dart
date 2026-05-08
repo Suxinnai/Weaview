@@ -142,6 +142,18 @@ class AiGateway {
       throw Exception('请先在「设置 > 提供商」中为 ${provider.name} 配置 API Key。');
     }
     final configuredModel = _providerModelId(assignment, provider);
+    final providerName = assignment.provider.isNotEmpty
+        ? assignment.provider
+        : provider.name;
+    if (_shouldUseNativeGeminiImage(provider, providerName, configuredModel)) {
+      return _geminiClient.generateImage(
+        apiKey: apiKey,
+        baseUrl: provider.baseUrl,
+        model: configuredModel,
+        prompt: prompt,
+        timeout: imageRequestTimeout,
+      );
+    }
     return _openAiClient.generateImage(
       apiKey: apiKey,
       baseUrl: _effectiveOpenAiBaseUrl(provider),
@@ -244,6 +256,26 @@ class AiGateway {
 
   static String _responseModelForImageTool(String imageModel) {
     return shouldUseResponsesImageTool(imageModel) ? 'gpt-5.5' : imageModel;
+  }
+
+  static bool _shouldUseNativeGeminiImage(
+    AiProvider provider,
+    String providerName,
+    String modelId,
+  ) {
+    final lowerModel = modelId.toLowerCase();
+    final nativeGeminiImageModel =
+        lowerModel.contains('gemini') ||
+        lowerModel.contains('nano-banana') ||
+        lowerModel.contains('nanobanana') ||
+        lowerModel.contains('banana');
+    if (!nativeGeminiImageModel) return false;
+    final providerLooksGemini = providerName.toLowerCase().contains('gemini');
+    final baseLooksGoogle = provider.baseUrl.toLowerCase().contains(
+      'generativelanguage.googleapis.com',
+    );
+    return (providerLooksGemini || baseLooksGoogle) &&
+        looksLikeImageGenerationModel(id: modelId, name: modelId);
   }
 
   static String _effectiveOpenAiBaseUrl(AiProvider provider) {
