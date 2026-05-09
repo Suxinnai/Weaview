@@ -2,6 +2,22 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.11 - 2026-05-09
+
+### 中文
+
+- 优化生图完成后的呈现效果，生成动画会更自然地过渡到图片附件。
+- 移除聊天缩略图上的悬浮下载按钮，避免遮挡图片主体。
+- 图片预览返回后不再自动弹出键盘。
+- 图片预览界面支持长按保存到手机相册，Android 会保存到 `Pictures/Weaview`。
+
+### English
+
+- Improved the image-generation finish state so the loading animation transitions more naturally into the generated image attachment.
+- Removed the floating download button from chat image thumbnails to avoid covering the image content.
+- Prevented the keyboard from reopening after closing image preview.
+- Added long-press save-to-gallery support in image preview; Android saves images to `Pictures/Weaview`.
+
 ## 1.0.10 - 2026-05-09
 
 ### 中文

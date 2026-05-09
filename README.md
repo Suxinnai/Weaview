@@ -6,7 +6,7 @@
 
 织境提供一个可本地配置的多模型聊天环境。它不内置任何真实 API Key，所有模型服务、搜索服务和语音服务凭据都需要用户在 App 设置中显式配置。
 
-Latest stable / 最新正式版：`v1.0.10`
+Latest stable / 最新正式版：`v1.0.11`
 
 主要能力包括：
 
@@ -222,23 +222,21 @@ flutter build ios
 
 ## Latest Release Notes / 最新更新日志
 
-### v1.0.10
+### v1.0.11
 
 中文：
 
-- 发布第一个正式版本，应用内版本标识为 `Weaview v1.0.10`。
-- 修复底部悬浮输入栏和消息操作按钮遮挡长回复的问题。
-- 美化 AI Markdown 长文本渲染，正文更轻，标题更克制，段落和小节结构更清晰。
-- 改进中文长回复分节显示，减少整段粗体和大块文本挤压。
-- 合并模型能力识别、聊天模型标签、语音输入提示、AI 回复左侧视觉基准线和发送按钮状态修复。
+- 优化生图完成后的呈现效果，生成动画会更自然地过渡到图片附件。
+- 移除聊天缩略图上的悬浮下载按钮，避免遮挡图片主体。
+- 图片预览返回后不再自动弹出键盘。
+- 图片预览界面支持长按保存到手机相册，Android 会保存到 `Pictures/Weaview`。
 
 English:
 
-- Published the first stable release with the in-app version label `Weaview v1.0.10`.
-- Fixed long AI replies and message actions being covered by the floating input dock.
-- Improved AI Markdown rendering with lighter body text, restrained headings, and clearer long-form structure.
-- Added lightweight Chinese section normalization to reduce dense bold text blocks.
-- Includes model capability detection, model capability chips, voice-input diagnostics, AI reply alignment, and send-button state fixes.
+- Improved the image-generation finish state so the loading animation transitions more naturally into the generated image attachment.
+- Removed the floating download button from chat image thumbnails to avoid covering the image content.
+- Prevented the keyboard from reopening after closing image preview.
+- Added long-press save-to-gallery support in image preview; Android saves images to `Pictures/Weaview`.
 
 ## 贡献指南
 

@@ -2,16 +2,20 @@ package com.weaview.weaview_flutter
 
 import android.Manifest
 import android.app.Activity
+import android.content.ContentValues
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.MediaPlayer
+import android.media.MediaScannerConnection
 import android.media.AudioTrack
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.provider.Settings
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -95,6 +99,20 @@ class MainActivity : FlutterActivity() {
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "openUrl" -> openUrl(call.argument<String>("url").orEmpty(), result)
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "weaview/native_media"
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "saveImageToGallery" -> saveImageToGallery(
+                    call.argument<String>("path").orEmpty(),
+                    call.argument<String>("name").orEmpty(),
+                    call.argument<String>("mimeType") ?: "image/png",
+                    result
+                )
                 else -> result.notImplemented()
             }
         }
@@ -535,6 +553,105 @@ class MainActivity : FlutterActivity() {
         } catch (error: Exception) {
             result.error("OPEN_URL_FAILED", error.message ?: "打开链接失败", null)
         }
+    }
+
+    private fun saveImageToGallery(
+        path: String,
+        name: String,
+        mimeType: String,
+        result: MethodChannel.Result
+    ) {
+        val source = File(path)
+        if (!source.exists() || !source.isFile) {
+            result.error("IMAGE_NOT_FOUND", "图片文件不存在", null)
+            return
+        }
+        val displayName = galleryDisplayName(name, mimeType)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val values = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, displayName)
+                    put(MediaStore.Images.Media.MIME_TYPE, mimeType)
+                    put(
+                        MediaStore.Images.Media.RELATIVE_PATH,
+                        "${Environment.DIRECTORY_PICTURES}/Weaview"
+                    )
+                    put(MediaStore.Images.Media.IS_PENDING, 1)
+                }
+                val uri = contentResolver.insert(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    values
+                ) ?: throw IllegalStateException("无法创建相册文件")
+                try {
+                    source.inputStream().use { input ->
+                        contentResolver.openOutputStream(uri)?.use { output ->
+                            input.copyTo(output)
+                        } ?: throw IllegalStateException("无法写入相册文件")
+                    }
+                    values.clear()
+                    values.put(MediaStore.Images.Media.IS_PENDING, 0)
+                    contentResolver.update(uri, values, null, null)
+                    result.success("Pictures/Weaview/$displayName")
+                } catch (error: Exception) {
+                    contentResolver.delete(uri, null, null)
+                    throw error
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                val directory = File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+                    "Weaview"
+                )
+                if (!directory.exists() && !directory.mkdirs()) {
+                    throw IllegalStateException("无法创建相册目录")
+                }
+                val target = uniqueGalleryFile(directory, displayName)
+                source.copyTo(target, overwrite = false)
+                MediaScannerConnection.scanFile(
+                    this,
+                    arrayOf(target.absolutePath),
+                    arrayOf(mimeType),
+                    null
+                )
+                result.success(target.absolutePath)
+            }
+        } catch (error: Exception) {
+            result.error("SAVE_IMAGE_FAILED", error.message ?: "保存图片失败", null)
+        }
+    }
+
+    private fun galleryDisplayName(name: String, mimeType: String): String {
+        val fallback = "weaview_image_${System.currentTimeMillis()}"
+        val cleaned = name
+            .ifBlank { fallback }
+            .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            .take(80)
+            .ifBlank { fallback }
+        val lower = cleaned.lowercase()
+        if (lower.endsWith(".png") || lower.endsWith(".jpg") ||
+            lower.endsWith(".jpeg") || lower.endsWith(".webp")
+        ) {
+            return cleaned
+        }
+        val extension = when {
+            mimeType.lowercase().contains("jpeg") || mimeType.lowercase().contains("jpg") -> "jpg"
+            mimeType.lowercase().contains("webp") -> "webp"
+            else -> "png"
+        }
+        return "$cleaned.$extension"
+    }
+
+    private fun uniqueGalleryFile(directory: File, displayName: String): File {
+        val dot = displayName.lastIndexOf('.')
+        val base = if (dot > 0) displayName.substring(0, dot) else displayName
+        val extension = if (dot > 0) displayName.substring(dot) else ""
+        var candidate = File(directory, displayName)
+        var index = 1
+        while (candidate.exists()) {
+            candidate = File(directory, "$base-$index$extension")
+            index += 1
+        }
+        return candidate
     }
 
     @Deprecated("Deprecated in Java")

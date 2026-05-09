@@ -200,54 +200,87 @@ class _MessageBubbleState extends State<MessageBubble> {
       child: Column(
         crossAxisAlignment: _messageColumnAlignment(state),
         children: [
-          if (message.isImageGenerating) ...[
-            ImageGenerationPanel(state: state),
-            const SizedBox(height: 10),
-          ] else if (message.reasoning.trim().isNotEmpty ||
-              message.isThinking) ...[
-            ReasoningPanel(
-              state: state,
-              reasoning: message.reasoning,
-              thinking: message.isThinking,
-            ),
-            const SizedBox(height: 10),
-          ],
-          if (message.attachments.isNotEmpty ||
-              message.content.trim().isNotEmpty ||
-              !message.isThinking)
-            _StyledMessageSurface(
-              state: state,
-              isUser: false,
-              maxWidth: maxWidth,
-              child: Column(
-                crossAxisAlignment: _messageColumnAlignment(state),
-                children: [
-                  if (message.attachments.isNotEmpty) ...[
-                    MessageAttachmentGrid(
-                      state: state,
-                      attachments: message.attachments,
-                      onDownload: widget.onDownloadAttachment,
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 460),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (child, animation) {
+              final scale = Tween<double>(
+                begin: 0.98,
+                end: 1,
+              ).animate(animation);
+              return FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(scale: scale, child: child),
+              );
+            },
+            child: message.isImageGenerating
+                ? Column(
+                    key: ValueKey('image-generating-${widget.index}'),
+                    crossAxisAlignment: _messageColumnAlignment(state),
+                    children: [
+                      ImageGenerationPanel(state: state),
+                      const SizedBox(height: 10),
+                    ],
+                  )
+                : Column(
+                    key: ValueKey(
+                      'assistant-content-${widget.index}-${message.attachments.length}',
                     ),
-                    if (message.content.trim().isNotEmpty)
-                      const SizedBox(height: 12),
-                  ],
-                  if (_inlineEditing)
-                    _InlineModelEditor(
-                      state: state,
-                      controller: _inlineEditController!,
-                      onCancel: _cancelInlineEdit,
-                      onSave: _saveInlineEdit,
-                    )
-                  else if (message.content.trim().isNotEmpty ||
-                      message.attachments.isEmpty)
-                    _AiMarkdown(
-                      state: state,
-                      data: message.content.isEmpty ? ' ' : message.content,
-                      textAlign: textAlign,
-                    ),
-                ],
-              ),
-            ),
+                    crossAxisAlignment: _messageColumnAlignment(state),
+                    children: [
+                      if (message.reasoning.trim().isNotEmpty ||
+                          message.isThinking) ...[
+                        ReasoningPanel(
+                          state: state,
+                          reasoning: message.reasoning,
+                          thinking: message.isThinking,
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                      if (message.attachments.isNotEmpty ||
+                          message.content.trim().isNotEmpty ||
+                          !message.isThinking)
+                        _StyledMessageSurface(
+                          state: state,
+                          isUser: false,
+                          maxWidth: maxWidth,
+                          child: Column(
+                            crossAxisAlignment: _messageColumnAlignment(state),
+                            children: [
+                              if (message.attachments.isNotEmpty) ...[
+                                MessageAttachmentGrid(
+                                  state: state,
+                                  attachments: message.attachments,
+                                  onDownload: widget.onDownloadAttachment,
+                                  imageExtent: 176,
+                                  animateImages: true,
+                                ),
+                                if (message.content.trim().isNotEmpty)
+                                  const SizedBox(height: 12),
+                              ],
+                              if (_inlineEditing)
+                                _InlineModelEditor(
+                                  state: state,
+                                  controller: _inlineEditController!,
+                                  onCancel: _cancelInlineEdit,
+                                  onSave: _saveInlineEdit,
+                                )
+                              else if (message.content.trim().isNotEmpty ||
+                                  message.attachments.isEmpty)
+                                _AiMarkdown(
+                                  state: state,
+                                  data: message.content.isEmpty
+                                      ? ' '
+                                      : message.content,
+                                  textAlign: textAlign,
+                                ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+          ),
           _ActionReveal(
             key: _actionsKey,
             visible: _actionsVisible,

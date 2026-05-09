@@ -5,6 +5,7 @@ import '../../domain/models.dart';
 import '../search/tavily_search_client.dart';
 import 'ai_response_parsers.dart';
 import 'gemini_client.dart';
+import 'image_prompt_guard.dart';
 import 'openai_compatible_client.dart';
 import 'openai_stream_parser.dart' as openai_stream_parser;
 import 'tts_client.dart';
@@ -142,6 +143,7 @@ class AiGateway {
       throw Exception('请先在「设置 > 提供商」中为 ${provider.name} 配置 API Key。');
     }
     final configuredModel = _providerModelId(assignment, provider);
+    final guardedPrompt = imagePromptWithDefaultQualityGuard(prompt);
     final providerName = assignment.provider.isNotEmpty
         ? assignment.provider
         : provider.name;
@@ -150,14 +152,14 @@ class AiGateway {
         apiKey: apiKey,
         baseUrl: provider.baseUrl,
         model: configuredModel,
-        prompt: prompt,
+        prompt: guardedPrompt,
         timeout: imageRequestTimeout,
       );
     }
     return _openAiClient.generateImage(
       apiKey: apiKey,
       baseUrl: _effectiveOpenAiBaseUrl(provider),
-      prompt: prompt,
+      prompt: guardedPrompt,
       responseModel: _responseModelForImageTool(configuredModel),
       imageModel: configuredModel,
       timeout: imageRequestTimeout,

@@ -3,6 +3,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/app_constants.dart';
 import '../../app/weaview_state.dart';
@@ -11,6 +12,8 @@ import '../../domain/models.dart';
 import '../view_models/provider_model.dart';
 import 'brand_icon.dart';
 import 'model_capability_chips.dart';
+
+const _nativeMedia = MethodChannel('weaview/native_media');
 
 class SendButton extends StatelessWidget {
   const SendButton({
@@ -232,7 +235,9 @@ class _PendingAttachmentChip extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
-          Positioned.fill(child: _AttachmentVisual(attachment: attachment)),
+          Positioned.fill(
+            child: _AttachmentVisual(attachment: attachment, animate: false),
+          ),
           if (!attachment.isImage)
             Positioned.fill(
               child: Padding(
@@ -291,11 +296,15 @@ class MessageAttachmentGrid extends StatelessWidget {
     required this.state,
     required this.attachments,
     this.onDownload,
+    this.imageExtent = 118,
+    this.animateImages = false,
   });
 
   final WeaviewState state;
   final List<MessageAttachment> attachments;
   final ValueChanged<MessageAttachment>? onDownload;
+  final double imageExtent;
+  final bool animateImages;
 
   @override
   Widget build(BuildContext context) {
@@ -308,6 +317,8 @@ class MessageAttachmentGrid extends StatelessWidget {
             state: state,
             attachment: attachment,
             onDownload: onDownload,
+            imageExtent: imageExtent,
+            animateImages: animateImages,
           ),
       ],
     );
@@ -319,25 +330,29 @@ class _AttachmentTile extends StatelessWidget {
     required this.state,
     required this.attachment,
     required this.onDownload,
+    required this.imageExtent,
+    required this.animateImages,
   });
 
   final WeaviewState state;
   final MessageAttachment attachment;
   final ValueChanged<MessageAttachment>? onDownload;
+  final double imageExtent;
+  final bool animateImages;
 
   @override
   Widget build(BuildContext context) {
     final card = Container(
-      width: attachment.isImage ? 118 : 190,
-      height: attachment.isImage ? 118 : 54,
+      width: attachment.isImage ? imageExtent : 190,
+      height: attachment.isImage ? imageExtent : 54,
       decoration: BoxDecoration(
         color: state.text(context).withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(attachment.isImage ? 22 : 16),
         border: Border.all(color: state.text(context).withValues(alpha: 0.07)),
       ),
       clipBehavior: Clip.antiAlias,
       child: attachment.isImage
-          ? _AttachmentVisual(attachment: attachment)
+          ? _AttachmentVisual(attachment: attachment, animate: animateImages)
           : Row(
               children: [
                 const SizedBox(width: 12),
@@ -383,15 +398,15 @@ class _AttachmentTile extends StatelessWidget {
         attachment.isImage
             ? Material(
                 color: Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(22),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(22),
                   onTap: () => _openImagePreview(context, state, attachment),
                   child: card,
                 ),
               )
             : card,
-        if (onDownload != null)
+        if (onDownload != null && !attachment.isImage)
           Positioned(
             right: 6,
             top: 6,
@@ -424,6 +439,11 @@ void _openImagePreview(
 ) {
   final file = File(attachment.path);
   if (!attachment.isImage || !file.existsSync()) return;
+  final rootContext = context;
+  FocusManager.instance.primaryFocus?.unfocus(
+    disposition: UnfocusDisposition.scope,
+  );
+  SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
   showDialog<void>(
     context: context,
     barrierColor: Colors.black.withValues(alpha: 0.82),
@@ -434,14 +454,23 @@ void _openImagePreview(
           child: Stack(
             children: [
               Positioned.fill(
-                child: InteractiveViewer(
-                  minScale: 0.7,
-                  maxScale: 4,
-                  child: Center(
-                    child: Image.file(
-                      file,
-                      fit: BoxFit.contain,
-                      filterQuality: FilterQuality.high,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onLongPress: () => _showImagePreviewActions(
+                    rootContext,
+                    context,
+                    state,
+                    attachment,
+                  ),
+                  child: InteractiveViewer(
+                    minScale: 0.7,
+                    maxScale: 4,
+                    child: Center(
+                      child: Image.file(
+                        file,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.high,
+                      ),
                     ),
                   ),
                 ),
@@ -473,20 +502,138 @@ void _openImagePreview(
         ),
       );
     },
-  );
+  ).whenComplete(() {
+    FocusManager.instance.primaryFocus?.unfocus(
+      disposition: UnfocusDisposition.scope,
+    );
+    SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+  });
 }
 
 class _AttachmentVisual extends StatelessWidget {
-  const _AttachmentVisual({required this.attachment});
+  const _AttachmentVisual({required this.attachment, required this.animate});
 
   final MessageAttachment attachment;
+  final bool animate;
 
   @override
   Widget build(BuildContext context) {
     if (attachment.isImage && File(attachment.path).existsSync()) {
-      return Image.file(File(attachment.path), fit: BoxFit.cover);
+      final image = Image.file(File(attachment.path), fit: BoxFit.cover);
+      if (!animate) return image;
+      return TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 520),
+        curve: Curves.easeOutCubic,
+        builder: (context, value, child) {
+          return Opacity(
+            opacity: value,
+            child: Transform.scale(scale: 0.96 + value * 0.04, child: child),
+          );
+        },
+        child: image,
+      );
     }
     return const Center(child: Icon(Icons.description_outlined, size: 24));
+  }
+}
+
+Future<void> _showImagePreviewActions(
+  BuildContext rootContext,
+  BuildContext sheetContext,
+  WeaviewState state,
+  MessageAttachment attachment,
+) async {
+  FocusManager.instance.primaryFocus?.unfocus(
+    disposition: UnfocusDisposition.scope,
+  );
+  SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+  final action = await showModalBottomSheet<String>(
+    context: sheetContext,
+    useRootNavigator: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) {
+      final dark = state.isDark(context);
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: state.layer(context).withValues(alpha: dark ? 0.92 : 0.96),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: state.text(context).withValues(alpha: 0.08),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: dark ? 0.30 : 0.10),
+                  blurRadius: 24,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: Text(
+                    '保存到手机相册',
+                    style: state.textStyle(
+                      context,
+                      size: 14,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '长按图片即可打开此菜单',
+                    style: state.textStyle(context, size: 11.5, opacity: 0.48),
+                  ),
+                  onTap: () => Navigator.of(context).pop('save'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+  if (action == 'save' && rootContext.mounted) {
+    await _saveImageToGallery(rootContext, attachment);
+  }
+}
+
+Future<void> _saveImageToGallery(
+  BuildContext context,
+  MessageAttachment attachment,
+) async {
+  try {
+    final savedPath = await _nativeMedia
+        .invokeMethod<String>('saveImageToGallery', {
+          'path': attachment.path,
+          'name': attachment.name,
+          'mimeType': attachment.mimeType,
+        });
+    if (!context.mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(
+          savedPath == null || savedPath.isEmpty
+              ? '已保存到手机相册'
+              : '已保存到手机相册：$savedPath',
+        ),
+      ),
+    );
+  } on PlatformException catch (error) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(SnackBar(content: Text(error.message ?? '保存图片失败')));
+  } on MissingPluginException {
+    if (!context.mounted) return;
+    ScaffoldMessenger.maybeOf(
+      context,
+    )?.showSnackBar(const SnackBar(content: Text('当前平台暂不支持直接保存到相册')));
   }
 }
 
