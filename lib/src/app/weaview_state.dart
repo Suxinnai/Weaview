@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/app_utils.dart';
 import '../core/zip_writer.dart';
@@ -18,6 +18,10 @@ import 'prompt_appearance_intent.dart';
 import 'weaview_preferences.dart';
 
 class WeaviewState extends ChangeNotifier {
+  static const MethodChannel _nativeNotifications = MethodChannel(
+    'weaview/native_notifications',
+  );
+
   WeaviewPreferences? _prefs;
   bool loaded = false;
   ThemeMode themeMode = ThemeMode.system;
@@ -47,6 +51,7 @@ class WeaviewState extends ChangeNotifier {
   bool isStreaming = false;
   int _streamRunId = 0;
   bool _cancelStreamRequested = false;
+  bool _imageGenerationActive = false;
 
   final List<ChatMessage> messages = [];
   final List<ChatSession> chatSessions = [];
@@ -59,6 +64,10 @@ class WeaviewState extends ChangeNotifier {
   SearchConfig searchConfig = const SearchConfig(active: 'tavily', keys: {});
   String activeTtsId = '';
   List<TtsProviderConfig> ttsProviders = TtsProviderConfig.defaults();
+
+  bool get hasActiveImageGeneration =>
+      _imageGenerationActive ||
+      messages.any((message) => message.isImageGenerating);
 
   ThemeMode get effectiveThemeMode {
     if (themeMode != ThemeMode.system) return themeMode;
@@ -970,12 +979,15 @@ ${_compactConversation(messages)}
     }
   }
 
-  Future<void> submitImageGeneration(String value) async {
+  Future<void> submitImageGeneration(
+    String value, {
+    List<MessageAttachment> attachments = const [],
+  }) async {
     final content = value.trim();
     if (content.isEmpty || isStreaming) return;
 
     messages
-      ..add(ChatMessage.user(content))
+      ..add(ChatMessage.user(content, attachments: attachments))
       ..add(
         ChatMessage.model('', isThinking: true, activity: 'imageGeneration'),
       );
@@ -983,11 +995,16 @@ ${_compactConversation(messages)}
     isStreaming = true;
     _cancelStreamRequested = false;
     final runId = ++_streamRunId;
+    unawaited(_ensureNativeNotificationPermission());
     _persistCurrentSession();
     notifyListeners();
 
     try {
-      await _generateImageIntoCurrentResponse(prompt: content, runId: runId);
+      await _generateImageIntoCurrentResponse(
+        prompt: content,
+        runId: runId,
+        targetIndex: messages.length - 1,
+      );
     } finally {
       if (runId == _streamRunId) {
         isStreaming = false;
@@ -997,9 +1014,61 @@ ${_compactConversation(messages)}
     }
   }
 
+  Future<void> resumeInterruptedImageGeneration({
+    bool retryLastFailure = false,
+  }) async {
+    if (isStreaming || _imageGenerationActive || messages.isEmpty) return;
+    var targetIndex = messages.lastIndexWhere(
+      (message) => message.isImageGenerating,
+    );
+    if (targetIndex < 0 && retryLastFailure) {
+      final lastIndex = messages.length - 1;
+      final last = messages[lastIndex];
+      if (last.role == 'model' && last.content.trim().startsWith('生图失败')) {
+        targetIndex = lastIndex;
+        last
+          ..content = ''
+          ..isThinking = true
+          ..activity = 'imageGeneration'
+          ..attachments = [];
+      }
+    }
+    if (targetIndex < 0) return;
+    final userIndex = messages
+        .take(targetIndex)
+        .toList()
+        .lastIndexWhere((message) => message.role == 'user');
+    if (userIndex < 0) return;
+    final prompt = messages[userIndex].content.trim();
+    if (prompt.isEmpty) return;
+
+    suggestions = [];
+    isStreaming = true;
+    _cancelStreamRequested = false;
+    final runId = ++_streamRunId;
+    _persistCurrentSession();
+    notifyListeners();
+
+    try {
+      await _generateImageIntoCurrentResponse(
+        prompt: prompt,
+        runId: runId,
+        targetIndex: targetIndex,
+      );
+    } finally {
+      if (runId == _streamRunId) {
+        isStreaming = false;
+        _cancelStreamRequested = false;
+        _persistCurrentSession();
+        notifyListeners();
+      }
+    }
+  }
+
   Future<void> _generateImageIntoCurrentResponse({
     required String prompt,
     required int runId,
+    int? targetIndex,
   }) async {
     final imageAssignment = _effectiveImageAssignment();
     final imageProvider = imageAssignment == null
@@ -1011,8 +1080,9 @@ ${_compactConversation(messages)}
       roleLabel: '生图模型',
     );
     if (configIssue != null) {
-      if (messages.isNotEmpty && messages.last.role == 'model') {
-        messages.last
+      final current = _imageGenerationMessage(targetIndex);
+      if (current != null) {
+        current
           ..content = configIssue
           ..isThinking = false
           ..activity = '';
@@ -1022,6 +1092,7 @@ ${_compactConversation(messages)}
       return;
     }
 
+    _imageGenerationActive = true;
     try {
       final result = await AiGateway.generateImage(
         provider: imageProvider!,
@@ -1029,14 +1100,16 @@ ${_compactConversation(messages)}
         prompt: prompt,
       );
       if (runId != _streamRunId || _cancelStreamRequested) {
-        messages.last
-          ..isThinking = false
+        final current = _imageGenerationMessage(targetIndex);
+        current
+          ?..isThinking = false
           ..activity = '';
         notifyListeners();
         return;
       }
+      final current = _imageGenerationMessage(targetIndex);
+      if (current == null) return;
       final attachment = await _writeGeneratedImageAttachment(result);
-      final current = messages.last;
       current
         ..content = '已生成图片。'
         ..attachments = [attachment]
@@ -1044,22 +1117,69 @@ ${_compactConversation(messages)}
         ..activity = '';
       _persistCurrentSession();
       await _refreshCurrentSessionTitle();
+      await _showNativeNotification(title: '织境生图完成', body: '图片已生成，回到织境查看结果。');
       notifyListeners();
     } catch (error) {
       if (runId != _streamRunId || _cancelStreamRequested) {
-        messages.last
-          ..isThinking = false
+        final current = _imageGenerationMessage(targetIndex);
+        current
+          ?..isThinking = false
           ..activity = '';
         notifyListeners();
         return;
       }
-      messages.last
+      final current = _imageGenerationMessage(targetIndex);
+      if (current == null) return;
+      current
         ..content =
             '生图失败：${_friendlyAiError(error, timeout: imageRequestTimeout)}\n\n请确认当前模型支持生图接口，模型能力已标记为 image，并检查 Base URL、证书和 API Key。'
         ..isThinking = false
         ..activity = '';
       _persistCurrentSession();
+      await _showNativeNotification(
+        title: '织境生图失败',
+        body: '图片生成未完成，请回到织境查看详情。',
+      );
       notifyListeners();
+    } finally {
+      _imageGenerationActive = false;
+    }
+  }
+
+  ChatMessage? _imageGenerationMessage(int? targetIndex) {
+    if (targetIndex != null &&
+        targetIndex >= 0 &&
+        targetIndex < messages.length &&
+        messages[targetIndex].role == 'model') {
+      return messages[targetIndex];
+    }
+    if (messages.isNotEmpty && messages.last.role == 'model') {
+      return messages.last;
+    }
+    return null;
+  }
+
+  Future<void> _showNativeNotification({
+    required String title,
+    required String body,
+  }) async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _nativeNotifications.invokeMethod<void>('show', {
+        'title': title,
+        'body': body,
+      });
+    } catch (_) {
+      // Notifications are best-effort and must never affect generation state.
+    }
+  }
+
+  Future<void> _ensureNativeNotificationPermission() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _nativeNotifications.invokeMethod<void>('ensurePermission');
+    } catch (_) {
+      // Permission prompts are best-effort and must not block generation.
     }
   }
 
@@ -1355,7 +1475,10 @@ Treat background style, font/text style, bubble style, and message alignment as 
     suggestions = [];
     notifyListeners();
     if (imageGeneration) {
-      await submitImageGeneration(original.content);
+      await submitImageGeneration(
+        original.content,
+        attachments: original.attachments.map((item) => item.copy()).toList(),
+      );
       return;
     }
     await submitMessage(

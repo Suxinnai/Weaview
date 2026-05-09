@@ -27,7 +27,7 @@ class WeaviewHome extends StatefulWidget {
 }
 
 class _WeaviewHomeState extends State<WeaviewHome>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   final TextEditingController _input = TextEditingController();
   final TextEditingController _modelSearch = TextEditingController();
   final FocusNode _inputFocus = FocusNode();
@@ -50,6 +50,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
   DateTime _lastAutoScroll = DateTime.fromMillisecondsSinceEpoch(0);
   List<MessageAttachment> _pendingAttachments = [];
   double _dockHeight = 68.0;
+  bool _backgroundedWithImageGeneration = false;
 
   @override
   void initState() {
@@ -59,12 +60,16 @@ class _WeaviewHomeState extends State<WeaviewHome>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     );
+    WidgetsBinding.instance.addObserver(this);
+    _inputFocus.addListener(_handleInputFocusChange);
     widget.state.addListener(_stateChanged);
   }
 
   @override
   void dispose() {
     widget.state.removeListener(_stateChanged);
+    _inputFocus.removeListener(_handleInputFocusChange);
+    WidgetsBinding.instance.removeObserver(this);
     _input.dispose();
     _modelSearch.dispose();
     _inputFocus.dispose();
@@ -80,6 +85,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
     final countChanged = widget.state.messages.length != _seenMessageCount;
     final shouldTrackStream =
         widget.state.isStreaming &&
+        _isNearConversationEnd() &&
         now.difference(_lastAutoScroll).inMilliseconds > 90;
     if (countChanged || shouldTrackStream) {
       _seenMessageCount = widget.state.messages.length;
@@ -87,6 +93,49 @@ class _WeaviewHomeState extends State<WeaviewHome>
       WidgetsBinding.instance.addPostFrameCallback(
         (_) => _scrollToBottom(animated: !widget.state.isStreaming),
       );
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.detached) {
+      _backgroundedWithImageGeneration = widget.state.hasActiveImageGeneration;
+      return;
+    }
+    if (state != AppLifecycleState.resumed) return;
+    final shouldRetry = _backgroundedWithImageGeneration;
+    _backgroundedWithImageGeneration = false;
+    unawaited(
+      widget.state.resumeInterruptedImageGeneration(
+        retryLastFailure: shouldRetry,
+      ),
+    );
+    _scheduleKeyboardAwareScroll();
+  }
+
+  void _handleInputFocusChange() {
+    if (!_inputFocus.hasFocus) return;
+    _scheduleKeyboardAwareScroll();
+  }
+
+  bool _isNearConversationEnd() {
+    if (!_scroll.hasClients) return true;
+    final distance = _scroll.position.maxScrollExtent - _scroll.position.pixels;
+    return distance < 360;
+  }
+
+  void _scheduleKeyboardAwareScroll() {
+    for (final delay in const [
+      Duration(milliseconds: 90),
+      Duration(milliseconds: 240),
+      Duration(milliseconds: 420),
+    ]) {
+      Future<void>.delayed(delay, () {
+        if (!mounted || !_scroll.hasClients) return;
+        _scrollToBottom(animated: true);
+      });
     }
   }
 
@@ -117,6 +166,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
       _wave.stop();
       setState(() => _recording = false);
     }
+    final attachments = List<MessageAttachment>.from(_pendingAttachments);
     if (_imageGenerationMode) {
       if (text.trim().isEmpty) return;
       _input.clear();
@@ -124,10 +174,9 @@ class _WeaviewHomeState extends State<WeaviewHome>
         _pendingAttachments = [];
         _dockExpanded = false;
       });
-      await widget.state.submitImageGeneration(text);
+      await widget.state.submitImageGeneration(text, attachments: attachments);
       return;
     }
-    final attachments = List<MessageAttachment>.from(_pendingAttachments);
     final useWebSearch = _webSearchEnabled;
     _input.clear();
     setState(() => _pendingAttachments = []);

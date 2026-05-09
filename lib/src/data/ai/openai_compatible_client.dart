@@ -38,6 +38,10 @@ class OpenAiCompatibleClient {
     ValueChanged<Map<String, dynamic>>? onThemeUpdate,
   }) async {
     final uri = Uri.parse('${_trimSlash(baseUrl)}/chat/completions');
+    final requestMessages = await openAiMessagesWithAttachments(
+      systemInstruction: systemInstruction,
+      messages: messages,
+    );
     final response = await http
         .post(
           uri,
@@ -47,14 +51,7 @@ class OpenAiCompatibleClient {
           },
           body: jsonEncode({
             'model': model,
-            'messages': [
-              {'role': 'system', 'content': systemInstruction},
-              for (final message in messages)
-                {
-                  'role': message.role == 'model' ? 'assistant' : 'user',
-                  'content': messageTextWithAttachments(message),
-                },
-            ],
+            'messages': requestMessages,
             'temperature': 0.7,
           }),
         )
@@ -95,6 +92,10 @@ class OpenAiCompatibleClient {
     var rawContent = '';
     var rawReasoning = '';
     try {
+      final requestMessages = await openAiMessagesWithAttachments(
+        systemInstruction: systemInstruction,
+        messages: messages,
+      );
       final request = http.Request('POST', uri)
         ..headers.addAll({
           'Authorization': 'Bearer $apiKey',
@@ -103,14 +104,7 @@ class OpenAiCompatibleClient {
         })
         ..body = jsonEncode({
           'model': model,
-          'messages': [
-            {'role': 'system', 'content': systemInstruction},
-            for (final message in messages)
-              {
-                'role': message.role == 'model' ? 'assistant' : 'user',
-                'content': messageTextWithAttachments(message),
-              },
-          ],
+          'messages': requestMessages,
           'temperature': 0.7,
           'stream': true,
         });

@@ -2,8 +2,13 @@ package com.weaview.weaview_flutter
 
 import android.Manifest
 import android.app.Activity
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.ContentValues
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
@@ -32,6 +37,7 @@ import java.util.concurrent.Executors
 class MainActivity : FlutterActivity() {
     private val speechRequestCode = 42017
     private val speechPermissionRequestCode = 42018
+    private val notificationPermissionRequestCode = 42019
     private var pendingSpeechResult: MethodChannel.Result? = null
     private var pendingSpeechLocale: String = "zh-CN"
     private var speechRecognizer: SpeechRecognizer? = null
@@ -116,6 +122,34 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "weaview/native_notifications"
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "ensurePermission" -> ensureNotificationPermission(result)
+                "show" -> showLocalNotification(
+                    call.argument<String>("title").orEmpty(),
+                    call.argument<String>("body").orEmpty(),
+                    result
+                )
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    private fun ensureNotificationPermission(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        ) {
+            result.success(true)
+            return
+        }
+        requestPermissions(
+            arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+            notificationPermissionRequestCode
+        )
+        result.success(false)
     }
 
     private fun startNativeSpeech(locale: String, result: MethodChannel.Result) {
@@ -552,6 +586,64 @@ class MainActivity : FlutterActivity() {
             result.error("NO_BROWSER", "没有可打开链接的应用", null)
         } catch (error: Exception) {
             result.error("OPEN_URL_FAILED", error.message ?: "打开链接失败", null)
+        }
+    }
+
+    private fun showLocalNotification(
+        title: String,
+        body: String,
+        result: MethodChannel.Result
+    ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            result.success(false)
+            return
+        }
+        try {
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channelId = "weaview_status"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val channel = NotificationChannel(
+                    channelId,
+                    "织境提醒",
+                    NotificationManager.IMPORTANCE_DEFAULT
+                ).apply {
+                    description = "生图和消息状态提醒"
+                }
+                manager.createNotificationChannel(channel)
+            }
+            val launchIntent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+            val pendingIntent = launchIntent?.let {
+                PendingIntent.getActivity(
+                    this,
+                    0,
+                    it,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            }
+            val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                Notification.Builder(this, channelId)
+            } else {
+                @Suppress("DEPRECATION")
+                Notification.Builder(this)
+            }
+            val notification = builder
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle(title.ifBlank { "织境" })
+                .setContentText(body)
+                .setStyle(Notification.BigTextStyle().bigText(body))
+                .setAutoCancel(true)
+                .apply {
+                    if (pendingIntent != null) setContentIntent(pendingIntent)
+                }
+                .build()
+            manager.notify((System.currentTimeMillis() % Int.MAX_VALUE).toInt(), notification)
+            result.success(true)
+        } catch (error: Exception) {
+            result.error("NOTIFICATION_FAILED", error.message ?: "通知发送失败", null)
         }
     }
 

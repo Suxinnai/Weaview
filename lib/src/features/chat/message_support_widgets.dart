@@ -425,6 +425,7 @@ class _ImageGenerationPainter extends CustomPainter {
 }
 
 class _ReasoningPanelState extends State<ReasoningPanel> {
+  final GlobalKey _anchorKey = GlobalKey();
   bool expanded = false;
   bool autoExpanded = false;
 
@@ -452,16 +453,12 @@ class _ReasoningPanelState extends State<ReasoningPanel> {
   Widget build(BuildContext context) {
     final hasReasoning = widget.reasoning.trim().isNotEmpty;
     return Material(
+      key: _anchorKey,
       color: widget.state.text(context).withValues(alpha: 0.045),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: hasReasoning
-            ? () => setState(() {
-                autoExpanded = false;
-                expanded = !expanded;
-              })
-            : null,
+        onTap: hasReasoning ? _toggleExpanded : null,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -533,5 +530,33 @@ class _ReasoningPanelState extends State<ReasoningPanel> {
         ),
       ),
     );
+  }
+
+  void _toggleExpanded() {
+    final scrollable = Scrollable.maybeOf(context);
+    final position = scrollable?.position;
+    final beforeTop = _globalTop();
+    final beforePixels = position?.pixels;
+    setState(() {
+      autoExpanded = false;
+      expanded = !expanded;
+    });
+    if (position == null || beforeTop == null || beforePixels == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !position.hasPixels) return;
+      final afterTop = _globalTop();
+      if (afterTop == null) return;
+      final target = (beforePixels + afterTop - beforeTop).clamp(
+        position.minScrollExtent,
+        position.maxScrollExtent,
+      );
+      position.jumpTo(target.toDouble());
+    });
+  }
+
+  double? _globalTop() {
+    final renderObject = _anchorKey.currentContext?.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) return null;
+    return renderObject.localToGlobal(Offset.zero).dy;
   }
 }

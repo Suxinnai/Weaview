@@ -62,6 +62,45 @@ String messageTextWithAttachments(ChatMessage message) {
   return buffer.toString();
 }
 
+Future<List<Map<String, dynamic>>> openAiMessagesWithAttachments({
+  required String systemInstruction,
+  required List<ChatMessage> messages,
+}) async {
+  return [
+    {'role': 'system', 'content': systemInstruction},
+    for (final message in messages)
+      {
+        'role': message.role == 'model' ? 'assistant' : 'user',
+        'content': await openAiMessageContent(message),
+      },
+  ];
+}
+
+Future<Object> openAiMessageContent(ChatMessage message) async {
+  final imageAttachments = message.role == 'user'
+      ? message.attachments.where((attachment) => attachment.isImage).toList()
+      : const <MessageAttachment>[];
+  if (imageAttachments.isEmpty) return messageTextWithAttachments(message);
+
+  final parts = <Map<String, dynamic>>[];
+  final text = messageTextWithAttachments(message);
+  if (text.trim().isNotEmpty) {
+    parts.add({'type': 'text', 'text': text});
+  }
+  for (final attachment in imageAttachments) {
+    final file = File(attachment.path);
+    if (!await file.exists()) continue;
+    final bytes = await file.readAsBytes();
+    parts.add({
+      'type': 'image_url',
+      'image_url': {
+        'url': 'data:${attachment.mimeType};base64,${base64Encode(bytes)}',
+      },
+    });
+  }
+  return parts.isEmpty ? messageTextWithAttachments(message) : parts;
+}
+
 String? tryReadTextFile(File file) {
   try {
     return file.readAsStringSync();

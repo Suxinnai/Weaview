@@ -247,6 +247,30 @@ $$E = mc^2$$
     state.dispose();
   });
 
+  test('image generation keeps attachments on the user message', () async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+
+    await state.load();
+    await state.submitImageGeneration(
+      '参考这张图生成',
+      attachments: const [
+        MessageAttachment(
+          path: '/tmp/reference.png',
+          name: 'reference.png',
+          mimeType: 'image/png',
+          kind: 'image',
+          size: 12,
+        ),
+      ],
+    );
+
+    expect(state.messages.first.role, 'user');
+    expect(state.messages.first.attachments.single.name, 'reference.png');
+    expect(state.messages.last.content, contains('生图模型'));
+    state.dispose();
+  });
+
   test('reorders providers and keeps order in state', () async {
     SharedPreferences.setMockInitialValues({});
     final state = WeaviewState();

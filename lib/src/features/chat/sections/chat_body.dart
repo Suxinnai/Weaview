@@ -62,46 +62,55 @@ class ChatBody extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.only(top: 64),
           child: state.messages.isEmpty
-              ? Center(
-                  child: TweenAnimationBuilder<double>(
-                    tween: Tween(begin: 0, end: 1),
-                    duration: const Duration(milliseconds: 1000),
-                    curve: Curves.easeOutCubic,
-                    builder: (context, value, child) {
-                      return Transform.translate(
-                        offset: Offset(0, 18 * (1 - value)),
-                        child: Opacity(opacity: value, child: child),
-                      );
-                    },
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '今天，你想编织什么梦境？',
-                          textAlign: TextAlign.center,
-                          style: state
-                              .textStyle(
-                                context,
-                                size: 17,
-                                weight: FontWeight.w300,
-                                opacity: 0.82,
-                              )
-                              .copyWith(letterSpacing: 1.8),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          'What dream shall we weave today?',
-                          textAlign: TextAlign.center,
-                          style: state
-                              .textStyle(
-                                context,
-                                size: 12,
-                                weight: FontWeight.w400,
-                                opacity: 0.38,
-                              )
-                              .copyWith(letterSpacing: 0.7),
-                        ),
-                      ],
+              ? AnimatedPadding(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  padding: EdgeInsets.only(
+                    bottom: keyboardInset > 0
+                        ? keyboardInset + measuredDockHeight
+                        : 0,
+                  ),
+                  child: Center(
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: 1),
+                      duration: const Duration(milliseconds: 1000),
+                      curve: Curves.easeOutCubic,
+                      builder: (context, value, child) {
+                        return Transform.translate(
+                          offset: Offset(0, 18 * (1 - value)),
+                          child: Opacity(opacity: value, child: child),
+                        );
+                      },
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '今天，你想编织什么梦境？',
+                            textAlign: TextAlign.center,
+                            style: state
+                                .textStyle(
+                                  context,
+                                  size: 17,
+                                  weight: FontWeight.w300,
+                                  opacity: 0.82,
+                                )
+                                .copyWith(letterSpacing: 1.8),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'What dream shall we weave today?',
+                            textAlign: TextAlign.center,
+                            style: state
+                                .textStyle(
+                                  context,
+                                  size: 12,
+                                  weight: FontWeight.w400,
+                                  opacity: 0.38,
+                                )
+                                .copyWith(letterSpacing: 0.7),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 )
