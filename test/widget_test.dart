@@ -13,8 +13,8 @@ import 'package:weaview_flutter/src/features/chat/sections/chat_model_dropdown.d
 import 'package:weaview_flutter/src/features/settings/settings_sheet.dart';
 
 void main() {
-  test('exposes the current preview version in app constants', () {
-    expect(appVersionTag, 'v1.0.10-preview.1');
+  test('exposes the current stable version in app constants', () {
+    expect(appVersionTag, 'v1.0.10');
     expect(appVersionDisplay, contains('v1.0.10'));
   });
 

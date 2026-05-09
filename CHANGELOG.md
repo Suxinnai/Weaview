@@ -2,6 +2,26 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.10 - 2026-05-09
+
+### 中文
+
+- 发布第一个正式版本，应用内版本标识从 Preview 切换为 `Weaview v1.0.10`。
+- 修复底部悬浮输入栏和消息操作按钮遮挡长回复的问题，聊天列表会按输入框高度、系统安全区和聊天建议动态预留滚动空间。
+- 美化 AI Markdown 长文本渲染：正文降重、标题层级收敛、行高和段落间距更稳定，减少整段粗体和大块文本挤压。
+- 对中文长回复做轻量结构化处理，常见的“一、标题 正文”会渲染为独立小节标题和正文段落。
+- 优化点击 AI 回复后操作按钮的滚动定位，复制、重试、编辑、朗读和更多按钮更容易保持在输入框上方可见。
+- 合并 `1.0.10-preview.1` 中的模型能力识别、聊天模型标签、语音输入提示、AI 回复左侧视觉基准线和发送按钮状态修复。
+
+### English
+
+- Published the first stable release and changed the in-app version label from Preview to `Weaview v1.0.10`.
+- Fixed long AI replies and message action buttons being covered by the floating input dock by reserving scroll space from the measured dock height, safe area, and suggestion row.
+- Improved AI Markdown rendering for long text: lighter body typography, more restrained headings, steadier line height, and cleaner paragraph spacing.
+- Added lightweight Chinese long-form normalization so common section starts like "一、Title Body" render as a section heading followed by body text.
+- Improved action-button reveal positioning so copy, retry, edit, speak, and more controls are easier to keep visible above the input dock.
+- Includes the `1.0.10-preview.1` fixes for model capability detection, model capability chips, voice-input diagnostics, AI reply alignment, and send-button state recovery.
+
 ## 1.0.10-preview.1 - 2026-05-08
 
 ### 中文

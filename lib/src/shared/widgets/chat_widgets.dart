@@ -538,33 +538,28 @@ class ModelDropdownItem extends StatelessWidget {
                         weight: selected ? FontWeight.w600 : FontWeight.w400,
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Flexible(
-                          child: ModelCapabilityChips(
-                            state: state,
-                            capabilities: item.model.capabilities,
-                            compact: true,
-                          ),
-                        ),
-                        const SizedBox(width: 7),
-                        Flexible(
-                          child: Text(
-                            item.provider.name,
-                            overflow: TextOverflow.ellipsis,
-                            style: state
-                                .textStyle(
-                                  context,
-                                  size: 10,
-                                  weight: FontWeight.w600,
-                                  opacity: 0.4,
-                                )
-                                .copyWith(letterSpacing: 1.2),
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: 4),
+                    Text(
+                      item.provider.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: state
+                          .textStyle(
+                            context,
+                            size: 10,
+                            weight: FontWeight.w600,
+                            opacity: 0.4,
+                          )
+                          .copyWith(letterSpacing: 1.2),
+                    ),
+                    const SizedBox(height: 6),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      child: ModelCapabilityChips(
+                        state: state,
+                        capabilities: item.model.capabilities,
+                        compact: true,
+                      ),
                     ),
                   ],
                 ),

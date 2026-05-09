@@ -79,6 +79,20 @@ void main() {
       );
     });
 
+    test('extracts tool capability from supported parameters', () {
+      final capabilities = modelCapabilitiesFromRecord({
+        'id': 'gpt-5.5',
+        'supported_parameters': [
+          'tools',
+          'tool_choice',
+          'parallel_tool_calls',
+          'response_format',
+        ],
+      });
+
+      expect(capabilities, containsAll(['chat', 'tool']));
+    });
+
     test('does not treat image input alone as image generation', () {
       final capabilities = modelCapabilitiesFromRecord({
         'id': 'provider/vision-chat',

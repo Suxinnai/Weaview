@@ -6,7 +6,7 @@
 
 织境提供一个可本地配置的多模型聊天环境。它不内置任何真实 API Key，所有模型服务、搜索服务和语音服务凭据都需要用户在 App 设置中显式配置。
 
-Latest preview / 最新预览版：`v1.0.10-preview.1`
+Latest stable / 最新正式版：`v1.0.10`
 
 主要能力包括：
 
@@ -222,23 +222,23 @@ flutter build ios
 
 ## Latest Release Notes / 最新更新日志
 
-### v1.0.10-preview.1
+### v1.0.10
 
 中文：
 
-- 修复模型能力拉取与手动能力保存后，聊天模型选择器不显示能力标签的问题。
-- 优化 AI 回复布局，头像、思考链、回复内容和后续文字使用更稳定的左侧视觉基准线。
-- 修复回复完成后发送按钮需要等待聊天建议生成才恢复的问题。
-- 优化底部输入栏与聊天建议间距，减少遮挡和异常留白。
-- 改进 Android 语音输入错误提示，区分 App 麦克风权限与系统语音引擎授权异常。
+- 发布第一个正式版本，应用内版本标识为 `Weaview v1.0.10`。
+- 修复底部悬浮输入栏和消息操作按钮遮挡长回复的问题。
+- 美化 AI Markdown 长文本渲染，正文更轻，标题更克制，段落和小节结构更清晰。
+- 改进中文长回复分节显示，减少整段粗体和大块文本挤压。
+- 合并模型能力识别、聊天模型标签、语音输入提示、AI 回复左侧视觉基准线和发送按钮状态修复。
 
 English:
 
-- Fixed model capability detection and ensured manually saved capabilities appear in the chat model picker.
-- Improved AI reply alignment so avatars, reasoning chips, reply content, and follow-up text share a steadier left reading guide.
-- Fixed the send button staying in the generating state until chat suggestions finished.
-- Tuned bottom input and suggestion spacing to reduce overlap and excessive blank space.
-- Improved Android voice input errors by separating app microphone permission issues from system speech-engine authorization failures.
+- Published the first stable release with the in-app version label `Weaview v1.0.10`.
+- Fixed long AI replies and message actions being covered by the floating input dock.
+- Improved AI Markdown rendering with lighter body text, restrained headings, and clearer long-form structure.
+- Added lightweight Chinese section normalization to reduce dense bold text blocks.
+- Includes model capability detection, model capability chips, voice-input diagnostics, AI reply alignment, and send-button state fixes.
 
 ## 贡献指南
 

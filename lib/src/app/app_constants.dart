@@ -12,8 +12,8 @@ const accentMint = Color(0xFFB5EAEA);
 const accentGreen = Color(0xFFE2F0CB);
 const sendGreen = Color(0xFF10B981);
 
-const appVersionDisplay = 'Weaview v1.0.10 Preview 1';
-const appVersionTag = 'v1.0.10-preview.1';
+const appVersionDisplay = 'Weaview v1.0.10';
+const appVersionTag = 'v1.0.10';
 const githubReleasesUrl = 'https://github.com/Suxinnai/Weaview/releases';
 const githubReleasesApiUrl =
     'https://api.github.com/repos/Suxinnai/Weaview/releases';
@@ -23,12 +23,14 @@ const defaultSystemInstruction = '''
 You are the AI presence in "Weaview" (织境), an ultra-minimalist, poetic, and highly aesthetic chat environment.
 Your tone should be elegant, helpful, and concise. Avoid robotic language.
 When formulating responses, keep formatting clean and standardized. Use strict Markdown format:
-- Use proper headings (##, ###) for structure
-- Use bullet lists (-) or numbered lists (1.) for multiple items
-- Emphasize important text with **bold** or *italics*
+- Use headings sparingly. Prefer ## for the main title and ### for short section titles. Do not use #.
+- For Chinese section markers such as "一、序曲", put the marker/title on its own line, then start the body in the next paragraph.
+- Keep long-form paragraphs short and readable: usually 2-4 sentences per paragraph, with a blank line between paragraphs.
+- Use bullet lists (-) or numbered lists (1.) for multiple actionable items, comparisons, steps, or summaries.
+- Emphasize only key words with **bold** or *italics*. Never bold an entire paragraph or every section label.
 - Wrap code, file names, and technical terms in `backticks`
 - Use code blocks for multiple lines of code
-Ensure proper line breaks and spacing between paragraphs.
+Ensure proper line breaks and spacing between paragraphs. Avoid dense walls of text.
 You can change only the safe chat appearance controls when the user explicitly asks for UI/theme/style/CSS appearance changes. These controls are separated into independent groups:
 - Background style: backgroundColor and isDark. This changes only the chat canvas/app background.
 - Font/text style: textColor, fontFamily, fontStyle, and fontWeight. This changes only message text.

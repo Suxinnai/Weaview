@@ -49,21 +49,29 @@ List<String> modelCapabilitiesFromRecord(dynamic record) {
   final hints = <Object?>[
     record['capabilities'],
     record['capability'],
+    record['supported_capabilities'],
     record['modalities'],
     record['supported_modalities'],
     record['features'],
+    record['supported_features'],
     record['tags'],
     record['type'],
+    record['abilities'],
+    record['supported_abilities'],
+    record['parameters'],
+    record['supported_parameters'],
+    record['supported_tools'],
+    record['tools'],
+    record['tool_calls'],
+    record['tool_calling'],
+    record['function_calling'],
+    record['functions'],
   ];
 
   final caps = <String>{};
-  caps.addAll(_capabilitiesFromValue(record['capabilities']));
-  caps.addAll(_capabilitiesFromValue(record['capability']));
-  caps.addAll(_capabilitiesFromValue(record['modalities']));
-  caps.addAll(_capabilitiesFromValue(record['supported_modalities']));
-  caps.addAll(_capabilitiesFromValue(record['features']));
-  caps.addAll(_capabilitiesFromValue(record['tags']));
-  caps.addAll(_capabilitiesFromValue(record['type']));
+  for (final hint in hints) {
+    caps.addAll(_capabilitiesFromValue(hint));
+  }
   for (final value in _flattenValues(record['input_modalities'])) {
     if (_looksLikeImageInput(value)) caps.add('vision');
     if (_looksLikeText(value)) caps.add('chat');
@@ -220,9 +228,17 @@ const _imageCapabilityNeedles = [
 const _toolCapabilityNeedles = [
   'tool',
   'tools',
+  'tool_choice',
+  'tool_calls',
+  'parallel_tool_calls',
   'function',
+  'functions',
+  'function_call',
+  'function_calls',
   'function_calling',
   'tool_use',
+  'json_schema',
+  'structured_output',
 ];
 
 const _reasonCapabilityNeedles = ['reason', 'reasoning', 'think', 'thinking'];

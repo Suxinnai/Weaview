@@ -54,6 +54,7 @@ class _MessageBubbleState extends State<MessageBubble> {
   bool _actionsVisible = false;
   bool _inlineEditing = false;
   TextEditingController? _inlineEditController;
+  Offset? _assistantPointerDown;
 
   void _toggleActions() {
     final nextVisible = !_actionsVisible;
@@ -64,9 +65,10 @@ class _MessageBubbleState extends State<MessageBubble> {
         if (context == null || !mounted) return;
         Scrollable.ensureVisible(
           context,
-          duration: const Duration(milliseconds: 180),
+          duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
-          alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+          alignment: 0.72,
+          alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
         );
       });
     }
@@ -185,8 +187,15 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     final assistantContent = Listener(
       behavior: HitTestBehavior.translucent,
-      onPointerUp: (_) {
-        if (!message.isThinking && !_inlineEditing) _toggleActions();
+      onPointerDown: (event) => _assistantPointerDown = event.position,
+      onPointerCancel: (_) => _assistantPointerDown = null,
+      onPointerUp: (event) {
+        final start = _assistantPointerDown;
+        _assistantPointerDown = null;
+        if (start != null && (event.position - start).distance > 10) return;
+        if (!message.isThinking && !_inlineEditing) {
+          _toggleActions();
+        }
       },
       child: Column(
         crossAxisAlignment: _messageColumnAlignment(state),
@@ -262,37 +271,21 @@ class _MessageBubbleState extends State<MessageBubble> {
         ],
       ),
     );
-    final useAssistantGuide =
-        state.messageAlignment == 'left' || state.messageAlignment == 'auto';
     return Align(
       alignment: _messageShellAlignment(state, isUser: false),
-      child: useAssistantGuide
-          ? Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AvatarDot(
-                  value: widget.assistantAvatar,
-                  fallbackIcon: Icons.auto_awesome_rounded,
-                  imageSize: 28,
-                  accent: state.accents[0],
-                ),
-                const SizedBox(width: 14),
-                Flexible(child: assistantContent),
-              ],
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AvatarDot(
-                  value: widget.assistantAvatar,
-                  fallbackIcon: Icons.auto_awesome_rounded,
-                  imageSize: 28,
-                  accent: state.accents[0],
-                ),
-                const SizedBox(height: 8),
-                assistantContent,
-              ],
-            ),
+      child: Column(
+        crossAxisAlignment: _messageColumnAlignment(state),
+        children: [
+          AvatarDot(
+            value: widget.assistantAvatar,
+            fallbackIcon: Icons.auto_awesome_rounded,
+            imageSize: 28,
+            accent: state.accents[0],
+          ),
+          const SizedBox(height: 8),
+          assistantContent,
+        ],
+      ),
     );
   }
 }
@@ -558,10 +551,10 @@ class _AiMarkdown extends StatelessWidget {
       crossAxisAlignment: _messageColumnAlignment(state),
       children: [
         for (var i = 0; i < segments.length; i++) ...[
-          if (i > 0) const SizedBox(height: 12),
+          if (i > 0) const SizedBox(height: 10),
           switch (segments[i].kind) {
             MarkdownSegmentKind.markdown => MarkdownBody(
-              data: segments[i].text,
+              data: _displayMarkdownText(segments[i].text),
               selectable: true,
               styleSheet: _aiMarkdownStyle(context, state, textAlign),
             ),
@@ -581,6 +574,77 @@ class _AiMarkdown extends StatelessWidget {
   }
 }
 
+String _displayMarkdownText(String source) {
+  if (source.trim().isEmpty) return source;
+  final normalized = source.replaceAll('\r\n', '\n');
+  final longForm = normalized.length > 160 || normalized.contains('\n\n');
+  if (!longForm) return normalized.trimRight();
+
+  final lines = normalized.split('\n');
+  final output = <String>[];
+  var inFence = false;
+  final sectionPattern = RegExp(
+    r'^(([一二三四五六七八九十百]+|[0-9]{1,2})[、.．]\s*[^，。！？!?；;：:]{1,14})\s+(.{8,})$',
+  );
+
+  for (final rawLine in lines) {
+    final line = rawLine.trimRight();
+    final trimmed = line.trim();
+    if (trimmed.startsWith('```')) {
+      inFence = !inFence;
+      output.add(line);
+      continue;
+    }
+    if (inFence || trimmed.isEmpty || _isMarkdownControlLine(trimmed)) {
+      output.add(line);
+      continue;
+    }
+
+    final section = sectionPattern.firstMatch(trimmed);
+    if (section != null) {
+      _appendBlankLine(output);
+      output.add('### ${section.group(1)!.trim()}');
+      output.add('');
+      output.add(section.group(3)!.trim());
+      continue;
+    }
+
+    if (_looksLikeStandaloneHeading(trimmed)) {
+      _appendBlankLine(output);
+      output.add('### $trimmed');
+      continue;
+    }
+
+    output.add(line);
+  }
+
+  return output.join('\n').replaceAll(RegExp(r'\n{3,}'), '\n\n').trimRight();
+}
+
+bool _isMarkdownControlLine(String line) {
+  return line.startsWith('#') ||
+      line.startsWith('>') ||
+      line.startsWith('|') ||
+      line.startsWith('- ') ||
+      line.startsWith('* ') ||
+      line.startsWith('+ ') ||
+      RegExp(r'^\d+[.)、]\s').hasMatch(line) ||
+      RegExp(r'^[-*_]{3,}$').hasMatch(line);
+}
+
+bool _looksLikeStandaloneHeading(String line) {
+  if (line.length < 2 || line.length > 18) return false;
+  if (RegExp(r'[，。！？、,.!?；;：:]').hasMatch(line)) return false;
+  if (RegExp(r'^\d+$').hasMatch(line)) return false;
+  return RegExp(r'[一-龥A-Za-z]').hasMatch(line);
+}
+
+void _appendBlankLine(List<String> output) {
+  if (output.isNotEmpty && output.last.trim().isNotEmpty) {
+    output.add('');
+  }
+}
+
 MarkdownStyleSheet _aiMarkdownStyle(
   BuildContext context,
   WeaviewState state,
@@ -590,14 +654,43 @@ MarkdownStyleSheet _aiMarkdownStyle(
   final dark = state.isDark(context);
   final tableBorder = text.withValues(alpha: dark ? 0.16 : 0.10);
   final wrapAlign = _markdownWrapAlignment(textAlign);
+  TextStyle type(
+    double size, {
+    FontWeight weight = FontWeight.w400,
+    double height = 1.6,
+    double opacity = 1,
+  }) {
+    return state
+        .textStyle(
+          context,
+          size: size,
+          height: height,
+          opacity: opacity,
+          weight: weight,
+        )
+        .copyWith(fontWeight: weight);
+  }
+
   return MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-    a: state
-        .textStyle(context, size: 15, height: 1.7, weight: FontWeight.w600)
-        .copyWith(color: sendGreen),
-    p: state.textStyle(context, size: 15, height: 1.76),
-    h1: state.textStyle(context, size: 23, weight: FontWeight.w700),
-    h2: state.textStyle(context, size: 20, weight: FontWeight.w700),
-    h3: state.textStyle(context, size: 17, weight: FontWeight.w700),
+    a: type(
+      13.8,
+      height: 1.66,
+      weight: FontWeight.w600,
+    ).copyWith(color: sendGreen),
+    p: type(13.8, height: 1.66),
+    pPadding: const EdgeInsets.only(bottom: 3),
+    h1: type(17.8, height: 1.32, weight: FontWeight.w700),
+    h1Padding: const EdgeInsets.only(top: 10, bottom: 5),
+    h2: type(16.2, height: 1.38, weight: FontWeight.w600),
+    h2Padding: const EdgeInsets.only(top: 8, bottom: 4),
+    h3: type(14.9, height: 1.44, weight: FontWeight.w600),
+    h3Padding: const EdgeInsets.only(top: 8, bottom: 3),
+    h4: type(14.2, height: 1.48, weight: FontWeight.w600),
+    h4Padding: const EdgeInsets.only(top: 6, bottom: 3),
+    h5: type(13.8, height: 1.5, weight: FontWeight.w600),
+    h6: type(13.5, height: 1.5, weight: FontWeight.w600, opacity: 0.72),
+    strong: type(13.8, height: 1.66, weight: FontWeight.w600),
+    em: type(13.8, height: 1.66).copyWith(fontStyle: FontStyle.italic),
     blockSpacing: 10,
     textAlign: wrapAlign,
     h1Align: wrapAlign,
@@ -610,28 +703,22 @@ MarkdownStyleSheet _aiMarkdownStyle(
     unorderedListAlign: wrapAlign,
     orderedListAlign: wrapAlign,
     codeblockAlign: wrapAlign,
-    listIndent: 22,
-    listBullet: state.textStyle(context, size: 15, height: 1.6),
-    listBulletPadding: const EdgeInsets.only(right: 7),
-    code: state
-        .textStyle(context, size: 13.5)
-        .copyWith(
-          backgroundColor: state.text(context).withValues(alpha: 0.075),
-          fontFamily: 'monospace',
-          color: text,
-        ),
+    listIndent: 18,
+    listBullet: type(13.8, height: 1.56),
+    listBulletPadding: const EdgeInsets.only(right: 6),
+    code: type(13.2, height: 1.45).copyWith(
+      backgroundColor: state.text(context).withValues(alpha: 0.075),
+      fontFamily: 'monospace',
+      fontStyle: FontStyle.normal,
+      color: text.withValues(alpha: 0.88),
+    ),
     codeblockPadding: const EdgeInsets.all(12),
     codeblockDecoration: BoxDecoration(
       color: text.withValues(alpha: dark ? 0.10 : 0.055),
       borderRadius: BorderRadius.circular(14),
       border: Border.all(color: text.withValues(alpha: 0.08)),
     ),
-    blockquote: state.textStyle(
-      context,
-      size: 14.5,
-      height: 1.65,
-      opacity: 0.8,
-    ),
+    blockquote: type(13.6, height: 1.58, opacity: 0.82),
     blockquotePadding: const EdgeInsets.fromLTRB(13, 10, 13, 10),
     blockquoteDecoration: BoxDecoration(
       color: state.accents[0].withValues(alpha: dark ? 0.10 : 0.16),
@@ -644,8 +731,8 @@ MarkdownStyleSheet _aiMarkdownStyle(
       ),
     ),
     tableColumnWidth: const IntrinsicColumnWidth(),
-    tableHead: state.textStyle(context, size: 13, weight: FontWeight.w800),
-    tableBody: state.textStyle(context, size: 13, height: 1.45),
+    tableHead: type(13, weight: FontWeight.w600, height: 1.42),
+    tableBody: type(13, height: 1.48),
     tableHeadAlign: textAlign,
     tablePadding: const EdgeInsets.symmetric(vertical: 6),
     tableBorder: TableBorder.all(

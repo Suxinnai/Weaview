@@ -60,25 +60,31 @@ class ChatInputDock extends StatelessWidget {
         ? hasText
         : hasText || pendingAttachments.isNotEmpty;
     final radius = BorderRadius.circular(dockExpanded ? 22 : 28);
+    final glassBase = dark ? Colors.black : Colors.white;
+    final textColor = state.text(context);
     final dockSurface = AnimatedContainer(
       duration: const Duration(milliseconds: 120),
       curve: Curves.easeOut,
       decoration: BoxDecoration(
-        color: (dark ? Colors.black : Colors.white).withValues(
-          alpha: dark ? 0.32 : 0.22,
+        color: glassBase.withValues(alpha: dark ? 0.24 : 0.30),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: dark ? 0.05 : 0.26),
+            glassBase.withValues(alpha: dark ? 0.18 : 0.12),
+          ],
         ),
         borderRadius: radius,
         border: Border.all(
-          color: (dark ? Colors.white : state.text(context)).withValues(
-            alpha: dark ? 0.08 : 0.08,
-          ),
+          color: textColor.withValues(alpha: dark ? 0.08 : 0.10),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: dark ? 0.18 : 0.075),
-            blurRadius: keyboardOpen ? 18 : 26,
-            spreadRadius: -8,
-            offset: Offset(0, keyboardOpen ? 8 : 14),
+            color: Colors.black.withValues(alpha: dark ? 0.18 : 0.065),
+            blurRadius: keyboardOpen ? 16 : 24,
+            spreadRadius: -9,
+            offset: Offset(0, keyboardOpen ? 8 : 13),
           ),
         ],
       ),
@@ -237,7 +243,7 @@ class ChatInputDock extends StatelessWidget {
       child: ClipRRect(
         borderRadius: radius,
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
           child: dockSurface,
         ),
       ),

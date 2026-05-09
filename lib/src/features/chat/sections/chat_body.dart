@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../../app/weaview_state.dart';
@@ -42,20 +43,24 @@ class ChatBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final navBarHeight = MediaQuery.paddingOf(context).bottom;
-    final suggestionPad =
+    final suggestionsVisible =
         state.suggestions.isNotEmpty &&
-            !state.isStreaming &&
-            !dockExpanded &&
-            keyboardInset == 0
-        ? 38.0
-        : 0.0;
-    final safeDockGap = math.max(0.0, 8.0 - navBarHeight);
-    final bottomPad =
-        dockHeight + keyboardInset + safeDockGap + suggestionPad + 8.0;
+        !state.isStreaming &&
+        !dockExpanded &&
+        keyboardInset == 0;
+    final measuredDockHeight = math.max(
+      dockHeight,
+      dockExpanded ? 132.0 : 104.0,
+    );
+    final bottomPad = keyboardInset > 0
+        ? keyboardInset + measuredDockHeight + 18.0
+        : suggestionsVisible
+        ? measuredDockHeight + navBarHeight + 58.0
+        : measuredDockHeight + navBarHeight + 42.0;
     return Positioned.fill(
       child: SafeArea(
         child: Padding(
-          padding: EdgeInsets.only(top: 64, bottom: bottomPad),
+          padding: const EdgeInsets.only(top: 64),
           child: state.messages.isEmpty
               ? Center(
                   child: TweenAnimationBuilder<double>(
@@ -103,7 +108,7 @@ class ChatBody extends StatelessWidget {
               : ListView.separated(
                   controller: scrollController,
                   physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.fromLTRB(16, 0, 16, bottomPad),
                   itemCount: state.messages.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 32),
                   itemBuilder: (context, index) {
