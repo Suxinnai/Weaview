@@ -14,8 +14,8 @@ import 'package:weaview_flutter/src/features/settings/settings_sheet.dart';
 
 void main() {
   test('exposes the current stable version in app constants', () {
-    expect(appVersionTag, 'v1.0.11');
-    expect(appVersionDisplay, contains('v1.0.11'));
+    expect(appVersionTag, 'v1.0.12');
+    expect(appVersionDisplay, contains('v1.0.12'));
   });
 
   testWidgets('renders the Weaview chat shell', (WidgetTester tester) async {
@@ -29,7 +29,7 @@ void main() {
     expect(find.text('编织'), findsOneWidget);
   });
 
-  testWidgets('renders rich AI markdown code and formula blocks', (
+  testWidgets('renders rich AI markdown code, formula, and table blocks', (
     WidgetTester tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -41,7 +41,11 @@ void main() {
 void main() {}
 ```
 
-$$E = mc^2$$'''),
+$$E = mc^2$$
+
+| 字段 | 说明 |
+| --- | --- |
+| 状态 | 正常 |'''),
     );
 
     await tester.pumpWidget(MaterialApp(home: WeaviewHome(state: state)));
@@ -51,6 +55,43 @@ $$E = mc^2$$'''),
     expect(find.text('void main() {}'), findsOneWidget);
     expect(find.text('公式'), findsOneWidget);
     expect(find.text('E = mc^2'), findsOneWidget);
+    expect(find.text('表格'), findsOneWidget);
+    expect(find.text('字段'), findsOneWidget);
+    expect(find.text('状态'), findsOneWidget);
+    state.dispose();
+  });
+
+  testWidgets('keeps AI prose regular-weight and justified', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+
+    await state.load();
+    state.fontWeightMood = 'bold';
+    state.messages.add(
+      ChatMessage.model(
+        '这是一段用于验证正文层级的普通文本，它需要保持常规字重并支持两端对齐，不能被全局加粗设置误伤。**重点**只应该略微更醒目。',
+      ),
+    );
+
+    await tester.pumpWidget(MaterialApp(home: WeaviewHome(state: state)));
+    await tester.pump();
+
+    final paragraph = tester.widget<SelectableText>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableText &&
+            widget.textSpan?.toPlainText().contains('正文层级') == true,
+      ),
+    );
+    expect(paragraph.textAlign, TextAlign.justify);
+    final rootStyle = paragraph.textSpan!.style!;
+    expect(rootStyle.fontWeight, FontWeight.w400);
+    final strongSpan = paragraph.textSpan!.children!
+        .whereType<TextSpan>()
+        .firstWhere((span) => span.text == '重点');
+    expect(strongSpan.style!.fontWeight, FontWeight.w600);
     state.dispose();
   });
 

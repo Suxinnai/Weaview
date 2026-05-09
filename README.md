@@ -6,7 +6,7 @@
 
 织境提供一个可本地配置的多模型聊天环境。它不内置任何真实 API Key，所有模型服务、搜索服务和语音服务凭据都需要用户在 App 设置中显式配置。
 
-Latest stable / 最新正式版：`v1.0.11`
+Latest stable / 最新正式版：`v1.0.12`
 
 主要能力包括：
 
@@ -222,21 +222,21 @@ flutter build ios
 
 ## Latest Release Notes / 最新更新日志
 
-### v1.0.11
+### v1.0.12
 
 中文：
 
-- 优化生图完成后的呈现效果，生成动画会更自然地过渡到图片附件。
-- 移除聊天缩略图上的悬浮下载按钮，避免遮挡图片主体。
-- 图片预览返回后不再自动弹出键盘。
-- 图片预览界面支持长按保存到手机相册，Android 会保存到 `Pictures/Weaview`。
+- 优化 AI 回复 Markdown 渲染，正文不再被错误放大或整体加粗，标题、正文和强调文本层级更稳定。
+- 普通长正文支持两端对齐，提升中文长文本阅读体验。
+- 表格改为移动端友好的横向滚动卡片，并提供表格复制入口。
+- 代码块和公式块固定为常规字重，避免受全局字体加粗设置影响。
 
 English:
 
-- Improved the image-generation finish state so the loading animation transitions more naturally into the generated image attachment.
-- Removed the floating download button from chat image thumbnails to avoid covering the image content.
-- Prevented the keyboard from reopening after closing image preview.
-- Added long-press save-to-gallery support in image preview; Android saves images to `Pictures/Weaview`.
+- Improved AI Markdown rendering so body text is no longer incorrectly enlarged or globally bolded, with steadier heading, body, and emphasis hierarchy.
+- Added justified alignment for long prose to improve Chinese long-form reading.
+- Rendered tables as mobile-friendly horizontally scrollable cards with table copy support.
+- Kept code and formula blocks at regular weight so global bold text settings no longer distort them.
 
 ## 贡献指南
 

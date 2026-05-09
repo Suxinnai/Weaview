@@ -2,6 +2,22 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.12 - 2026-05-09
+
+### 中文
+
+- 优化 AI 回复 Markdown 渲染，正文不再被错误放大或整体加粗，标题、正文和强调文本层级更稳定。
+- 普通长正文支持两端对齐，提升中文长文本阅读体验。
+- 表格改为移动端友好的横向滚动卡片，并提供表格复制入口。
+- 代码块和公式块固定为常规字重，避免受全局字体加粗设置影响。
+
+### English
+
+- Improved AI Markdown rendering so body text is no longer incorrectly enlarged or globally bolded, with steadier heading, body, and emphasis hierarchy.
+- Added justified alignment for long prose to improve Chinese long-form reading.
+- Rendered tables as mobile-friendly horizontally scrollable cards with table copy support.
+- Kept code and formula blocks at regular weight so global bold text settings no longer distort them.
+
 ## 1.0.11 - 2026-05-09
 
 ### 中文

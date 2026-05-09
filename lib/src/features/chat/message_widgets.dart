@@ -586,10 +586,10 @@ class _AiMarkdown extends StatelessWidget {
         for (var i = 0; i < segments.length; i++) ...[
           if (i > 0) const SizedBox(height: 10),
           switch (segments[i].kind) {
-            MarkdownSegmentKind.markdown => MarkdownBody(
+            MarkdownSegmentKind.markdown => _RichMarkdownBlocks(
+              state: state,
               data: _displayMarkdownText(segments[i].text),
-              selectable: true,
-              styleSheet: _aiMarkdownStyle(context, state, textAlign),
+              textAlign: textAlign,
             ),
             MarkdownSegmentKind.code => _CodeBlock(
               state: state,
@@ -610,48 +610,19 @@ class _AiMarkdown extends StatelessWidget {
 String _displayMarkdownText(String source) {
   if (source.trim().isEmpty) return source;
   final normalized = source.replaceAll('\r\n', '\n');
-  final longForm = normalized.length > 160 || normalized.contains('\n\n');
-  if (!longForm) return normalized.trimRight();
-
-  final lines = normalized.split('\n');
-  final output = <String>[];
-  var inFence = false;
-  final sectionPattern = RegExp(
-    r'^(([一二三四五六七八九十百]+|[0-9]{1,2})[、.．]\s*[^，。！？!?；;：:]{1,14})\s+(.{8,})$',
-  );
-
-  for (final rawLine in lines) {
-    final line = rawLine.trimRight();
-    final trimmed = line.trim();
-    if (trimmed.startsWith('```')) {
-      inFence = !inFence;
-      output.add(line);
-      continue;
-    }
-    if (inFence || trimmed.isEmpty || _isMarkdownControlLine(trimmed)) {
-      output.add(line);
-      continue;
-    }
-
-    final section = sectionPattern.firstMatch(trimmed);
-    if (section != null) {
-      _appendBlankLine(output);
-      output.add('### ${section.group(1)!.trim()}');
-      output.add('');
-      output.add(section.group(3)!.trim());
-      continue;
-    }
-
-    if (_looksLikeStandaloneHeading(trimmed)) {
-      _appendBlankLine(output);
-      output.add('### $trimmed');
-      continue;
-    }
-
-    output.add(line);
-  }
-
-  return output.join('\n').replaceAll(RegExp(r'\n{3,}'), '\n\n').trimRight();
+  return normalized
+      .split('\n')
+      .map((line) {
+        final trimmedLeft = line.trimLeft();
+        final leading = line.length - trimmedLeft.length;
+        if (trimmedLeft.startsWith('# ')) {
+          return '${line.substring(0, leading)}## ${trimmedLeft.substring(2).trimLeft()}';
+        }
+        return line.trimRight();
+      })
+      .join('\n')
+      .replaceAll(RegExp(r'\n{4,}'), '\n\n\n')
+      .trimRight();
 }
 
 bool _isMarkdownControlLine(String line) {
@@ -665,17 +636,413 @@ bool _isMarkdownControlLine(String line) {
       RegExp(r'^[-*_]{3,}$').hasMatch(line);
 }
 
-bool _looksLikeStandaloneHeading(String line) {
-  if (line.length < 2 || line.length > 18) return false;
-  if (RegExp(r'[，。！？、,.!?；;：:]').hasMatch(line)) return false;
-  if (RegExp(r'^\d+$').hasMatch(line)) return false;
-  return RegExp(r'[一-龥A-Za-z]').hasMatch(line);
+class _RichMarkdownBlocks extends StatelessWidget {
+  const _RichMarkdownBlocks({
+    required this.state,
+    required this.data,
+    required this.textAlign,
+  });
+
+  final WeaviewState state;
+  final String data;
+  final TextAlign textAlign;
+
+  @override
+  Widget build(BuildContext context) {
+    final blocks = _splitRichMarkdownBlocks(data);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < blocks.length; i++) ...[
+          if (i > 0) const SizedBox(height: 8),
+          switch (blocks[i].kind) {
+            _RichMarkdownBlockKind.prose => _ProseParagraph(
+              state: state,
+              data: blocks[i].text,
+              textAlign: textAlign,
+            ),
+            _RichMarkdownBlockKind.table => _MarkdownTableBlock(
+              state: state,
+              table: blocks[i].text,
+            ),
+            _RichMarkdownBlockKind.markdown => MarkdownBody(
+              data: blocks[i].text,
+              selectable: true,
+              styleSheet: _aiMarkdownStyle(context, state, textAlign),
+            ),
+          },
+        ],
+      ],
+    );
+  }
 }
 
-void _appendBlankLine(List<String> output) {
-  if (output.isNotEmpty && output.last.trim().isNotEmpty) {
-    output.add('');
+enum _RichMarkdownBlockKind { prose, markdown, table }
+
+class _RichMarkdownBlock {
+  const _RichMarkdownBlock(this.kind, this.text);
+
+  final _RichMarkdownBlockKind kind;
+  final String text;
+}
+
+List<_RichMarkdownBlock> _splitRichMarkdownBlocks(String source) {
+  final lines = source.split('\n');
+  final blocks = <_RichMarkdownBlock>[];
+  final buffer = <String>[];
+  _RichMarkdownBlockKind? bufferKind;
+
+  void flush() {
+    final text = buffer.join('\n').trimRight();
+    if (bufferKind != null && text.trim().isNotEmpty) {
+      blocks.add(_RichMarkdownBlock(bufferKind!, text));
+    }
+    buffer.clear();
+    bufferKind = null;
   }
+
+  void addLine(_RichMarkdownBlockKind kind, String line) {
+    if (bufferKind != null && bufferKind != kind) flush();
+    bufferKind = kind;
+    buffer.add(line);
+  }
+
+  for (var i = 0; i < lines.length; i++) {
+    final line = lines[i];
+    final trimmed = line.trim();
+    if (trimmed.isEmpty) {
+      flush();
+      continue;
+    }
+    if (_isMarkdownTableStart(lines, i)) {
+      flush();
+      final tableLines = <String>[line, lines[i + 1]];
+      i += 2;
+      while (i < lines.length && lines[i].contains('|')) {
+        tableLines.add(lines[i]);
+        i++;
+      }
+      i--;
+      blocks.add(
+        _RichMarkdownBlock(
+          _RichMarkdownBlockKind.table,
+          tableLines.join('\n').trimRight(),
+        ),
+      );
+      continue;
+    }
+    addLine(
+      _isPlainProseLine(trimmed)
+          ? _RichMarkdownBlockKind.prose
+          : _RichMarkdownBlockKind.markdown,
+      line,
+    );
+  }
+  flush();
+  return blocks;
+}
+
+bool _isPlainProseLine(String line) {
+  if (_isMarkdownControlLine(line)) return false;
+  if (RegExp(r'!?\[[^\]]+\]\([^)]+\)').hasMatch(line)) return false;
+  if (line.startsWith('<') || line.endsWith('>')) return false;
+  return true;
+}
+
+bool _isMarkdownTableStart(List<String> lines, int index) {
+  if (index + 1 >= lines.length) return false;
+  final header = lines[index].trim();
+  final divider = lines[index + 1].trim();
+  return header.contains('|') &&
+      RegExp(r'^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$').hasMatch(divider);
+}
+
+class _ProseParagraph extends StatelessWidget {
+  const _ProseParagraph({
+    required this.state,
+    required this.data,
+    required this.textAlign,
+  });
+
+  final WeaviewState state;
+  final String data;
+  final TextAlign textAlign;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = _markdownType(context, state, 14.2, height: 1.66);
+    final strong = _markdownType(
+      context,
+      state,
+      14.2,
+      height: 1.66,
+      weight: FontWeight.w600,
+    );
+    final emphasis = base.copyWith(fontStyle: FontStyle.italic);
+    final code =
+        _markdownType(
+          context,
+          state,
+          13.2,
+          height: 1.52,
+          weight: FontWeight.w500,
+        ).copyWith(
+          fontFamily: 'monospace',
+          backgroundColor: state.text(context).withValues(alpha: 0.075),
+        );
+    return SelectableText.rich(
+      TextSpan(
+        style: base,
+        children: _inlineMarkdownSpans(data, base, strong, emphasis, code),
+      ),
+      textAlign: _proseTextAlign(textAlign, data),
+    );
+  }
+}
+
+List<InlineSpan> _inlineMarkdownSpans(
+  String source,
+  TextStyle base,
+  TextStyle strong,
+  TextStyle emphasis,
+  TextStyle code,
+) {
+  final spans = <InlineSpan>[];
+  var index = 0;
+
+  void addPlain(int end) {
+    if (end > index) {
+      spans.add(TextSpan(text: source.substring(index, end), style: base));
+    }
+  }
+
+  while (index < source.length) {
+    final codeStart = source.indexOf('`', index);
+    final strongStart = source.indexOf('**', index);
+    final emphasisStart = _nextSingleStar(source, index);
+    final starts = <int>[
+      codeStart,
+      strongStart,
+      emphasisStart,
+    ].where((value) => value >= 0).toList()..sort();
+    if (starts.isEmpty) {
+      addPlain(source.length);
+      break;
+    }
+    final start = starts.first;
+    addPlain(start);
+    if (start == codeStart) {
+      final end = source.indexOf('`', start + 1);
+      if (end <= start) {
+        spans.add(TextSpan(text: source.substring(start), style: base));
+        break;
+      }
+      spans.add(TextSpan(text: source.substring(start + 1, end), style: code));
+      index = end + 1;
+      continue;
+    }
+    if (start == strongStart) {
+      final end = source.indexOf('**', start + 2);
+      if (end <= start) {
+        spans.add(TextSpan(text: source.substring(start), style: base));
+        break;
+      }
+      spans.add(
+        TextSpan(text: source.substring(start + 2, end), style: strong),
+      );
+      index = end + 2;
+      continue;
+    }
+    final end = source.indexOf('*', start + 1);
+    if (end <= start) {
+      spans.add(TextSpan(text: source.substring(start), style: base));
+      break;
+    }
+    spans.add(
+      TextSpan(text: source.substring(start + 1, end), style: emphasis),
+    );
+    index = end + 1;
+  }
+
+  return spans;
+}
+
+int _nextSingleStar(String source, int start) {
+  var index = source.indexOf('*', start);
+  while (index >= 0) {
+    final previousIsStar = index > 0 && source[index - 1] == '*';
+    final nextIsStar = index + 1 < source.length && source[index + 1] == '*';
+    if (!previousIsStar && !nextIsStar) return index;
+    index = source.indexOf('*', index + 1);
+  }
+  return -1;
+}
+
+TextAlign _proseTextAlign(TextAlign requested, String text) {
+  if (requested == TextAlign.center ||
+      requested == TextAlign.right ||
+      requested == TextAlign.end) {
+    return requested;
+  }
+  return _shouldJustifyParagraph(text) ? TextAlign.justify : TextAlign.left;
+}
+
+bool _shouldJustifyParagraph(String text) {
+  final plain = text
+      .replaceAll(RegExp(r'[`*_#>\-\s]'), '')
+      .replaceAll(RegExp(r'https?://\S+'), '');
+  if (plain.runes.length < 28) return false;
+  final latin = RegExp(r'[A-Za-z0-9/:._-]').allMatches(plain).length;
+  return latin / math.max(plain.runes.length, 1) < 0.35;
+}
+
+class _MarkdownTableBlock extends StatelessWidget {
+  const _MarkdownTableBlock({required this.state, required this.table});
+
+  final WeaviewState state;
+  final String table;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = _parseMarkdownTable(table);
+    if (rows.isEmpty) {
+      return MarkdownBody(
+        data: table,
+        selectable: true,
+        styleSheet: _aiMarkdownStyle(context, state, TextAlign.left),
+      );
+    }
+    final text = state.text(context);
+    final dark = state.isDark(context);
+    final columns = rows.fold<int>(0, (max, row) => math.max(max, row.length));
+    final headStyle = _markdownType(
+      context,
+      state,
+      13.2,
+      height: 1.42,
+      weight: FontWeight.w600,
+    );
+    final bodyStyle = _markdownType(context, state, 13, height: 1.5);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 10, 9, 12),
+      decoration: BoxDecoration(
+        color: text.withValues(alpha: dark ? 0.085 : 0.045),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: text.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.table_chart_rounded,
+                size: 16,
+                color: text.withValues(alpha: 0.56),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  '表格',
+                  style: _markdownType(
+                    context,
+                    state,
+                    11.6,
+                    weight: FontWeight.w700,
+                    opacity: 0.58,
+                  ).copyWith(letterSpacing: 1.1),
+                ),
+              ),
+              _CopyMiniButton(
+                state: state,
+                tooltip: '复制表格',
+                onTap: () => _copyText(context, table, '已复制表格。'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final minWidth = math.max(constraints.maxWidth, columns * 126.0);
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: minWidth,
+                  child: Table(
+                    border: TableBorder.all(
+                      color: text.withValues(alpha: dark ? 0.15 : 0.10),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                    children: [
+                      for (var rowIndex = 0; rowIndex < rows.length; rowIndex++)
+                        TableRow(
+                          decoration: BoxDecoration(
+                            color: rowIndex == 0
+                                ? state.accents[0].withValues(
+                                    alpha: dark ? 0.16 : 0.20,
+                                  )
+                                : text.withValues(
+                                    alpha: rowIndex.isEven ? 0.025 : 0.0,
+                                  ),
+                          ),
+                          children: [
+                            for (var column = 0; column < columns; column++)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 9,
+                                ),
+                                child: SelectableText(
+                                  column < rows[rowIndex].length
+                                      ? rows[rowIndex][column]
+                                      : '',
+                                  style: rowIndex == 0 ? headStyle : bodyStyle,
+                                ),
+                              ),
+                          ],
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+List<List<String>> _parseMarkdownTable(String table) {
+  final lines = table
+      .split('\n')
+      .map((line) => line.trim())
+      .where((line) => line.isNotEmpty)
+      .toList();
+  if (lines.length < 2) return const [];
+  final rows = <List<String>>[];
+  for (var i = 0; i < lines.length; i++) {
+    if (i == 1 &&
+        RegExp(
+          r'^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?$',
+        ).hasMatch(lines[i])) {
+      continue;
+    }
+    rows.add(_splitMarkdownTableRow(lines[i]));
+  }
+  return rows.where((row) => row.any((cell) => cell.isNotEmpty)).toList();
+}
+
+List<String> _splitMarkdownTableRow(String line) {
+  var cleaned = line.trim();
+  if (cleaned.startsWith('|')) cleaned = cleaned.substring(1);
+  if (cleaned.endsWith('|')) cleaned = cleaned.substring(0, cleaned.length - 1);
+  return cleaned
+      .split('|')
+      .map((cell) => cell.trim().replaceAll(r'\|', '|'))
+      .toList();
 }
 
 MarkdownStyleSheet _aiMarkdownStyle(
@@ -693,38 +1060,37 @@ MarkdownStyleSheet _aiMarkdownStyle(
     double height = 1.6,
     double opacity = 1,
   }) {
-    return state
-        .textStyle(
-          context,
-          size: size,
-          height: height,
-          opacity: opacity,
-          weight: weight,
-        )
-        .copyWith(fontWeight: weight);
+    return _markdownType(
+      context,
+      state,
+      size,
+      height: height,
+      opacity: opacity,
+      weight: weight,
+    );
   }
 
   return MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
     a: type(
-      13.8,
+      14.2,
       height: 1.66,
       weight: FontWeight.w600,
     ).copyWith(color: sendGreen),
-    p: type(13.8, height: 1.66),
-    pPadding: const EdgeInsets.only(bottom: 3),
-    h1: type(17.8, height: 1.32, weight: FontWeight.w700),
-    h1Padding: const EdgeInsets.only(top: 10, bottom: 5),
-    h2: type(16.2, height: 1.38, weight: FontWeight.w600),
+    p: type(14.2, height: 1.66),
+    pPadding: const EdgeInsets.only(bottom: 5),
+    h1: type(16.8, height: 1.34, weight: FontWeight.w600),
+    h1Padding: const EdgeInsets.only(top: 9, bottom: 5),
+    h2: type(15.8, height: 1.4, weight: FontWeight.w600),
     h2Padding: const EdgeInsets.only(top: 8, bottom: 4),
-    h3: type(14.9, height: 1.44, weight: FontWeight.w600),
-    h3Padding: const EdgeInsets.only(top: 8, bottom: 3),
-    h4: type(14.2, height: 1.48, weight: FontWeight.w600),
+    h3: type(15.0, height: 1.45, weight: FontWeight.w600),
+    h3Padding: const EdgeInsets.only(top: 7, bottom: 3),
+    h4: type(14.4, height: 1.5, weight: FontWeight.w600),
     h4Padding: const EdgeInsets.only(top: 6, bottom: 3),
-    h5: type(13.8, height: 1.5, weight: FontWeight.w600),
-    h6: type(13.5, height: 1.5, weight: FontWeight.w600, opacity: 0.72),
-    strong: type(13.8, height: 1.66, weight: FontWeight.w600),
-    em: type(13.8, height: 1.66).copyWith(fontStyle: FontStyle.italic),
-    blockSpacing: 10,
+    h5: type(14.0, height: 1.52, weight: FontWeight.w600),
+    h6: type(13.6, height: 1.52, weight: FontWeight.w600, opacity: 0.72),
+    strong: type(14.2, height: 1.66, weight: FontWeight.w600),
+    em: type(14.2, height: 1.66).copyWith(fontStyle: FontStyle.italic),
+    blockSpacing: 8,
     textAlign: wrapAlign,
     h1Align: wrapAlign,
     h2Align: wrapAlign,
@@ -737,7 +1103,7 @@ MarkdownStyleSheet _aiMarkdownStyle(
     orderedListAlign: wrapAlign,
     codeblockAlign: wrapAlign,
     listIndent: 18,
-    listBullet: type(13.8, height: 1.56),
+    listBullet: type(14.0, height: 1.58),
     listBulletPadding: const EdgeInsets.only(right: 6),
     code: type(13.2, height: 1.45).copyWith(
       backgroundColor: state.text(context).withValues(alpha: 0.075),
@@ -751,7 +1117,7 @@ MarkdownStyleSheet _aiMarkdownStyle(
       borderRadius: BorderRadius.circular(14),
       border: Border.all(color: text.withValues(alpha: 0.08)),
     ),
-    blockquote: type(13.6, height: 1.58, opacity: 0.82),
+    blockquote: type(13.8, height: 1.58, opacity: 0.82),
     blockquotePadding: const EdgeInsets.fromLTRB(13, 10, 13, 10),
     blockquoteDecoration: BoxDecoration(
       color: state.accents[0].withValues(alpha: dark ? 0.10 : 0.16),
@@ -788,6 +1154,31 @@ MarkdownStyleSheet _aiMarkdownStyle(
         top: BorderSide(color: text.withValues(alpha: 0.10), width: 1),
       ),
     ),
+  );
+}
+
+TextStyle _markdownType(
+  BuildContext context,
+  WeaviewState state,
+  double size, {
+  FontWeight weight = FontWeight.w400,
+  double height = 1.6,
+  double opacity = 1,
+}) {
+  return TextStyle(
+    color: state.text(context).withValues(alpha: opacity),
+    fontSize: size,
+    fontWeight: weight,
+    fontStyle: FontStyle.normal,
+    height: height,
+    fontFamily: state.fontMood == 'serif' ? 'Noto Serif SC' : 'Inter',
+    fontFamilyFallback: const [
+      'PingFang SC',
+      'Microsoft YaHei',
+      'Noto Sans CJK SC',
+      'Songti SC',
+      'serif',
+    ],
   );
 }
 
@@ -868,6 +1259,8 @@ class _CodeBlock extends StatelessWidget {
                   .textStyle(context, size: 13.2, height: 1.55)
                   .copyWith(
                     fontFamily: 'monospace',
+                    fontWeight: FontWeight.w400,
+                    fontStyle: FontStyle.normal,
                     color: text.withValues(alpha: 0.88),
                   ),
             ),
@@ -934,10 +1327,11 @@ class _FormulaBlock extends StatelessWidget {
             child: SelectableText(
               formula,
               style: state
-                  .textStyle(context, size: 16, height: 1.55)
+                  .textStyle(context, size: 14.2, height: 1.55)
                   .copyWith(
                     fontFamily: 'monospace',
-                    fontStyle: FontStyle.italic,
+                    fontStyle: FontStyle.normal,
+                    fontWeight: FontWeight.w400,
                   ),
             ),
           ),
@@ -969,11 +1363,11 @@ class _CopyMiniButton extends StatelessWidget {
           customBorder: const CircleBorder(),
           onTap: onTap,
           child: SizedBox(
-            width: 30,
-            height: 30,
+            width: 36,
+            height: 36,
             child: Icon(
               Icons.content_copy_rounded,
-              size: 15,
+              size: 15.5,
               color: state.text(context).withValues(alpha: 0.58),
             ),
           ),
