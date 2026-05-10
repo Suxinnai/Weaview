@@ -2,6 +2,24 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.13 - 2026-05-10
+
+### 中文
+
+- 生图后台恢复：应用回到前台时会恢复未完成的生图；如果生图是在后台期间失败，会自动重试一次。
+- 生图/失败通知：新增 Android 原生通知通道，并在开始生图时尽量触发通知权限请求；生图完成或失败都会发系统通知。
+- 附件进入消息：生图模式下不再丢失待上传附件；OpenAI 兼容聊天接口现在会把用户图片附件以 `image_url` 多模态 payload 传入模型。
+- 输入框上弹：输入框聚焦后会分阶段滚动到底部，空对话页的“今天，你想编织什么梦境？”也会跟随键盘上移。
+- 思维链展开跳动：展开/收起思维链时增加滚动锚定，避免直接跳到消息末尾。
+
+### English
+
+- Image-generation resume: unfinished image generation resumes when the app returns to the foreground; failures that happen while backgrounded are retried once.
+- Image success/failure notifications: added an Android native notification channel and best-effort permission request when image generation starts; completion and failure now send system notifications.
+- Attachments in messages: image generation no longer drops pending attachments; OpenAI-compatible chat requests now pass user image attachments as multimodal `image_url` payloads.
+- Keyboard lift: focusing the input scrolls to the conversation end in stages, and the empty-chat “What dream do you want to weave today?” prompt follows the keyboard upward.
+- Reasoning-chain stability: expanding/collapsing reasoning now anchors scroll position instead of jumping directly to the message end.
+
 ## 1.0.12 - 2026-05-09
 
 ### 中文

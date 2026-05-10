@@ -6,7 +6,7 @@
 
 织境提供一个可本地配置的多模型聊天环境。它不内置任何真实 API Key，所有模型服务、搜索服务和语音服务凭据都需要用户在 App 设置中显式配置。
 
-Latest stable / 最新正式版：`v1.0.12`
+Latest stable / 最新正式版：`v1.0.13`
 
 主要能力包括：
 
@@ -222,21 +222,23 @@ flutter build ios
 
 ## Latest Release Notes / 最新更新日志
 
-### v1.0.12
+### v1.0.13
 
 中文：
 
-- 优化 AI 回复 Markdown 渲染，正文不再被错误放大或整体加粗，标题、正文和强调文本层级更稳定。
-- 普通长正文支持两端对齐，提升中文长文本阅读体验。
-- 表格改为移动端友好的横向滚动卡片，并提供表格复制入口。
-- 代码块和公式块固定为常规字重，避免受全局字体加粗设置影响。
+- 生图后台恢复：应用回到前台时会恢复未完成的生图；如果生图是在后台期间失败，会自动重试一次。
+- 生图/失败通知：新增 Android 原生通知通道，并在开始生图时尽量触发通知权限请求；生图完成或失败都会发系统通知。
+- 附件进入消息：生图模式下不再丢失待上传附件；OpenAI 兼容聊天接口现在会把用户图片附件以 `image_url` 多模态 payload 传入模型。
+- 输入框上弹：输入框聚焦后会分阶段滚动到底部，空对话页的“今天，你想编织什么梦境？”也会跟随键盘上移。
+- 思维链展开跳动：展开/收起思维链时增加滚动锚定，避免直接跳到消息末尾。
 
 English:
 
-- Improved AI Markdown rendering so body text is no longer incorrectly enlarged or globally bolded, with steadier heading, body, and emphasis hierarchy.
-- Added justified alignment for long prose to improve Chinese long-form reading.
-- Rendered tables as mobile-friendly horizontally scrollable cards with table copy support.
-- Kept code and formula blocks at regular weight so global bold text settings no longer distort them.
+- Image-generation resume: unfinished image generation resumes when the app returns to the foreground; failures that happen while backgrounded are retried once.
+- Image success/failure notifications: added an Android native notification channel and best-effort permission request when image generation starts; completion and failure now send system notifications.
+- Attachments in messages: image generation no longer drops pending attachments; OpenAI-compatible chat requests now pass user image attachments as multimodal `image_url` payloads.
+- Keyboard lift: focusing the input scrolls to the conversation end in stages, and the empty-chat “What dream do you want to weave today?” prompt follows the keyboard upward.
+- Reasoning-chain stability: expanding/collapsing reasoning now anchors scroll position instead of jumping directly to the message end.
 
 ## 贡献指南
 
