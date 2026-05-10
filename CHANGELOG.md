@@ -2,6 +2,20 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.14 - 2026-05-10
+
+### 中文
+
+- 修复参考图生图没有按上传图片执行的问题：OpenAI 兼容生图在带参考图时会走 `/images/edits`，并用 multipart 把图片上传给模型。
+- Gemini 原生生图现在会把参考图作为 `inlineData` 一起传入 `generateContent`。
+- 生图成功后不再额外输出“已生成图片。”文字，只展示生成出的图片附件。
+
+### English
+
+- Fixed reference-image generation ignoring uploaded images: OpenAI-compatible image generation now uses `/images/edits` with multipart image uploads when reference images are attached.
+- Native Gemini image generation now sends reference images as `inlineData` parts in `generateContent`.
+- Successful image generations no longer append the extra “Image generated” text; only the generated image attachment is shown.
+
 ## 1.0.13 - 2026-05-10
 
 ### 中文

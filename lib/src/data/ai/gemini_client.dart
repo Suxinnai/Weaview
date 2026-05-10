@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -126,9 +127,21 @@ class GeminiClient {
     required String model,
     required String prompt,
     required Duration timeout,
+    List<MessageAttachment> attachments = const [],
     String baseUrl = '',
   }) async {
     final uri = _generateContentUri(baseUrl: baseUrl, model: model);
+    final imageParts = <Map<String, dynamic>>[];
+    for (final attachment in attachments.where((item) => item.isImage)) {
+      final file = File(attachment.path);
+      if (!await file.exists()) continue;
+      imageParts.add({
+        'inlineData': {
+          'mimeType': attachment.mimeType,
+          'data': base64Encode(await file.readAsBytes()),
+        },
+      });
+    }
     final response = await http
         .post(
           uri,
@@ -143,6 +156,7 @@ class GeminiClient {
                 'role': 'user',
                 'parts': [
                   {'text': prompt},
+                  ...imageParts,
                 ],
               },
             ],

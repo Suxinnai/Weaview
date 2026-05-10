@@ -1002,6 +1002,7 @@ ${_compactConversation(messages)}
     try {
       await _generateImageIntoCurrentResponse(
         prompt: content,
+        attachments: attachments,
         runId: runId,
         targetIndex: messages.length - 1,
       );
@@ -1041,6 +1042,9 @@ ${_compactConversation(messages)}
     if (userIndex < 0) return;
     final prompt = messages[userIndex].content.trim();
     if (prompt.isEmpty) return;
+    final attachments = messages[userIndex].attachments
+        .map((attachment) => attachment.copy())
+        .toList();
 
     suggestions = [];
     isStreaming = true;
@@ -1052,6 +1056,7 @@ ${_compactConversation(messages)}
     try {
       await _generateImageIntoCurrentResponse(
         prompt: prompt,
+        attachments: attachments,
         runId: runId,
         targetIndex: targetIndex,
       );
@@ -1067,6 +1072,7 @@ ${_compactConversation(messages)}
 
   Future<void> _generateImageIntoCurrentResponse({
     required String prompt,
+    List<MessageAttachment> attachments = const [],
     required int runId,
     int? targetIndex,
   }) async {
@@ -1098,6 +1104,7 @@ ${_compactConversation(messages)}
         provider: imageProvider!,
         assignment: imageAssignment!,
         prompt: prompt,
+        attachments: attachments,
       );
       if (runId != _streamRunId || _cancelStreamRequested) {
         final current = _imageGenerationMessage(targetIndex);
@@ -1111,7 +1118,7 @@ ${_compactConversation(messages)}
       if (current == null) return;
       final attachment = await _writeGeneratedImageAttachment(result);
       current
-        ..content = '已生成图片。'
+        ..content = ''
         ..attachments = [attachment]
         ..isThinking = false
         ..activity = '';

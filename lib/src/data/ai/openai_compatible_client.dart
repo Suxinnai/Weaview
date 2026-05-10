@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -154,26 +155,43 @@ class OpenAiCompatibleClient {
     required String apiKey,
     required String baseUrl,
     required String prompt,
+    List<MessageAttachment> attachments = const [],
     required String responseModel,
     required String imageModel,
     required Duration timeout,
     String size = '1024x1024',
   }) async {
     Object? imagesError;
+    final imageAttachments = attachments
+        .where((attachment) => attachment.isImage)
+        .toList();
     try {
-      return await _generateImageWithImagesRoute(
-        apiKey: apiKey,
-        baseUrl: baseUrl,
-        prompt: prompt,
-        imageModel: imageModel,
-        timeout: timeout,
-        size: size,
-      );
+      if (imageAttachments.isNotEmpty) {
+        return await _generateImageWithImageEditsRoute(
+          apiKey: apiKey,
+          baseUrl: baseUrl,
+          prompt: prompt,
+          imageModel: imageModel,
+          imageAttachments: imageAttachments,
+          timeout: timeout,
+          size: size,
+        );
+      } else {
+        return await _generateImageWithImagesRoute(
+          apiKey: apiKey,
+          baseUrl: baseUrl,
+          prompt: prompt,
+          imageModel: imageModel,
+          timeout: timeout,
+          size: size,
+        );
+      }
     } catch (error) {
       imagesError = error;
-      if (!shouldUseResponsesImageTool(imageModel)) {
+      if (imageAttachments.isNotEmpty ||
+          !shouldUseResponsesImageTool(imageModel)) {
         throw Exception(
-          '生图失败。/v1/images/generations：${_compactError(imagesError)}',
+          '生图失败。${imageAttachments.isNotEmpty ? '/v1/images/edits' : '/v1/images/generations'}：${_compactError(imagesError)}',
         );
       }
     }
@@ -183,6 +201,7 @@ class OpenAiCompatibleClient {
         apiKey: apiKey,
         baseUrl: baseUrl,
         prompt: prompt,
+        imageAttachments: imageAttachments,
         responseModel: responseModel,
         imageModel: imageModel,
         timeout: timeout,
@@ -201,12 +220,24 @@ class OpenAiCompatibleClient {
     required String apiKey,
     required String baseUrl,
     required String prompt,
+    required List<MessageAttachment> imageAttachments,
     required String responseModel,
     required String imageModel,
     required Duration timeout,
     required String size,
   }) async {
     final uri = Uri.parse('${_trimSlash(baseUrl)}/responses');
+    final input = imageAttachments.isEmpty
+        ? prompt
+        : [
+            {
+              'role': 'user',
+              'content': [
+                {'type': 'input_text', 'text': prompt},
+                ...await _responsesInputImages(imageAttachments),
+              ],
+            },
+          ];
     final response = await http
         .post(
           uri,
@@ -217,7 +248,7 @@ class OpenAiCompatibleClient {
           },
           body: jsonEncode({
             'model': responseModel,
-            'input': prompt,
+            'input': input,
             'tools': [
               {
                 'type': 'image_generation',
@@ -275,6 +306,77 @@ class OpenAiCompatibleClient {
       throw Exception('/v1/images/generations 未返回图片数据。');
     }
     return _imageResultFromPayload(payload, route: '/v1/images/generations');
+  }
+
+  Future<GeneratedImageResult> _generateImageWithImageEditsRoute({
+    required String apiKey,
+    required String baseUrl,
+    required String prompt,
+    required String imageModel,
+    required List<MessageAttachment> imageAttachments,
+    required Duration timeout,
+    required String size,
+  }) async {
+    final uri = Uri.parse('${_trimSlash(baseUrl)}/images/edits');
+    final request = http.MultipartRequest('POST', uri)
+      ..headers.addAll({
+        'Authorization': 'Bearer $apiKey',
+        'Accept': 'application/json',
+      })
+      ..fields.addAll({
+        'model': imageModel,
+        'prompt': prompt,
+        'size': size,
+        'output_format': 'png',
+        'response_format': 'b64_json',
+        'n': '1',
+      });
+
+    var attachedCount = 0;
+    final fieldName = imageAttachments.length == 1 ? 'image' : 'image[]';
+    for (final attachment in imageAttachments) {
+      final file = File(attachment.path);
+      if (!await file.exists()) continue;
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          fieldName,
+          await file.readAsBytes(),
+          filename: attachment.name,
+        ),
+      );
+      attachedCount += 1;
+    }
+    if (attachedCount == 0) {
+      throw Exception('没有可读取的参考图片。');
+    }
+
+    final streamed = await request.send().timeout(timeout);
+    final response = await http.Response.fromStream(streamed);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception('HTTP ${response.statusCode}: ${response.body}');
+    }
+    final payload = parseImagesGeneration(jsonDecode(response.body));
+    if (!payload.hasImage) {
+      throw Exception('/v1/images/edits 未返回图片数据。');
+    }
+    return _imageResultFromPayload(payload, route: '/v1/images/edits');
+  }
+
+  Future<List<Map<String, dynamic>>> _responsesInputImages(
+    List<MessageAttachment> imageAttachments,
+  ) async {
+    final parts = <Map<String, dynamic>>[];
+    for (final attachment in imageAttachments) {
+      final file = File(attachment.path);
+      if (!await file.exists()) continue;
+      final bytes = await file.readAsBytes();
+      parts.add({
+        'type': 'input_image',
+        'image_url':
+            'data:${attachment.mimeType};base64,${base64Encode(bytes)}',
+      });
+    }
+    return parts;
   }
 
   Future<GeneratedImageResult> _imageResultFromPayload(

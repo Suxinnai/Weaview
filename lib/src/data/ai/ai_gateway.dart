@@ -137,6 +137,7 @@ class AiGateway {
     required AiProvider provider,
     required ModelAssignment assignment,
     required String prompt,
+    List<MessageAttachment> attachments = const [],
   }) async {
     final apiKey = provider.apiKey;
     if (apiKey.isEmpty) {
@@ -153,6 +154,7 @@ class AiGateway {
         baseUrl: provider.baseUrl,
         model: configuredModel,
         prompt: guardedPrompt,
+        attachments: attachments,
         timeout: imageRequestTimeout,
       );
     }
@@ -160,6 +162,7 @@ class AiGateway {
       apiKey: apiKey,
       baseUrl: _effectiveOpenAiBaseUrl(provider),
       prompt: guardedPrompt,
+      attachments: attachments,
       responseModel: _responseModelForImageTool(configuredModel),
       imageModel: configuredModel,
       timeout: imageRequestTimeout,
