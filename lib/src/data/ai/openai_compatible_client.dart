@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import '../../core/app_utils.dart' as app_utils;
 import '../../domain/models.dart';
@@ -337,11 +338,14 @@ class OpenAiCompatibleClient {
     for (final attachment in imageAttachments) {
       final file = File(attachment.path);
       if (!await file.exists()) continue;
+      final bytes = await file.readAsBytes();
+      final mimeType = attachment.resolvedImageMimeType(headerBytes: bytes);
       request.files.add(
         http.MultipartFile.fromBytes(
           fieldName,
-          await file.readAsBytes(),
+          bytes,
           filename: attachment.name,
+          contentType: MediaType.parse(mimeType),
         ),
       );
       attachedCount += 1;
@@ -370,10 +374,10 @@ class OpenAiCompatibleClient {
       final file = File(attachment.path);
       if (!await file.exists()) continue;
       final bytes = await file.readAsBytes();
+      final mimeType = attachment.resolvedImageMimeType(headerBytes: bytes);
       parts.add({
         'type': 'input_image',
-        'image_url':
-            'data:${attachment.mimeType};base64,${base64Encode(bytes)}',
+        'image_url': 'data:$mimeType;base64,${base64Encode(bytes)}',
       });
     }
     return parts;

@@ -1,3 +1,5 @@
+import 'package:mime/mime.dart';
+
 class MessageAttachment {
   const MessageAttachment({
     required this.path,
@@ -24,7 +26,22 @@ class MessageAttachment {
   final String kind;
   final int? size;
 
-  bool get isImage => kind == 'image' || mimeType.startsWith('image/');
+  bool get isImage =>
+      kind == 'image' ||
+      mimeType.startsWith('image/') ||
+      _normalizedImageMimeType(lookupMimeType(path)) != null ||
+      _normalizedImageMimeType(lookupMimeType(name)) != null;
+
+  String resolvedImageMimeType({List<int>? headerBytes}) {
+    return _normalizedImageMimeType(mimeType) ??
+        _normalizedImageMimeType(
+          lookupMimeType(path, headerBytes: headerBytes),
+        ) ??
+        _normalizedImageMimeType(
+          lookupMimeType(name, headerBytes: headerBytes),
+        ) ??
+        'image/png';
+  }
 
   MessageAttachment copy() => MessageAttachment(
     path: path,
@@ -40,5 +57,18 @@ class MessageAttachment {
     'mimeType': mimeType,
     'kind': kind,
     'size': size,
+  };
+}
+
+String? _normalizedImageMimeType(String? value) {
+  final mime = value?.split(';').first.trim().toLowerCase();
+  if (mime == null || mime.isEmpty || !mime.startsWith('image/')) {
+    return null;
+  }
+  return switch (mime) {
+    'image/jpg' => 'image/jpeg',
+    'image/pjpeg' => 'image/jpeg',
+    'image/x-png' => 'image/png',
+    _ => mime,
   };
 }

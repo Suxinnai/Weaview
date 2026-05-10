@@ -39,7 +39,7 @@ void main() {
             MessageAttachment(
               path: image.path,
               name: 'test.png',
-              mimeType: 'image/png',
+              mimeType: 'application/octet-stream',
               kind: 'image',
               size: image.lengthSync(),
             ),

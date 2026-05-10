@@ -91,11 +91,10 @@ Future<Object> openAiMessageContent(ChatMessage message) async {
     final file = File(attachment.path);
     if (!await file.exists()) continue;
     final bytes = await file.readAsBytes();
+    final mimeType = attachment.resolvedImageMimeType(headerBytes: bytes);
     parts.add({
       'type': 'image_url',
-      'image_url': {
-        'url': 'data:${attachment.mimeType};base64,${base64Encode(bytes)}',
-      },
+      'image_url': {'url': 'data:$mimeType;base64,${base64Encode(bytes)}'},
     });
   }
   return parts.isEmpty ? messageTextWithAttachments(message) : parts;

@@ -135,10 +135,11 @@ class GeminiClient {
     for (final attachment in attachments.where((item) => item.isImage)) {
       final file = File(attachment.path);
       if (!await file.exists()) continue;
+      final bytes = await file.readAsBytes();
       imageParts.add({
         'inlineData': {
-          'mimeType': attachment.mimeType,
-          'data': base64Encode(await file.readAsBytes()),
+          'mimeType': attachment.resolvedImageMimeType(headerBytes: bytes),
+          'data': base64Encode(bytes),
         },
       });
     }

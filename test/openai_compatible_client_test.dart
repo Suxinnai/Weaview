@@ -96,7 +96,7 @@ void main() {
               MessageAttachment(
                 path: reference.path,
                 name: 'reference.png',
-                mimeType: 'image/png',
+                mimeType: 'application/octet-stream',
                 kind: 'image',
                 size: await reference.length(),
               ),
@@ -113,6 +113,10 @@ void main() {
           expect(
             multipartBody,
             contains('name="image"; filename="reference.png"'),
+          );
+          expect(
+            multipartBody?.toLowerCase(),
+            contains('content-type: image/png'),
           );
           expect(multipartBody, contains('reference-image'));
           expect(multipartBody, contains('name="prompt"'));

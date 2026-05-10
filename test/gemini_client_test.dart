@@ -56,7 +56,7 @@ void main() {
             MessageAttachment(
               path: reference.path,
               name: 'reference.png',
-              mimeType: 'image/png',
+              mimeType: 'application/octet-stream',
               kind: 'image',
               size: await reference.length(),
             ),

@@ -6,7 +6,7 @@
 
 织境提供一个可本地配置的多模型聊天环境。它不内置任何真实 API Key，所有模型服务、搜索服务和语音服务凭据都需要用户在 App 设置中显式配置。
 
-Latest stable / 最新正式版：`v1.0.14`
+Latest stable / 最新正式版：`v1.0.15`
 
 主要能力包括：
 
@@ -222,19 +222,19 @@ flutter build ios
 
 ## Latest Release Notes / 最新更新日志
 
-### v1.0.14
+### v1.0.15
 
 中文：
 
-- 修复参考图生图没有按上传图片执行的问题：OpenAI 兼容生图在带参考图时会走 `/images/edits`，并用 multipart 把图片上传给模型。
-- Gemini 原生生图现在会把参考图作为 `inlineData` 一起传入 `generateContent`。
-- 生图成功后不再额外输出“已生成图片。”文字，只展示生成出的图片附件。
+- 修复部分中转站把上传图片识别为 `application/octet-stream` 后导致参考图生图失败的问题。
+- OpenAI 兼容聊天、生图编辑和 Responses fallback 的图片 data URL 会统一兜底为真实图片 MIME。
+- `/images/edits` multipart 上传会显式声明图片 `Content-Type`，减少第三方网关拒绝参考图的情况。
 
 English:
 
-- Fixed reference-image generation ignoring uploaded images: OpenAI-compatible image generation now uses `/images/edits` with multipart image uploads when reference images are attached.
-- Native Gemini image generation now sends reference images as `inlineData` parts in `generateContent`.
-- Successful image generations no longer append the extra “Image generated” text; only the generated image attachment is shown.
+- Fixed reference-image generation failures on proxies that saved uploaded images as `application/octet-stream`.
+- OpenAI-compatible chat, image edits, and Responses fallback image data URLs now normalize to a real image MIME type.
+- `/images/edits` multipart uploads now explicitly declare image `Content-Type`, reducing reference-image rejection by third-party gateways.
 
 ## 贡献指南
 

@@ -2,6 +2,20 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.15 - 2026-05-10
+
+### 中文
+
+- 修复部分中转站把上传图片识别为 `application/octet-stream` 后导致参考图生图失败的问题。
+- OpenAI 兼容聊天、生图编辑和 Responses fallback 的图片 data URL 会统一兜底为真实图片 MIME。
+- `/images/edits` multipart 上传会显式声明图片 `Content-Type`，减少第三方网关拒绝参考图的情况。
+
+### English
+
+- Fixed reference-image generation failures on proxies that saved uploaded images as `application/octet-stream`.
+- OpenAI-compatible chat, image edits, and Responses fallback image data URLs now normalize to a real image MIME type.
+- `/images/edits` multipart uploads now explicitly declare image `Content-Type`, reducing reference-image rejection by third-party gateways.
+
 ## 1.0.14 - 2026-05-10
 
 ### 中文
