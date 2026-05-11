@@ -113,6 +113,7 @@ class _ThemeRippleState extends State<ThemeRipple>
 
 class IconCircleButton extends StatelessWidget {
   const IconCircleButton({
+    super.key,
     required this.icon,
     required this.onTap,
     required this.color,

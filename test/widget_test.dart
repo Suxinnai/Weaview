@@ -9,13 +9,14 @@ import 'package:weaview_flutter/src/core/app_utils.dart';
 import 'package:weaview_flutter/src/data/ai/ai_gateway.dart';
 import 'package:weaview_flutter/src/domain/models.dart';
 import 'package:weaview_flutter/src/features/chat/chat_home.dart';
+import 'package:weaview_flutter/src/features/chat/sections/chat_input_dock.dart';
 import 'package:weaview_flutter/src/features/chat/sections/chat_model_dropdown.dart';
 import 'package:weaview_flutter/src/features/settings/settings_sheet.dart';
 
 void main() {
   test('exposes the current stable version in app constants', () {
-    expect(appVersionTag, 'v1.0.16');
-    expect(appVersionDisplay, contains('v1.0.16'));
+    expect(appVersionTag, 'v1.0.17');
+    expect(appVersionDisplay, contains('v1.0.17'));
   });
 
   testWidgets('renders the Weaview chat shell', (WidgetTester tester) async {
@@ -405,6 +406,51 @@ $$E = mc^2$$
     expect(find.text('推理'), findsOneWidget);
 
     search.dispose();
+    state.dispose();
+  });
+
+  testWidgets('long composer text hides inline web search and shows expand', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+    final controller = TextEditingController(text: '第一行\n第二行\n第三行\n第四行继续输入');
+    final focusNode = FocusNode();
+
+    await state.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatInputDock(
+            state: state,
+            inputController: controller,
+            inputFocusNode: focusNode,
+            wave: const AlwaysStoppedAnimation<double>(0),
+            recording: false,
+            webSearchEnabled: false,
+            imageGenerationMode: false,
+            dockExpanded: false,
+            pendingAttachments: const [],
+            onToggleExpanded: () {},
+            onToggleWebSearch: () {},
+            onSubmit: () async {},
+            onToggleRecording: () async {},
+            onPickChatImages: () async {},
+            onPickChatFiles: () async {},
+            onRemoveAttachment: (_) {},
+            onTextChanged: () {},
+            onHeightChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.public_rounded), findsNothing);
+    expect(find.byIcon(Icons.open_in_full_rounded), findsOneWidget);
+
+    focusNode.dispose();
+    controller.dispose();
     state.dispose();
   });
 

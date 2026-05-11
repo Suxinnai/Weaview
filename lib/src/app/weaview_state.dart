@@ -32,6 +32,10 @@ class _PreparedImageRequest {
 }
 
 class WeaviewState extends ChangeNotifier {
+  static const MethodChannel _nativeMedia = MethodChannel(
+    'weaview/native_media',
+  );
+
   static const MethodChannel _nativeNotifications = MethodChannel(
     'weaview/native_notifications',
   );
@@ -123,7 +127,9 @@ class WeaviewState extends ChangeNotifier {
     assistantBubbleOpacity = prefs.assistantBubbleOpacity;
     userBubbleOpacity = prefs.userBubbleOpacity;
 
-    final savedSessions = prefs.loadChatSessions();
+    final savedSessions = await _migrateGeneratedImageAttachments(
+      prefs.loadChatSessions(),
+    );
     chatSessions
       ..clear()
       ..addAll(savedSessions);
@@ -1685,9 +1691,7 @@ Treat background style, font/text style, bubble style, and message alignment as 
   Future<MessageAttachment> _writeGeneratedImageAttachment(
     GeneratedImageResult result,
   ) async {
-    final directory = Directory(
-      '${Directory.systemTemp.path}${Platform.pathSeparator}weaview_generated_images',
-    );
+    final directory = await _generatedImagesDirectory();
     await directory.create(recursive: true);
     final extension = switch (result.mimeType.toLowerCase()) {
       'image/jpeg' || 'image/jpg' => 'jpg',
@@ -1705,6 +1709,117 @@ Treat background style, font/text style, bubble style, and message alignment as 
       kind: 'image',
       size: result.bytes.lengthInBytes,
     );
+  }
+
+  Future<Directory> _generatedImagesDirectory() async {
+    if (Platform.isAndroid) {
+      try {
+        final path = await _nativeMedia.invokeMethod<String>(
+          'generatedImageDirectory',
+        );
+        if (path != null && path.trim().isNotEmpty) {
+          return Directory(path.trim());
+        }
+      } catch (_) {
+        // Fall through to a desktop/test friendly persistent directory.
+      }
+    }
+
+    final home =
+        Platform.environment['APPDATA'] ??
+        Platform.environment['HOME'] ??
+        Directory.current.path;
+    return Directory(
+      [home, 'Weaview', 'generated_images'].join(Platform.pathSeparator),
+    );
+  }
+
+  Future<List<ChatSession>> _migrateGeneratedImageAttachments(
+    List<ChatSession> sessions,
+  ) async {
+    if (sessions.isEmpty) return sessions;
+    final tempRoot = Directory.systemTemp.path.replaceAll('\\', '/');
+    var changed = false;
+    Directory? targetDirectory;
+    final migratedSessions = <ChatSession>[];
+
+    for (final session in sessions) {
+      var sessionChanged = false;
+      final migratedMessages = <ChatMessage>[];
+      for (final message in session.messages) {
+        var messageChanged = false;
+        final migratedAttachments = <MessageAttachment>[];
+        for (final attachment in message.attachments) {
+          final normalizedPath = attachment.path.replaceAll('\\', '/');
+          final source = File(attachment.path);
+          final isTempGeneratedImage =
+              attachment.isImage &&
+              attachment.name.startsWith('weaview_image_') &&
+              normalizedPath.startsWith(tempRoot) &&
+              normalizedPath.contains('/weaview_generated_images/');
+          if (!isTempGeneratedImage || !await source.exists()) {
+            migratedAttachments.add(attachment);
+            continue;
+          }
+
+          targetDirectory ??= await _generatedImagesDirectory();
+          await targetDirectory.create(recursive: true);
+          final migratedName = _uniqueGeneratedImageName(
+            targetDirectory,
+            attachment.name,
+          );
+          final target = File(
+            '${targetDirectory.path}${Platform.pathSeparator}$migratedName',
+          );
+          await source.copy(target.path);
+          migratedAttachments.add(
+            MessageAttachment(
+              path: target.path,
+              name: migratedName,
+              mimeType: attachment.resolvedImageMimeType(),
+              kind: 'image',
+              size: attachment.size,
+            ),
+          );
+          changed = true;
+          messageChanged = true;
+        }
+        if (messageChanged) {
+          final next = message.copy()..attachments = migratedAttachments;
+          migratedMessages.add(next);
+          sessionChanged = true;
+        } else {
+          migratedMessages.add(message);
+        }
+      }
+      migratedSessions.add(
+        sessionChanged ? session.copyWith(messages: migratedMessages) : session,
+      );
+    }
+
+    if (changed) _prefs?.saveChatSessions(migratedSessions);
+    return migratedSessions;
+  }
+
+  String _uniqueGeneratedImageName(Directory directory, String originalName) {
+    final safeName = originalName
+        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
+        .trim();
+    final fallback =
+        'weaview_image_${DateTime.now().millisecondsSinceEpoch}.png';
+    final baseName = safeName.isEmpty ? fallback : safeName;
+    final dot = baseName.lastIndexOf('.');
+    final stem = dot > 0 ? baseName.substring(0, dot) : baseName;
+    final extension = dot > 0 ? baseName.substring(dot) : '.png';
+    var candidate = baseName;
+    var index = 1;
+    while (File(
+      '${directory.path}${Platform.pathSeparator}$candidate',
+    ).existsSync()) {
+      candidate = '${stem}_$index$extension';
+      index += 1;
+    }
+    return candidate;
   }
 
   AiProvider? _providerForAssignment(ModelAssignment assignment) {

@@ -2,6 +2,22 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.17 - 2026-05-11
+
+### 中文
+
+- 生成图片改为保存到应用私有持久目录，并会迁移仍存在的旧临时生成图，避免升级后历史图片路径失效。
+- 人物画像编辑区增高并支持更稳定的滚动编辑，减少长画像内容被截断的问题。
+- 输入框超过三行时自动隐藏行内联网按钮并显示展开编辑入口，释放正文输入宽度。
+- 多行输入框布局和玻璃悬浮输入区域细节微调。
+
+### English
+
+- Generated images are now stored in a persistent app-private directory, with migration for existing temporary generated images when the original files still exist.
+- The user-profile editor is taller and scrolls more reliably, reducing clipping for long profile text.
+- When the composer exceeds three lines, the inline web-search button is hidden and the expanded editor entry is shown to preserve text width.
+- Refined multi-line composer layout and floating glass input details.
+
 ## 1.0.16 - 2026-05-11
 
 ### 中文

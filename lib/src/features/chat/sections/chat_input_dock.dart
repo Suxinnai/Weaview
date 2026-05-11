@@ -56,9 +56,19 @@ class ChatInputDock extends StatelessWidget {
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final keyboardOpen = keyboardInset > 0;
     final hasText = inputController.text.trim().isNotEmpty;
-    final needsExpandedEditor =
-        inputController.text.characters.length > 56 ||
-        inputController.text.contains('\n');
+    final rawInput = inputController.text;
+    final explicitLineCount = rawInput.isEmpty
+        ? 1
+        : rawInput.split('\n').length;
+    final estimatedLineCount = math.max(
+      explicitLineCount,
+      (rawInput.characters.length / 18).ceil(),
+    );
+    final needsExpandedEditor = estimatedLineCount > 3;
+    final showInlineWebSearch = !needsExpandedEditor;
+    final showMicButton =
+        (inputController.text.trim().isEmpty || recording) &&
+        !state.isStreaming;
     final canSubmit = imageGenerationMode
         ? hasText
         : hasText || pendingAttachments.isNotEmpty;
@@ -115,7 +125,9 @@ class ChatInputDock extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.all(4),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: needsExpandedEditor
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.center,
               children: [
                 GestureDetector(
                   onTap: onToggleExpanded,
@@ -141,25 +153,37 @@ class ChatInputDock extends StatelessWidget {
                     ),
                   ),
                 ),
-                IconCircleButton(
-                  icon: webSearchEnabled
-                      ? Icons.travel_explore_rounded
-                      : Icons.public_rounded,
-                  onTap: onToggleWebSearch,
-                  color: webSearchEnabled ? sendGreen : state.text(context),
-                  background: webSearchEnabled
-                      ? sendGreen.withValues(alpha: 0.14)
-                      : Colors.transparent,
-                  opacity: webSearchEnabled ? 1 : 0.42,
-                  size: 38,
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 160),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeOutCubic,
+                  child: showInlineWebSearch
+                      ? IconCircleButton(
+                          key: const ValueKey('inline_web_search'),
+                          icon: webSearchEnabled
+                              ? Icons.travel_explore_rounded
+                              : Icons.public_rounded,
+                          onTap: onToggleWebSearch,
+                          color: webSearchEnabled
+                              ? sendGreen
+                              : state.text(context),
+                          background: webSearchEnabled
+                              ? sendGreen.withValues(alpha: 0.14)
+                              : Colors.transparent,
+                          opacity: webSearchEnabled ? 1 : 0.42,
+                          size: 38,
+                        )
+                      : const SizedBox(
+                          key: ValueKey('inline_web_search_hidden'),
+                        ),
                 ),
-                const SizedBox(width: 2),
+                if (showInlineWebSearch) const SizedBox(width: 2),
                 Expanded(
                   child: TextField(
                     controller: inputController,
                     focusNode: inputFocusNode,
                     minLines: 1,
-                    maxLines: 5,
+                    maxLines: needsExpandedEditor ? 4 : 5,
                     textInputAction: TextInputAction.newline,
                     style: state.textStyle(context, size: 15, height: 1.45),
                     decoration: InputDecoration(
@@ -172,8 +196,8 @@ class ChatInputDock extends StatelessWidget {
                       border: InputBorder.none,
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 8,
+                        horizontal: 9,
+                        vertical: 7,
                       ),
                     ),
                     onSubmitted: (_) => onSubmit(),
@@ -186,12 +210,11 @@ class ChatInputDock extends StatelessWidget {
                     icon: Icons.open_in_full_rounded,
                     onTap: () => _openExpandedComposer(context),
                     color: state.text(context),
-                    background: Colors.transparent,
-                    opacity: 0.42,
-                    size: 36,
+                    background: state.text(context).withValues(alpha: 0.055),
+                    opacity: 0.62,
+                    size: 38,
                   ),
-                if ((inputController.text.trim().isEmpty || recording) &&
-                    !state.isStreaming)
+                if (showMicButton)
                   IconCircleButton(
                     icon: Icons.mic_none_rounded,
                     onTap: onToggleRecording,

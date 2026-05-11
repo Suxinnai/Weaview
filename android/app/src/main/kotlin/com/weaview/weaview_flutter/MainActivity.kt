@@ -119,6 +119,7 @@ class MainActivity : FlutterActivity() {
                     call.argument<String>("mimeType") ?: "image/png",
                     result
                 )
+                "generatedImageDirectory" -> generatedImageDirectory(result)
                 else -> result.notImplemented()
             }
         }
@@ -709,6 +710,18 @@ class MainActivity : FlutterActivity() {
             }
         } catch (error: Exception) {
             result.error("SAVE_IMAGE_FAILED", error.message ?: "保存图片失败", null)
+        }
+    }
+
+    private fun generatedImageDirectory(result: MethodChannel.Result) {
+        try {
+            val directory = File(filesDir, "weaview_generated_images")
+            if (!directory.exists() && !directory.mkdirs()) {
+                throw IllegalStateException("无法创建图片缓存目录")
+            }
+            result.success(directory.absolutePath)
+        } catch (error: Exception) {
+            result.error("MEDIA_DIR_FAILED", error.message ?: "图片缓存目录不可用", null)
         }
     }
 

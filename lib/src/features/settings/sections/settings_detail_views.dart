@@ -48,6 +48,9 @@ extension SettingsDetailViews on SettingsSheetState {
 
   Widget userProfileView() {
     final state = widget.state;
+    final editorHeight = (MediaQuery.sizeOf(context).height * 0.56)
+        .clamp(360.0, 520.0)
+        .toDouble();
     return bottomActionPage(
       status: statusText,
       children: [
@@ -61,19 +64,20 @@ extension SettingsDetailViews on SettingsSheetState {
           ),
         ),
         const SizedBox(height: 16),
-        SizedBox(
-          height: MediaQuery.sizeOf(context).height * 0.42,
+        ConstrainedBox(
+          constraints: BoxConstraints(minHeight: 320, maxHeight: editorHeight),
           child: TextField(
             controller: profileController,
             expands: true,
             maxLines: null,
             minLines: null,
             textAlignVertical: TextAlignVertical.top,
-            style: state.textStyle(context, size: 14, height: 1.65),
+            scrollPhysics: const BouncingScrollPhysics(),
+            style: state.textStyle(context, size: 13.5, height: 1.6),
             decoration: inputDecoration(
               state,
               hint: '记录你的偏好、项目、沟通方式等...',
-            ).copyWith(contentPadding: const EdgeInsets.all(18)),
+            ).copyWith(contentPadding: const EdgeInsets.all(20)),
             onChanged: state.updateUserProfile,
           ),
         ),
