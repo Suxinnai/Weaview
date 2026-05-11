@@ -14,8 +14,8 @@ import 'package:weaview_flutter/src/features/settings/settings_sheet.dart';
 
 void main() {
   test('exposes the current stable version in app constants', () {
-    expect(appVersionTag, 'v1.0.15');
-    expect(appVersionDisplay, contains('v1.0.15'));
+    expect(appVersionTag, 'v1.0.16');
+    expect(appVersionDisplay, contains('v1.0.16'));
   });
 
   testWidgets('renders the Weaview chat shell', (WidgetTester tester) async {
@@ -516,6 +516,23 @@ $$E = mc^2$$
 
     expect(state.assistantName, '沐灵');
     expect(state.userProfile, contains('Flutter'));
+    state.dispose();
+  });
+
+  test('keeps user display name in the user profile context', () async {
+    SharedPreferences.setMockInitialValues({'user_name': '沐灵'});
+    final state = WeaviewState();
+
+    await state.load();
+
+    expect(state.userProfile, contains('用户称呼：沐灵'));
+
+    state.updateUserProfile('用户偏好简洁直接的回答。');
+    state.updateUserName('星野');
+
+    expect(state.userProfile, contains('用户称呼：星野'));
+    expect(state.userProfile, contains('用户偏好简洁直接的回答。'));
+    expect(state.userProfile, isNot(contains('沐灵')));
     state.dispose();
   });
 

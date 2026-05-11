@@ -138,6 +138,7 @@ class AiGateway {
     required ModelAssignment assignment,
     required String prompt,
     List<MessageAttachment> attachments = const [],
+    String size = '1024x1024',
   }) async {
     final apiKey = provider.apiKey;
     if (apiKey.isEmpty) {
@@ -166,6 +167,7 @@ class AiGateway {
       responseModel: _responseModelForImageTool(configuredModel),
       imageModel: configuredModel,
       timeout: imageRequestTimeout,
+      size: size,
     );
   }
 
@@ -184,7 +186,21 @@ class AiGateway {
     required String apiKey,
     required String baseUrl,
     required String model,
+    Iterable<String> capabilities = const [],
   }) async {
+    if (looksLikeImageGenerationModel(
+      id: model,
+      name: model,
+      capabilities: capabilities,
+    )) {
+      return _openAiClient.testImageConnection(
+        apiKey: apiKey,
+        baseUrl: baseUrl,
+        imageModel: model,
+        responseModel: _responseModelForImageTool(model),
+        timeout: imageRequestTimeout,
+      );
+    }
     return _openAiClient.testConnection(
       apiKey: apiKey,
       baseUrl: baseUrl,

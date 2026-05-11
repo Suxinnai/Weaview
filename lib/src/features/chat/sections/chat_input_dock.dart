@@ -56,6 +56,9 @@ class ChatInputDock extends StatelessWidget {
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
     final keyboardOpen = keyboardInset > 0;
     final hasText = inputController.text.trim().isNotEmpty;
+    final needsExpandedEditor =
+        inputController.text.characters.length > 56 ||
+        inputController.text.contains('\n');
     final canSubmit = imageGenerationMode
         ? hasText
         : hasText || pendingAttachments.isNotEmpty;
@@ -178,6 +181,15 @@ class ChatInputDock extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 4),
+                if (needsExpandedEditor)
+                  IconCircleButton(
+                    icon: Icons.open_in_full_rounded,
+                    onTap: () => _openExpandedComposer(context),
+                    color: state.text(context),
+                    background: Colors.transparent,
+                    opacity: 0.42,
+                    size: 36,
+                  ),
                 if ((inputController.text.trim().isEmpty || recording) &&
                     !state.isStreaming)
                   IconCircleButton(
@@ -261,6 +273,119 @@ class ChatInputDock extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _openExpandedComposer(BuildContext context) async {
+    final editor = TextEditingController(text: inputController.text);
+    try {
+      final result = await showModalBottomSheet<String>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) {
+          final bottom = MediaQuery.viewInsetsOf(context).bottom;
+          final dark = state.isDark(context);
+          return Padding(
+            padding: EdgeInsets.fromLTRB(14, 0, 14, bottom + 12),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: state
+                    .layer(context)
+                    .withValues(alpha: dark ? 0.94 : 0.98),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: state.text(context).withValues(alpha: 0.08),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: dark ? 0.30 : 0.12),
+                    blurRadius: 28,
+                    offset: const Offset(0, 16),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          '展开输入',
+                          style: state.textStyle(
+                            context,
+                            size: 15,
+                            weight: FontWeight.w700,
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: editor,
+                      autofocus: true,
+                      minLines: 6,
+                      maxLines: 12,
+                      style: state.textStyle(context, size: 16, height: 1.5),
+                      decoration: InputDecoration(
+                        hintText: '今天想编织什么？',
+                        hintStyle: state.textStyle(
+                          context,
+                          size: 16,
+                          opacity: 0.36,
+                        ),
+                        filled: true,
+                        fillColor: state.text(context).withValues(alpha: 0.045),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.all(14),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            child: const Text('取消'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () =>
+                                Navigator.of(context).pop(editor.text),
+                            child: const Text('完成'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+      if (result == null) return;
+      inputController.text = result;
+      inputController.selection = TextSelection.collapsed(
+        offset: inputController.text.length,
+      );
+      onTextChanged();
+      inputFocusNode.requestFocus();
+    } finally {
+      editor.dispose();
+    }
   }
 }
 

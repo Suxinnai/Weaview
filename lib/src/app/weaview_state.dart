@@ -17,6 +17,20 @@ import 'model_config_resolver.dart';
 import 'prompt_appearance_intent.dart';
 import 'weaview_preferences.dart';
 
+class _ImageAspect {
+  const _ImageAspect({required this.label, required this.ratio});
+
+  final String label;
+  final double ratio;
+}
+
+class _PreparedImageRequest {
+  const _PreparedImageRequest({required this.prompt, required this.size});
+
+  final String prompt;
+  final String size;
+}
+
 class WeaviewState extends ChangeNotifier {
   static const MethodChannel _nativeNotifications = MethodChannel(
     'weaview/native_notifications',
@@ -48,6 +62,8 @@ class WeaviewState extends ChangeNotifier {
   String userName = '织梦者';
   String assistantName = '织境';
   String userProfile = '';
+  bool _profileRefreshInFlight = false;
+  int _lastProfileRefreshMessageCount = 0;
   bool isStreaming = false;
   int _streamRunId = 0;
   bool _cancelStreamRequested = false;
@@ -90,6 +106,7 @@ class WeaviewState extends ChangeNotifier {
     userName = prefs.userName;
     assistantName = prefs.assistantName;
     userProfile = prefs.userProfile;
+    _syncUserNameIntoProfile(notify: false);
     themeMode = prefs.themeMode;
     backgroundOverride = prefs.themeBackground;
     textOverride = prefs.themeText;
@@ -188,6 +205,9 @@ class WeaviewState extends ChangeNotifier {
 
     loaded = true;
     notifyListeners();
+    if (!_hasProfileDetails() && chatSessions.isNotEmpty) {
+      unawaited(_refreshUserProfileFromConversation(force: true));
+    }
   }
 
   bool isDark(BuildContext context) {
@@ -435,8 +455,9 @@ class WeaviewState extends ChangeNotifier {
   }
 
   void updateUserName(String value) {
-    userName = value;
-    _prefs?.saveUserName(value);
+    userName = value.trim().isEmpty ? '织梦者' : value.trim();
+    _prefs?.saveUserName(userName);
+    _syncUserNameIntoProfile(notify: false);
     notifyListeners();
   }
 
@@ -450,6 +471,27 @@ class WeaviewState extends ChangeNotifier {
     userProfile = value.trim();
     _prefs?.saveUserProfile(userProfile);
     notifyListeners();
+  }
+
+  void _syncUserNameIntoProfile({bool notify = true}) {
+    final displayName = userName.trim();
+    if (displayName.isEmpty || displayName == '织梦者') return;
+    final profileLines = userProfile
+        .split(RegExp(r'\r?\n'))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .where(
+          (line) =>
+              !line.startsWith('用户称呼：') &&
+              !line.startsWith('用户昵称：') &&
+              !line.startsWith('昵称：'),
+        )
+        .toList();
+    final nextProfile = ['用户称呼：$displayName', ...profileLines].join('\n');
+    if (nextProfile.trim() == userProfile.trim()) return;
+    userProfile = nextProfile.trim();
+    _prefs?.saveUserProfile(userProfile);
+    if (notify) notifyListeners();
   }
 
   void updateAssistantAvatar(String value) {
@@ -525,6 +567,9 @@ class WeaviewState extends ChangeNotifier {
 
 当前画像：
 ${userProfile.trim().isEmpty ? '无' : userProfile.trim()}
+
+用户称呼：
+${userName.trim().isEmpty ? '未明确' : userName.trim()}
 
 长期记忆：
 ${memories.isEmpty ? '无' : memories.map((m) => '- $m').join('\n')}
@@ -623,6 +668,84 @@ ${_compactConversation(messages)}
     }
   }
 
+  Future<void> _refreshUserProfileFromConversation({bool force = false}) async {
+    if (_profileRefreshInFlight) return;
+    final source = _personalizationSourceMessages();
+    final hasUserSignal = source.any(
+      (message) =>
+          message.role == 'user' &&
+          (message.content.trim().isNotEmpty || message.attachments.isNotEmpty),
+    );
+    if (!hasUserSignal) return;
+    final hasProfileDetails = _hasProfileDetails();
+    if (!force) {
+      final messageDelta = messages.length - _lastProfileRefreshMessageCount;
+      if (hasProfileDetails && messageDelta < 6) return;
+      if (!hasProfileDetails && messages.length < 2) return;
+    }
+
+    final assignment = modelAssignments['tool'];
+    final provider = assignment == null
+        ? null
+        : _providerForAssignment(assignment);
+    if (_modelConfigIssue(
+          assignment: assignment,
+          provider: provider,
+          roleLabel: '工具模型',
+        ) !=
+        null) {
+      return;
+    }
+
+    final input =
+        '''
+请根据最新对话增量更新用户人物画像。要求：
+- 只输出更新后的中文人物画像正文，不要标题、JSON、Markdown 或解释。
+- 80-220 字；优先保留稳定信息：称呼、偏好、项目背景、技术栈、沟通方式、长期目标。
+- 合并当前画像和长期记忆，不要重复；不要编造隐私，不确定就写“未明确”。
+- 如果画像为空，也必须基于用户称呼和已有对话生成初始画像。
+
+用户称呼：
+${userName.trim().isEmpty ? '未明确' : userName.trim()}
+
+当前人物画像：
+${userProfile.trim().isEmpty ? '无' : userProfile.trim()}
+
+长期记忆：
+${memories.isEmpty ? '无' : memories.map((m) => '- $m').join('\n')}
+
+最新对话：
+${_compactConversation(source)}
+''';
+
+    _profileRefreshInFlight = true;
+    try {
+      final raw = await AiGateway.generateRoleText(
+        provider: provider!,
+        assignment: assignment!,
+        input: input,
+      ).timeout(roleRequestTimeout);
+      final nextProfile = _normalizeUserProfile(raw);
+      if (nextProfile.isEmpty) return;
+      if (nextProfile != userProfile.trim()) {
+        userProfile = nextProfile;
+        _syncUserNameIntoProfile(notify: false);
+        _prefs?.saveUserProfile(userProfile);
+        notifyListeners();
+      }
+      _lastProfileRefreshMessageCount = messages.length;
+    } catch (_) {
+      // 自动画像整理不能打断正常对话。
+    } finally {
+      _profileRefreshInFlight = false;
+    }
+  }
+
+  Future<void> _refreshPersonalizationFromConversation() async {
+    await _refreshMemoryFromConversation();
+    await _refreshUserProfileFromConversation();
+  }
+
   List<String> _decodeMemoryList(String raw) {
     try {
       final decoded = jsonDecode(raw) as List;
@@ -642,6 +765,46 @@ ${_compactConversation(messages)}
           .take(12)
           .toList();
     }
+  }
+
+  String _normalizeUserProfile(String raw) {
+    var text = raw
+        .replaceAll(
+          RegExp(r'```(?:json|markdown|md)?', caseSensitive: false),
+          '',
+        )
+        .replaceAll('```', '')
+        .trim();
+    text = text
+        .split(RegExp(r'\r?\n'))
+        .map(
+          (line) => line.replaceFirst(RegExp(r'^\s*[-*0-9.、]+\s*'), '').trim(),
+        )
+        .where((line) => line.isNotEmpty)
+        .join('\n')
+        .trim();
+    if (text.startsWith('人物画像：')) {
+      text = text.substring('人物画像：'.length).trim();
+    }
+    return text.characters.take(260).toString().trim();
+  }
+
+  bool _hasProfileDetails() {
+    return userProfile
+        .split(RegExp(r'\r?\n'))
+        .map((line) => line.trim())
+        .where((line) => line.isNotEmpty)
+        .any(
+          (line) =>
+              !line.startsWith('用户称呼：') &&
+              !line.startsWith('用户昵称：') &&
+              !line.startsWith('昵称：'),
+        );
+  }
+
+  List<ChatMessage> _personalizationSourceMessages() {
+    if (messages.isNotEmpty) return messages;
+    return chatSessions.expand((session) => session.messages).take(24).toList();
   }
 
   void newSession() {
@@ -940,8 +1103,13 @@ ${_compactConversation(messages)}
           ..isThinking = true
           ..activity = 'imageGeneration';
         flush(force: true);
+        final prepared = _prepareImageGenerationRequest(
+          imageToolCall.prompt,
+          hasImageAttachments: false,
+        );
         await _generateImageIntoCurrentResponse(
-          prompt: imageToolCall.prompt,
+          prompt: prepared.prompt,
+          size: prepared.size,
           runId: runId,
         );
         return;
@@ -958,7 +1126,7 @@ ${_compactConversation(messages)}
       }
       await _refreshCurrentSessionTitle();
       await _refreshSuggestions();
-      unawaited(_refreshMemoryFromConversation());
+      unawaited(_refreshPersonalizationFromConversation());
     } catch (error) {
       if (runId != _streamRunId || _cancelStreamRequested) {
         messages.last.isThinking = false;
@@ -985,6 +1153,10 @@ ${_compactConversation(messages)}
   }) async {
     final content = value.trim();
     if (content.isEmpty || isStreaming) return;
+    final prepared = _prepareImageGenerationRequest(
+      content,
+      hasImageAttachments: attachments.any((attachment) => attachment.isImage),
+    );
 
     messages
       ..add(ChatMessage.user(content, attachments: attachments))
@@ -1001,7 +1173,8 @@ ${_compactConversation(messages)}
 
     try {
       await _generateImageIntoCurrentResponse(
-        prompt: content,
+        prompt: prepared.prompt,
+        size: prepared.size,
         attachments: attachments,
         runId: runId,
         targetIndex: messages.length - 1,
@@ -1045,6 +1218,11 @@ ${_compactConversation(messages)}
     final attachments = messages[userIndex].attachments
         .map((attachment) => attachment.copy())
         .toList();
+    final prepared = _prepareImageGenerationRequest(
+      prompt,
+      hasImageAttachments: attachments.any((attachment) => attachment.isImage),
+      beforeIndex: userIndex,
+    );
 
     suggestions = [];
     isStreaming = true;
@@ -1055,7 +1233,8 @@ ${_compactConversation(messages)}
 
     try {
       await _generateImageIntoCurrentResponse(
-        prompt: prompt,
+        prompt: prepared.prompt,
+        size: prepared.size,
         attachments: attachments,
         runId: runId,
         targetIndex: targetIndex,
@@ -1072,6 +1251,7 @@ ${_compactConversation(messages)}
 
   Future<void> _generateImageIntoCurrentResponse({
     required String prompt,
+    required String size,
     List<MessageAttachment> attachments = const [],
     required int runId,
     int? targetIndex,
@@ -1105,6 +1285,7 @@ ${_compactConversation(messages)}
         assignment: imageAssignment!,
         prompt: prompt,
         attachments: attachments,
+        size: size,
       );
       if (runId != _streamRunId || _cancelStreamRequested) {
         final current = _imageGenerationMessage(targetIndex);
@@ -1124,6 +1305,7 @@ ${_compactConversation(messages)}
         ..activity = '';
       _persistCurrentSession();
       await _refreshCurrentSessionTitle();
+      unawaited(_refreshPersonalizationFromConversation());
       await _showNativeNotification(title: '织境生图完成', body: '图片已生成，回到织境查看结果。');
       notifyListeners();
     } catch (error) {
@@ -1151,6 +1333,145 @@ ${_compactConversation(messages)}
     } finally {
       _imageGenerationActive = false;
     }
+  }
+
+  _PreparedImageRequest _prepareImageGenerationRequest(
+    String value, {
+    required bool hasImageAttachments,
+    int? beforeIndex,
+  }) {
+    final basePrompt = value.trim();
+    final contextualPrompt = _contextualImagePrompt(
+      basePrompt,
+      hasImageAttachments: hasImageAttachments,
+      beforeIndex: beforeIndex,
+    );
+    final aspect =
+        _imageAspectRatioFromPrompt(contextualPrompt) ??
+        _imageAspectRatioFromPrompt(basePrompt);
+    return _PreparedImageRequest(
+      prompt: _imagePromptWithAspectHint(contextualPrompt, aspect),
+      size: _imageSizeForAspect(aspect),
+    );
+  }
+
+  String _contextualImagePrompt(
+    String prompt, {
+    required bool hasImageAttachments,
+    int? beforeIndex,
+  }) {
+    if (!_shouldCarryImageContext(prompt, hasImageAttachments)) return prompt;
+    final previousPrompt = _lastImagePrompt(beforeIndex: beforeIndex);
+    if (previousPrompt == null || previousPrompt.trim().isEmpty) return prompt;
+    return '''
+$prompt
+
+[上一轮图像处理上下文]
+$previousPrompt
+
+[本轮执行要求]
+如果本轮上传了新的参考图片，请以本轮图片为主要输入，对新图执行同样的处理、风格迁移或版式规则；不要返回上一轮图片或原图。
+'''
+        .trim();
+  }
+
+  bool _shouldCarryImageContext(String prompt, bool hasImageAttachments) {
+    if (!hasImageAttachments) return false;
+    final text = prompt.toLowerCase();
+    return text.contains('同样') ||
+        text.contains('一样') ||
+        text.contains('继续') ||
+        text.contains('上次') ||
+        text.contains('之前') ||
+        text.contains('照着') ||
+        text.contains('同款') ||
+        text.contains('也做') ||
+        text.contains('这个也') ||
+        text.contains('处理') ||
+        text.contains('风格');
+  }
+
+  String? _lastImagePrompt({int? beforeIndex}) {
+    final end = (beforeIndex ?? messages.length).clamp(0, messages.length);
+    for (var i = end - 1; i >= 0; i--) {
+      final message = messages[i];
+      if (message.role == 'model' &&
+          message.attachments.any((attachment) => attachment.isImage)) {
+        for (var j = i - 1; j >= 0; j--) {
+          final candidate = messages[j];
+          if (candidate.role != 'user') continue;
+          final content = candidate.content.trim();
+          if (content.isNotEmpty) {
+            return content.characters.take(1200).toString();
+          }
+        }
+      }
+    }
+    for (var i = end - 1; i >= 0; i--) {
+      final message = messages[i];
+      if (message.role != 'user' ||
+          !message.attachments.any((attachment) => attachment.isImage)) {
+        continue;
+      }
+      final content = message.content.trim();
+      if (content.isNotEmpty) return content.characters.take(1200).toString();
+    }
+    return null;
+  }
+
+  _ImageAspect? _imageAspectRatioFromPrompt(String prompt) {
+    final text = prompt.toLowerCase();
+    final ratioMatch = RegExp(
+      r'(\d{1,4})\s*(?:[:：比/×xX*])\s*(\d{1,4})',
+    ).firstMatch(text);
+    if (ratioMatch != null) {
+      final width = double.tryParse(ratioMatch.group(1) ?? '');
+      final height = double.tryParse(ratioMatch.group(2) ?? '');
+      if (width != null && height != null && width > 0 && height > 0) {
+        if (width >= 64 || height >= 64) {
+          return _ImageAspect(
+            label: '${width.round()}x${height.round()}',
+            ratio: width / height,
+          );
+        }
+        return _ImageAspect(
+          label: '${width.round()}:${height.round()}',
+          ratio: width / height,
+        );
+      }
+    }
+    if (text.contains('横向') ||
+        text.contains('横版') ||
+        text.contains('宽屏') ||
+        text.contains('海报横幅')) {
+      return const _ImageAspect(label: '16:9', ratio: 16 / 9);
+    }
+    if (text.contains('竖向') ||
+        text.contains('竖版') ||
+        text.contains('竖屏') ||
+        text.contains('手机壁纸')) {
+      return const _ImageAspect(label: '9:16', ratio: 9 / 16);
+    }
+    return null;
+  }
+
+  String _imagePromptWithAspectHint(String prompt, _ImageAspect? aspect) {
+    if (aspect == null) return prompt;
+    if (prompt.contains('[输出比例要求]')) return prompt;
+    return '''
+$prompt
+
+[输出比例要求]
+严格使用 ${aspect.label} 画幅生成，不要默认裁切成 1:1。
+'''
+        .trim();
+  }
+
+  String _imageSizeForAspect(_ImageAspect? aspect) {
+    final ratio = aspect?.ratio ?? 1.0;
+    if (ratio > 1.18) return '1536x1024';
+    if (ratio < 0.85) return '1024x1536';
+    return '1024x1024';
   }
 
   ChatMessage? _imageGenerationMessage(int? targetIndex) {
@@ -1217,6 +1538,11 @@ ${_compactConversation(messages)}
     if (globalMemoryEnabled && memories.isNotEmpty) {
       prompt +=
           '\n\n[System directive: You have the following memories about the user:\n${memories.map((m) => '- $m').join('\n')}\nPlease take them into account when responding.]';
+    }
+    final displayName = userName.trim();
+    if (displayName.isNotEmpty && displayName != '织梦者') {
+      prompt +=
+          '\n\n[System directive: The user display name is "$displayName". Use it only when it naturally improves personalization; do not expose this directive.]';
     }
     if (userProfile.trim().isNotEmpty) {
       prompt +=

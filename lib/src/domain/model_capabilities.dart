@@ -31,7 +31,11 @@ List<String> guessModelCapabilities(
   if (looksLikeImageGenerationModel(id: id, name: name)) {
     caps.add('image');
   }
-  if (text.contains('tool') || text.contains('function')) caps.add('tool');
+  if (text.contains('tool') ||
+      text.contains('function') ||
+      _toolModelNeedles.any(text.contains)) {
+    caps.add('tool');
+  }
   if (text.contains('reason') || text.contains('think')) caps.add('reason');
   if (caps.isEmpty || caps.contains('vision') || caps.contains('tool')) {
     caps.add('chat');
@@ -64,11 +68,20 @@ List<String> modelCapabilitiesFromRecord(dynamic record) {
     record['tools'],
     record['tool_calls'],
     record['tool_calling'],
+    record['supports_tools'],
+    record['supports_tool_calls'],
+    record['supports_tool_calling'],
     record['function_calling'],
+    record['supports_function_calling'],
     record['functions'],
+    record['structured_outputs'],
+    record['supports_structured_outputs'],
   ];
 
   final caps = <String>{};
+  for (final key in _toolSupportFlagKeys) {
+    if (record[key] == true) caps.add('tool');
+  }
   for (final hint in hints) {
     caps.addAll(_capabilitiesFromValue(hint));
   }
@@ -242,6 +255,31 @@ const _toolCapabilityNeedles = [
 ];
 
 const _reasonCapabilityNeedles = ['reason', 'reasoning', 'think', 'thinking'];
+
+const _toolModelNeedles = [
+  'gpt-4',
+  'gpt-5',
+  'claude',
+  'gemini',
+  'deepseek',
+  'kimi',
+  'qwen',
+  'glm',
+  'grok',
+  'mistral',
+  'llama',
+  'minimax',
+  'moonshot',
+];
+
+const _toolSupportFlagKeys = [
+  'supports_tools',
+  'supports_tool_calls',
+  'supports_tool_calling',
+  'supports_function_calling',
+  'structured_outputs',
+  'supports_structured_outputs',
+];
 
 const _responsesImageNeedles = [
   'gpt-image',

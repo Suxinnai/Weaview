@@ -484,11 +484,32 @@ class OpenAiCompatibleClient {
     return '连接成功，模型响应正常：${answer.trim().isEmpty ? 'OK' : answer.trim()}（${elapsed}ms）';
   }
 
+  Future<String> testImageConnection({
+    required String apiKey,
+    required String baseUrl,
+    required String imageModel,
+    required String responseModel,
+    required Duration timeout,
+  }) async {
+    final start = DateTime.now();
+    final result = await generateImage(
+      apiKey: apiKey,
+      baseUrl: baseUrl,
+      prompt: 'Generate a tiny clean app test image: one mint dot on white.',
+      imageModel: imageModel,
+      responseModel: responseModel,
+      timeout: timeout,
+      size: '1024x1024',
+    );
+    final elapsed = DateTime.now().difference(start).inMilliseconds;
+    return '连接成功，生图接口响应正常：${result.route}（${elapsed}ms）';
+  }
+
   static String _trimSlash(String value) => app_utils.normalizeBaseUrl(value);
 
   static String _compactError(Object? error) {
     if (error == null) return '未返回具体错误';
     final text = error.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
-    return text.length > 360 ? '${text.substring(0, 360)}...' : text;
+    return text.length > 1200 ? '${text.substring(0, 1200)}...' : text;
   }
 }

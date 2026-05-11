@@ -1,5 +1,6 @@
 // ignore_for_file: use_key_in_widget_constructors
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -517,10 +518,28 @@ class SettingsSheetState extends State<SettingsSheet> {
             ? 'https://api.openai.com/v1'
             : providerBaseUrl.trim(),
         model: model.id,
+        capabilities: model.capabilities,
       );
       setState(() => statusText = message);
     } catch (error) {
-      setState(() => statusText = '连接失败：$error');
+      final message = '连接失败：$error';
+      setState(() => statusText = message);
+      if (!mounted) return;
+      unawaited(
+        showDialog<void>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('连接测试失败'),
+            content: SingleChildScrollView(child: SelectableText(message)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('关闭'),
+              ),
+            ],
+          ),
+        ),
+      );
     }
   }
 
@@ -726,7 +745,7 @@ ${feedbackContactController.text.trim().isEmpty ? '未填写' : feedbackContactC
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: Text(current ? '当前已是最新预览版' : '发现新版本'),
+          title: Text(current ? '当前已是最新版本' : '发现新版本'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,

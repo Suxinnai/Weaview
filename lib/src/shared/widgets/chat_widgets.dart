@@ -1,6 +1,7 @@
 // ignore_for_file: use_key_in_widget_constructors
 
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -342,70 +343,63 @@ class _AttachmentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (attachment.isImage) {
+      return _ImageAttachmentTile(
+        state: state,
+        attachment: attachment,
+        imageExtent: imageExtent,
+        animateImages: animateImages,
+      );
+    }
+
     final card = Container(
-      width: attachment.isImage ? imageExtent : 190,
-      height: attachment.isImage ? imageExtent : 54,
+      width: 190,
+      height: 54,
       decoration: BoxDecoration(
         color: state.text(context).withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(attachment.isImage ? 22 : 16),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: state.text(context).withValues(alpha: 0.07)),
       ),
       clipBehavior: Clip.antiAlias,
-      child: attachment.isImage
-          ? _AttachmentVisual(attachment: attachment, animate: animateImages)
-          : Row(
+      child: Row(
+        children: [
+          const SizedBox(width: 12),
+          Icon(
+            Icons.description_outlined,
+            size: 22,
+            color: state.text(context).withValues(alpha: 0.56),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const SizedBox(width: 12),
-                Icon(
-                  Icons.description_outlined,
-                  size: 22,
-                  color: state.text(context).withValues(alpha: 0.56),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        attachment.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: state.textStyle(
-                          context,
-                          size: 12,
-                          weight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        formatBytes(attachment.size ?? 0),
-                        style: state.textStyle(
-                          context,
-                          size: 10,
-                          opacity: 0.45,
-                        ),
-                      ),
-                    ],
+                Text(
+                  attachment.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: state.textStyle(
+                    context,
+                    size: 12,
+                    weight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(width: 10),
+                Text(
+                  formatBytes(attachment.size ?? 0),
+                  style: state.textStyle(context, size: 10, opacity: 0.45),
+                ),
               ],
             ),
+          ),
+          const SizedBox(width: 10),
+        ],
+      ),
     );
 
     return Stack(
       children: [
-        attachment.isImage
-            ? Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(22),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(22),
-                  onTap: () => _openImagePreview(context, state, attachment),
-                  child: card,
-                ),
-              )
-            : card,
+        card,
         if (onDownload != null && !attachment.isImage)
           Positioned(
             right: 6,
@@ -430,6 +424,68 @@ class _AttachmentTile extends StatelessWidget {
       ],
     );
   }
+}
+
+class _ImageAttachmentTile extends StatelessWidget {
+  const _ImageAttachmentTile({
+    required this.state,
+    required this.attachment,
+    required this.imageExtent,
+    required this.animateImages,
+  });
+
+  final WeaviewState state;
+  final MessageAttachment attachment;
+  final double imageExtent;
+  final bool animateImages;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Size>(
+      future: _readImageSize(attachment.path),
+      builder: (context, snapshot) {
+        final ratio = snapshot.data == null
+            ? 1.0
+            : (snapshot.data!.width / snapshot.data!.height).clamp(0.62, 1.7);
+        final height = imageExtent;
+        final width = height * ratio;
+        final radius = BorderRadius.circular(22);
+        final card = Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            color: state.text(context).withValues(alpha: 0.06),
+            borderRadius: radius,
+            border: Border.all(
+              color: state.text(context).withValues(alpha: 0.07),
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: _AttachmentVisual(
+            attachment: attachment,
+            animate: animateImages,
+          ),
+        );
+        return Material(
+          color: Colors.transparent,
+          borderRadius: radius,
+          child: InkWell(
+            borderRadius: radius,
+            onTap: () => _openImagePreview(context, state, attachment),
+            child: card,
+          ),
+        );
+      },
+    );
+  }
+}
+
+Future<Size> _readImageSize(String path) async {
+  final bytes = await File(path).readAsBytes();
+  final codec = await ui.instantiateImageCodec(bytes);
+  final frame = await codec.getNextFrame();
+  final image = frame.image;
+  return Size(image.width.toDouble(), image.height.toDouble());
 }
 
 void _openImagePreview(

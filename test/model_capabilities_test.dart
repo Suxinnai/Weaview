@@ -93,6 +93,17 @@ void main() {
       expect(capabilities, containsAll(['chat', 'tool']));
     });
 
+    test('infers tool capability from common model ids and support flags', () {
+      expect(guessModelCapabilities('gpt-5.5'), containsAll(['chat', 'tool']));
+      expect(
+        modelCapabilitiesFromRecord({
+          'id': 'provider/custom-model',
+          'supports_tool_calling': true,
+        }),
+        containsAll(['chat', 'tool']),
+      );
+    });
+
     test('does not treat image input alone as image generation', () {
       final capabilities = modelCapabilitiesFromRecord({
         'id': 'provider/vision-chat',

@@ -2,6 +2,28 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.16 - 2026-05-11
+
+### 中文
+
+- 生图连续编辑现在会带入上一轮图像处理上下文，适配“同样处理”“继续处理”等多轮图片任务。
+- 生图会从提示词中识别 `4:3`、`16:9`、竖屏/横屏等比例，并同步到接口尺寸与提示词约束。
+- 图片缩略图按真实宽高比展示，避免横图或竖图在聊天中被裁成正方形。
+- 生图模型连接测试改为走生图接口，并保留更完整的错误详情。
+- 长文本输入支持展开编辑面板，多行输入排版更稳定。
+- 自动人物画像会随对话和用户昵称变化更新，工具模型配置后不再长期保持空白。
+- 更新 Android 应用图标与关于页版本文案。
+
+### English
+
+- Image editing now carries forward the previous image-generation context for follow-up prompts such as “same treatment” or “continue”.
+- Image generation detects ratios such as `4:3`, `16:9`, landscape, and portrait, then applies matching request sizes and prompt constraints.
+- Image thumbnails now preserve their real aspect ratio instead of visually cropping every result into a square.
+- Image model connection tests now use the image-generation endpoint and keep fuller error details.
+- Added an expanded composer for long multi-line prompts.
+- User profile memory now refreshes from conversations and nickname changes when a tool model is configured.
+- Updated the Android app icon and about-page version wording.
+
 ## 1.0.15 - 2026-05-10
 
 ### 中文
