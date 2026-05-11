@@ -12,8 +12,8 @@ const accentMint = Color(0xFFB5EAEA);
 const accentGreen = Color(0xFFE2F0CB);
 const sendGreen = Color(0xFF10B981);
 
-const appVersionDisplay = 'Weaview v1.0.17';
-const appVersionTag = 'v1.0.17';
+const appVersionDisplay = 'Weaview v1.0.18';
+const appVersionTag = 'v1.0.18';
 const githubReleasesUrl = 'https://github.com/Suxinnai/Weaview/releases';
 const githubReleasesApiUrl =
     'https://api.github.com/repos/Suxinnai/Weaview/releases';

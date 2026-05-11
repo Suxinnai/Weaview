@@ -2,6 +2,20 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.18 - 2026-05-12
+
+### 中文
+
+- 生图请求新增一次有边界的瞬时失败重试，覆盖 500/502/503/504、中转站 upstream 错误和连接中断等偶发失败。
+- 生图接口返回 URL 时，结果图片下载阶段会独立超时与重试，下载失败不会重新触发一次生图。
+- 补充生图请求重试和结果图片下载重试的回归测试，降低“模型测试正常但实际生图偶发失败”的概率。
+
+### English
+
+- Added one bounded transient retry for image-generation requests, covering 500/502/503/504, upstream gateway errors, and dropped connections.
+- Image result URL downloads now use an isolated timeout and retry, so download failures do not trigger another image generation.
+- Added regression tests for image request retry and generated-image URL retry, reducing intermittent failures when model tests pass but real generation occasionally fails.
+
 ## 1.0.17 - 2026-05-11
 
 ### 中文

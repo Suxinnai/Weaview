@@ -227,49 +227,57 @@ class OpenAiCompatibleClient {
     required Duration timeout,
     required String size,
   }) async {
-    final uri = Uri.parse('${_trimSlash(baseUrl)}/responses');
-    final input = imageAttachments.isEmpty
-        ? prompt
-        : [
-            {
-              'role': 'user',
-              'content': [
-                {'type': 'input_text', 'text': prompt},
-                ...await _responsesInputImages(imageAttachments),
-              ],
-            },
-          ];
-    final response = await http
-        .post(
-          uri,
-          headers: {
-            'Authorization': 'Bearer $apiKey',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: jsonEncode({
-            'model': responseModel,
-            'input': input,
-            'tools': [
+    final payload = await _withTransientImageRetry(() async {
+      final uri = Uri.parse('${_trimSlash(baseUrl)}/responses');
+      final input = imageAttachments.isEmpty
+          ? prompt
+          : [
               {
-                'type': 'image_generation',
-                'model': imageModel,
-                'size': size,
-                'output_format': 'png',
+                'role': 'user',
+                'content': [
+                  {'type': 'input_text', 'text': prompt},
+                  ...await _responsesInputImages(imageAttachments),
+                ],
               },
-            ],
-            'tool_choice': {'type': 'image_generation'},
-          }),
-        )
-        .timeout(timeout);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('HTTP ${response.statusCode}: ${response.body}');
-    }
-    final payload = parseResponsesImageGeneration(jsonDecode(response.body));
-    if (!payload.hasImage) {
-      throw Exception('Responses API 未返回 image_generation_call 结果。');
-    }
-    return _imageResultFromPayload(payload, route: '/v1/responses');
+            ];
+      final response = await http
+          .post(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $apiKey',
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'model': responseModel,
+              'input': input,
+              'tools': [
+                {
+                  'type': 'image_generation',
+                  'model': imageModel,
+                  'size': size,
+                  'output_format': 'png',
+                },
+              ],
+              'tool_choice': {'type': 'image_generation'},
+            }),
+          )
+          .timeout(timeout);
+      _throwIfRetryableImageStatus(response);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+      final payload = parseResponsesImageGeneration(jsonDecode(response.body));
+      if (!payload.hasImage) {
+        throw Exception('Responses API 未返回 image_generation_call 结果。');
+      }
+      return payload;
+    });
+    return _imageResultFromPayload(
+      payload,
+      route: '/v1/responses',
+      timeout: timeout,
+    );
   }
 
   Future<GeneratedImageResult> _generateImageWithImagesRoute({
@@ -280,33 +288,41 @@ class OpenAiCompatibleClient {
     required Duration timeout,
     required String size,
   }) async {
-    final uri = Uri.parse('${_trimSlash(baseUrl)}/images/generations');
-    final response = await http
-        .post(
-          uri,
-          headers: {
-            'Authorization': 'Bearer $apiKey',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-          },
-          body: jsonEncode({
-            'model': imageModel,
-            'prompt': prompt,
-            'size': size,
-            'output_format': 'png',
-            'response_format': 'b64_json',
-            'n': 1,
-          }),
-        )
-        .timeout(timeout);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('HTTP ${response.statusCode}: ${response.body}');
-    }
-    final payload = parseImagesGeneration(jsonDecode(response.body));
-    if (!payload.hasImage) {
-      throw Exception('/v1/images/generations 未返回图片数据。');
-    }
-    return _imageResultFromPayload(payload, route: '/v1/images/generations');
+    final payload = await _withTransientImageRetry(() async {
+      final uri = Uri.parse('${_trimSlash(baseUrl)}/images/generations');
+      final response = await http
+          .post(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $apiKey',
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              'model': imageModel,
+              'prompt': prompt,
+              'size': size,
+              'output_format': 'png',
+              'response_format': 'b64_json',
+              'n': 1,
+            }),
+          )
+          .timeout(timeout);
+      _throwIfRetryableImageStatus(response);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+      final payload = parseImagesGeneration(jsonDecode(response.body));
+      if (!payload.hasImage) {
+        throw Exception('/v1/images/generations 未返回图片数据。');
+      }
+      return payload;
+    });
+    return _imageResultFromPayload(
+      payload,
+      route: '/v1/images/generations',
+      timeout: timeout,
+    );
   }
 
   Future<GeneratedImageResult> _generateImageWithImageEditsRoute({
@@ -318,52 +334,62 @@ class OpenAiCompatibleClient {
     required Duration timeout,
     required String size,
   }) async {
-    final uri = Uri.parse('${_trimSlash(baseUrl)}/images/edits');
-    final request = http.MultipartRequest('POST', uri)
-      ..headers.addAll({
-        'Authorization': 'Bearer $apiKey',
-        'Accept': 'application/json',
-      })
-      ..fields.addAll({
-        'model': imageModel,
-        'prompt': prompt,
-        'size': size,
-        'output_format': 'png',
-        'response_format': 'b64_json',
-        'n': '1',
-      });
+    final payload = await _withTransientImageRetry(() async {
+      final uri = Uri.parse('${_trimSlash(baseUrl)}/images/edits');
+      final request = http.MultipartRequest('POST', uri)
+        ..headers.addAll({
+          'Authorization': 'Bearer $apiKey',
+          'Accept': 'application/json',
+        })
+        ..fields.addAll({
+          'model': imageModel,
+          'prompt': prompt,
+          'size': size,
+          'output_format': 'png',
+          'response_format': 'b64_json',
+          'n': '1',
+        });
 
-    var attachedCount = 0;
-    final fieldName = imageAttachments.length == 1 ? 'image' : 'image[]';
-    for (final attachment in imageAttachments) {
-      final file = File(attachment.path);
-      if (!await file.exists()) continue;
-      final bytes = await file.readAsBytes();
-      final mimeType = attachment.resolvedImageMimeType(headerBytes: bytes);
-      request.files.add(
-        http.MultipartFile.fromBytes(
-          fieldName,
-          bytes,
-          filename: attachment.name,
-          contentType: MediaType.parse(mimeType),
-        ),
-      );
-      attachedCount += 1;
-    }
-    if (attachedCount == 0) {
-      throw Exception('没有可读取的参考图片。');
-    }
+      var attachedCount = 0;
+      final fieldName = imageAttachments.length == 1 ? 'image' : 'image[]';
+      for (final attachment in imageAttachments) {
+        final file = File(attachment.path);
+        if (!await file.exists()) continue;
+        final bytes = await file.readAsBytes();
+        final mimeType = attachment.resolvedImageMimeType(headerBytes: bytes);
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            fieldName,
+            bytes,
+            filename: attachment.name,
+            contentType: MediaType.parse(mimeType),
+          ),
+        );
+        attachedCount += 1;
+      }
+      if (attachedCount == 0) {
+        throw Exception('没有可读取的参考图片。');
+      }
 
-    final streamed = await request.send().timeout(timeout);
-    final response = await http.Response.fromStream(streamed);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('HTTP ${response.statusCode}: ${response.body}');
-    }
-    final payload = parseImagesGeneration(jsonDecode(response.body));
-    if (!payload.hasImage) {
-      throw Exception('/v1/images/edits 未返回图片数据。');
-    }
-    return _imageResultFromPayload(payload, route: '/v1/images/edits');
+      final streamed = await request.send().timeout(timeout);
+      final response = await http.Response.fromStream(
+        streamed,
+      ).timeout(timeout);
+      _throwIfRetryableImageStatus(response);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+      final payload = parseImagesGeneration(jsonDecode(response.body));
+      if (!payload.hasImage) {
+        throw Exception('/v1/images/edits 未返回图片数据。');
+      }
+      return payload;
+    });
+    return _imageResultFromPayload(
+      payload,
+      route: '/v1/images/edits',
+      timeout: timeout,
+    );
   }
 
   Future<List<Map<String, dynamic>>> _responsesInputImages(
@@ -386,6 +412,7 @@ class OpenAiCompatibleClient {
   Future<GeneratedImageResult> _imageResultFromPayload(
     ParsedImageGenerationResult payload, {
     required String route,
+    required Duration timeout,
   }) async {
     final base64Data = payload.base64Data;
     if (base64Data != null && base64Data.trim().isNotEmpty) {
@@ -402,7 +429,11 @@ class OpenAiCompatibleClient {
     if (url == null || url.trim().isEmpty) {
       throw Exception('图片结果为空。');
     }
-    final response = await http.get(Uri.parse(url));
+    final response = await _withTransientImageRetry(() async {
+      final response = await http.get(Uri.parse(url)).timeout(timeout);
+      _throwIfRetryableImageStatus(response);
+      return response;
+    }, retryTimeouts: true);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception('下载图片失败：HTTP ${response.statusCode}');
     }
@@ -507,9 +538,74 @@ class OpenAiCompatibleClient {
 
   static String _trimSlash(String value) => app_utils.normalizeBaseUrl(value);
 
+  static Future<T> _withTransientImageRetry<T>(
+    Future<T> Function() operation, {
+    bool retryTimeouts = false,
+  }) async {
+    Object? lastError;
+    for (var attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error;
+        if (attempt == 1 ||
+            !_isTransientImageError(error, retryTimeouts: retryTimeouts)) {
+          rethrow;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 650));
+      }
+    }
+    throw lastError ?? Exception('生图请求失败。');
+  }
+
+  static void _throwIfRetryableImageStatus(http.Response response) {
+    if (response.statusCode == 500 ||
+        response.statusCode == 502 ||
+        response.statusCode == 503 ||
+        response.statusCode == 504) {
+      throw _RetryableImageException(
+        'HTTP ${response.statusCode}: ${response.body}',
+      );
+    }
+  }
+
+  static bool _isTransientImageError(
+    Object error, {
+    required bool retryTimeouts,
+  }) {
+    if (error is _RetryableImageException ||
+        error is SocketException ||
+        error is HandshakeException ||
+        error is HttpException ||
+        error is http.ClientException) {
+      return true;
+    }
+    if (retryTimeouts && error is TimeoutException) return true;
+    final text = error.toString().toLowerCase();
+    return text.contains('connection closed') ||
+        text.contains('connection reset') ||
+        text.contains('failed host lookup') ||
+        text.contains('network is unreachable') ||
+        text.contains('temporarily unavailable') ||
+        text.contains('upstream_error') ||
+        text.contains('http 500') ||
+        text.contains('http 502') ||
+        text.contains('http 503') ||
+        text.contains('http 504');
+  }
+
   static String _compactError(Object? error) {
     if (error == null) return '未返回具体错误';
     final text = error.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
     return text.length > 1200 ? '${text.substring(0, 1200)}...' : text;
   }
+}
+
+class _RetryableImageException implements Exception {
+  const _RetryableImageException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }

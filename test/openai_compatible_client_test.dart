@@ -59,6 +59,122 @@ void main() {
       },
     );
 
+    test('retries transient image generation gateway failures once', () async {
+      var generationAttempts = 0;
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final serving = server.listen((request) async {
+        if (request.uri.path == '/v1/images/generations') {
+          generationAttempts += 1;
+          await utf8.decoder.bind(request).join();
+          if (generationAttempts == 1) {
+            request.response
+              ..statusCode = 503
+              ..headers.contentType = ContentType.json
+              ..write('{"error":{"message":"temporary upstream error"}}');
+          } else {
+            request.response
+              ..statusCode = 200
+              ..headers.contentType = ContentType.json
+              ..write(
+                jsonEncode({
+                  'data': [
+                    {'b64_json': 'cmV0cmllZC1pbWFnZQ=='},
+                  ],
+                }),
+              );
+          }
+          await request.response.close();
+          return;
+        }
+        request.response
+          ..statusCode = 404
+          ..write('unexpected route');
+        await request.response.close();
+      });
+
+      try {
+        final result = await const OpenAiCompatibleClient().generateImage(
+          apiKey: 'test-key',
+          baseUrl: 'http://127.0.0.1:${server.port}/v1',
+          prompt: 'a retry test image',
+          responseModel: 'gpt-5.5',
+          imageModel: 'gpt-image-2',
+          timeout: const Duration(seconds: 5),
+        );
+
+        expect(result.bytes, utf8.encode('retried-image'));
+        expect(generationAttempts, 2);
+      } finally {
+        await serving.cancel();
+        await server.close(force: true);
+      }
+    });
+
+    test(
+      'retries transient generated image URL downloads without regenerating',
+      () async {
+        var generationAttempts = 0;
+        var downloadAttempts = 0;
+        late final HttpServer server;
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        final serving = server.listen((request) async {
+          if (request.uri.path == '/v1/images/generations') {
+            generationAttempts += 1;
+            await utf8.decoder.bind(request).join();
+            request.response
+              ..statusCode = 200
+              ..headers.contentType = ContentType.json
+              ..write(
+                jsonEncode({
+                  'data': [
+                    {'url': 'http://127.0.0.1:${server.port}/generated.png'},
+                  ],
+                }),
+              );
+            await request.response.close();
+            return;
+          }
+          if (request.uri.path == '/generated.png') {
+            downloadAttempts += 1;
+            if (downloadAttempts == 1) {
+              request.response
+                ..statusCode = 502
+                ..write('bad gateway');
+            } else {
+              request.response
+                ..statusCode = 200
+                ..headers.contentType = ContentType('image', 'png')
+                ..add(utf8.encode('downloaded-image'));
+            }
+            await request.response.close();
+            return;
+          }
+          request.response
+            ..statusCode = 404
+            ..write('unexpected route');
+          await request.response.close();
+        });
+
+        try {
+          final result = await const OpenAiCompatibleClient().generateImage(
+            apiKey: 'test-key',
+            baseUrl: 'http://127.0.0.1:${server.port}/v1',
+            prompt: 'a url retry test image',
+            responseModel: 'gpt-5.5',
+            imageModel: 'gpt-image-2',
+            timeout: const Duration(seconds: 5),
+          );
+
+          expect(result.bytes, utf8.encode('downloaded-image'));
+          expect(generationAttempts, 1);
+          expect(downloadAttempts, 2);
+        } finally {
+          await serving.cancel();
+          await server.close(force: true);
+        }
+      },
+    );
+
     test(
       'uses /images/edits with multipart images for reference images',
       () async {
