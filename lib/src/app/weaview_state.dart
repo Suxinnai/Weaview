@@ -1159,13 +1159,19 @@ ${_compactConversation(source)}
   }) async {
     final content = value.trim();
     if (content.isEmpty || isStreaming) return;
+    final requestAttachments = _contextualImageAttachments(
+      content,
+      attachments,
+    );
     final prepared = _prepareImageGenerationRequest(
       content,
-      hasImageAttachments: attachments.any((attachment) => attachment.isImage),
+      hasImageAttachments: requestAttachments.any(
+        (attachment) => attachment.isImage,
+      ),
     );
 
     messages
-      ..add(ChatMessage.user(content, attachments: attachments))
+      ..add(ChatMessage.user(content, attachments: requestAttachments))
       ..add(
         ChatMessage.model('', isThinking: true, activity: 'imageGeneration'),
       );
@@ -1181,7 +1187,7 @@ ${_compactConversation(source)}
       await _generateImageIntoCurrentResponse(
         prompt: prepared.prompt,
         size: prepared.size,
-        attachments: attachments,
+        attachments: requestAttachments,
         runId: runId,
         targetIndex: messages.length - 1,
       );
@@ -1366,7 +1372,13 @@ ${_compactConversation(source)}
     required bool hasImageAttachments,
     int? beforeIndex,
   }) {
-    if (!_shouldCarryImageContext(prompt, hasImageAttachments)) return prompt;
+    if (!_shouldCarryImageContext(
+      prompt,
+      hasImageAttachments,
+      beforeIndex: beforeIndex,
+    )) {
+      return prompt;
+    }
     final previousPrompt = _lastImagePrompt(beforeIndex: beforeIndex);
     if (previousPrompt == null || previousPrompt.trim().isEmpty) return prompt;
     return '''
@@ -1381,10 +1393,50 @@ $previousPrompt
         .trim();
   }
 
-  bool _shouldCarryImageContext(String prompt, bool hasImageAttachments) {
-    if (!hasImageAttachments) return false;
+  List<MessageAttachment> _contextualImageAttachments(
+    String prompt,
+    List<MessageAttachment> attachments, {
+    int? beforeIndex,
+  }) {
+    final copied = attachments.map((attachment) => attachment.copy()).toList();
+    if (copied.any((attachment) => attachment.isImage)) return copied;
+    if (!_isImageFollowUpPrompt(prompt)) return copied;
+    final previous = _lastGeneratedImageAttachment(beforeIndex: beforeIndex);
+    if (previous == null) return copied;
+    return [...copied, previous.copy()];
+  }
+
+  bool _shouldCarryImageContext(
+    String prompt,
+    bool hasImageAttachments, {
+    int? beforeIndex,
+  }) {
+    if (!hasImageAttachments && !_isImageFollowUpPrompt(prompt)) return false;
+    if (!hasImageAttachments &&
+        _lastGeneratedImageAttachment(beforeIndex: beforeIndex) == null) {
+      return false;
+    }
+    return _isImageFollowUpPrompt(prompt);
+  }
+
+  bool _isImageFollowUpPrompt(String prompt) {
     final text = prompt.toLowerCase();
-    return text.contains('同样') ||
+    return text.contains('不要改') ||
+        text.contains('别改') ||
+        text.contains('改成') ||
+        text.contains('修改') ||
+        text.contains('调整') ||
+        text.contains('保持') ||
+        text.contains('基于') ||
+        text.contains('这张') ||
+        text.contains('上张') ||
+        text.contains('上一张') ||
+        text.contains('上图') ||
+        text.contains('刚才') ||
+        text.contains('重新') ||
+        text.contains('换成') ||
+        text.contains('变成') ||
+        text.contains('同样') ||
         text.contains('一样') ||
         text.contains('继续') ||
         text.contains('上次') ||
@@ -1395,6 +1447,22 @@ $previousPrompt
         text.contains('这个也') ||
         text.contains('处理') ||
         text.contains('风格');
+  }
+
+  MessageAttachment? _lastGeneratedImageAttachment({int? beforeIndex}) {
+    final end = (beforeIndex ?? messages.length).clamp(0, messages.length);
+    for (var i = end - 1; i >= 0; i--) {
+      final message = messages[i];
+      if (message.role != 'model') continue;
+      for (final attachment in message.attachments.reversed) {
+        if (!attachment.isImage) continue;
+        if (attachment.path.isEmpty || !File(attachment.path).existsSync()) {
+          continue;
+        }
+        return attachment;
+      }
+    }
+    return null;
   }
 
   String? _lastImagePrompt({int? beforeIndex}) {

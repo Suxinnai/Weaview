@@ -247,5 +247,86 @@ void main() {
         }
       },
     );
+
+    test(
+      'falls back to Responses image tool when image edits route is transiently unavailable',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp('weaview-image-');
+        final reference = File('${tempDir.path}/reference.png');
+        await reference.writeAsBytes(utf8.encode('reference-image'));
+
+        final requests = <String>[];
+        String? responsesBody;
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        final serving = server.listen((request) async {
+          requests.add(request.uri.path);
+          if (request.uri.path == '/v1/images/edits') {
+            await latin1.decoder.bind(request).join();
+            request.response
+              ..statusCode = 502
+              ..headers.contentType = ContentType.json
+              ..write('{"error":{"message":"temporary upstream error"}}');
+            await request.response.close();
+            return;
+          }
+          if (request.uri.path == '/v1/responses') {
+            responsesBody = await utf8.decoder.bind(request).join();
+            request.response
+              ..statusCode = 200
+              ..headers.contentType = ContentType.json
+              ..write(
+                jsonEncode({
+                  'output': [
+                    {
+                      'type': 'image_generation_call',
+                      'result': 'ZmFsbGJhY2staW1hZ2U=',
+                    },
+                  ],
+                }),
+              );
+            await request.response.close();
+            return;
+          }
+          request.response
+            ..statusCode = 404
+            ..write('unexpected route');
+          await request.response.close();
+        });
+
+        try {
+          final result = await const OpenAiCompatibleClient().generateImage(
+            apiKey: 'test-key',
+            baseUrl: 'http://127.0.0.1:${server.port}/v1',
+            prompt: 'keep composition and change color',
+            attachments: [
+              MessageAttachment(
+                path: reference.path,
+                name: 'reference.png',
+                mimeType: 'application/octet-stream',
+                kind: 'image',
+                size: await reference.length(),
+              ),
+            ],
+            responseModel: 'gpt-5.5',
+            imageModel: 'gpt-image-2',
+            timeout: const Duration(seconds: 5),
+          );
+
+          expect(result.route, '/v1/responses');
+          expect(result.bytes, utf8.encode('fallback-image'));
+          expect(requests, [
+            '/v1/images/edits',
+            '/v1/images/edits',
+            '/v1/responses',
+          ]);
+          expect(responsesBody, contains('data:image/png;base64,'));
+          expect(responsesBody, contains('keep composition and change color'));
+        } finally {
+          await serving.cancel();
+          await server.close(force: true);
+          await tempDir.delete(recursive: true);
+        }
+      },
+    );
   });
 }

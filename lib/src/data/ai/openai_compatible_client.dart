@@ -166,6 +166,9 @@ class OpenAiCompatibleClient {
     final imageAttachments = attachments
         .where((attachment) => attachment.isImage)
         .toList();
+    final primaryImageRoute = imageAttachments.isNotEmpty
+        ? '/v1/images/edits'
+        : '/v1/images/generations';
     try {
       if (imageAttachments.isNotEmpty) {
         return await _generateImageWithImageEditsRoute(
@@ -189,10 +192,9 @@ class OpenAiCompatibleClient {
       }
     } catch (error) {
       imagesError = error;
-      if (imageAttachments.isNotEmpty ||
-          !shouldUseResponsesImageTool(imageModel)) {
+      if (!shouldUseResponsesImageTool(imageModel)) {
         throw Exception(
-          '生图失败。${imageAttachments.isNotEmpty ? '/v1/images/edits' : '/v1/images/generations'}：${_compactError(imagesError)}',
+          '生图失败。$primaryImageRoute：${_compactError(imagesError)}',
         );
       }
     }
@@ -212,7 +214,7 @@ class OpenAiCompatibleClient {
       final imagesMessage = _compactError(imagesError);
       final responsesMessage = _compactError(responsesError);
       throw Exception(
-        '生图失败。/v1/images/generations：$imagesMessage；Responses API：$responsesMessage',
+        '生图失败。$primaryImageRoute：$imagesMessage；Responses API：$responsesMessage',
       );
     }
   }

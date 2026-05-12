@@ -2,6 +2,22 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.19 - 2026-05-12
+
+### 中文
+
+- 续改生图时会自动把上一张生成图作为参考图带入请求，支持“不改比例”“改成 4:3”“继续调整”等无需重新上传图片的上下文编辑。
+- OpenAI 图片模型带参考图时，如果 `/v1/images/edits` 被中转站断连或返回临时网关错误，会 fallback 到 Responses 图像工具继续尝试。
+- 补充参考图编辑 fallback 和上一张生成图续改的回归测试。
+- 接口实测：`gpt-image-2` 纯生图可成功返回图片；拼写错误的 `gpt-imgae-2` 会被接口返回 400；当前中转站 `/images/edits` 偶发断连，但 `/responses` 带参考图可成功。
+
+### English
+
+- Follow-up image edits now automatically reuse the previous generated image as a reference for prompts such as “keep the ratio”, “change to 4:3”, or “continue adjusting” without re-uploading the image.
+- For OpenAI image models with reference images, transient `/v1/images/edits` gateway drops now fall back to the Responses image tool.
+- Added regression tests for reference-image fallback and previous-generated-image follow-up context.
+- Live API check: `gpt-image-2` generation succeeds; the misspelled `gpt-imgae-2` returns HTTP 400; the current gateway intermittently drops `/images/edits`, while `/responses` with reference images succeeds.
+
 ## 1.0.18 - 2026-05-12
 
 ### 中文

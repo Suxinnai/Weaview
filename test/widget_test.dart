@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -15,8 +17,8 @@ import 'package:weaview_flutter/src/features/settings/settings_sheet.dart';
 
 void main() {
   test('exposes the current stable version in app constants', () {
-    expect(appVersionTag, 'v1.0.18');
-    expect(appVersionDisplay, contains('v1.0.18'));
+    expect(appVersionTag, 'v1.0.19');
+    expect(appVersionDisplay, contains('v1.0.19'));
   });
 
   testWidgets('renders the Weaview chat shell', (WidgetTester tester) async {
@@ -271,6 +273,43 @@ $$E = mc^2$$
     expect(state.messages.last.content, contains('生图模型'));
     state.dispose();
   });
+
+  test(
+    'image generation follow-up reuses the previous generated image',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final tempDir = await Directory.systemTemp.createTemp(
+        'weaview-follow-up-',
+      );
+      final previous = File('${tempDir.path}/previous.png');
+      await previous.writeAsBytes([0x89, 0x50, 0x4E, 0x47]);
+      final state = WeaviewState();
+
+      await state.load();
+      state.messages.add(
+        ChatMessage.model('')
+          ..attachments = [
+            MessageAttachment(
+              path: previous.path,
+              name: 'previous.png',
+              mimeType: 'image/png',
+              kind: 'image',
+              size: await previous.length(),
+            ),
+          ],
+      );
+      await state.submitImageGeneration('不要改比例');
+
+      final user = state.messages.lastWhere(
+        (message) => message.role == 'user',
+      );
+      expect(user.attachments, hasLength(1));
+      expect(user.attachments.single.path, previous.path);
+      expect(state.messages.last.content, contains('生图模型'));
+      state.dispose();
+      await tempDir.delete(recursive: true);
+    },
+  );
 
   test('reorders providers and keeps order in state', () async {
     SharedPreferences.setMockInitialValues({});
