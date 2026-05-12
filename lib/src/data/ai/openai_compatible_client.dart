@@ -179,7 +179,6 @@ class OpenAiCompatibleClient {
           prompt: prompt,
           imageAttachments: imageAttachments,
           responseModel: responseModel,
-          imageModel: imageModel,
           timeout: timeout,
           size: size,
         );
@@ -243,7 +242,6 @@ class OpenAiCompatibleClient {
         prompt: prompt,
         imageAttachments: imageAttachments,
         responseModel: responseModel,
-        imageModel: imageModel,
         timeout: timeout,
         size: size,
       );
@@ -262,7 +260,6 @@ class OpenAiCompatibleClient {
     required String prompt,
     required List<MessageAttachment> imageAttachments,
     required String responseModel,
-    required String imageModel,
     required Duration timeout,
     required String size,
   }) async {
@@ -273,38 +270,27 @@ class OpenAiCompatibleClient {
         uri: uri,
         apiKey: apiKey,
         responseModel: responseModel,
-        imageModel: imageModel,
         prompt: prompt,
         inputImages: inputImages,
         size: size,
         timeout: timeout,
-        forceToolChoice: false,
+        requireToolChoice: true,
       );
-      if (response.statusCode >= 200 &&
-          response.statusCode < 300 &&
-          !parseResponsesImageGeneration(jsonDecode(response.body)).hasImage) {
+      if (_isResponsesToolChoiceCompatibilityError(response) ||
+          (response.statusCode >= 200 &&
+              response.statusCode < 300 &&
+              !parseResponsesImageGeneration(
+                jsonDecode(response.body),
+              ).hasImage)) {
         response = await _postResponsesImageGeneration(
           uri: uri,
           apiKey: apiKey,
           responseModel: responseModel,
-          imageModel: imageModel,
           prompt: prompt,
           inputImages: inputImages,
           size: size,
           timeout: timeout,
-          forceToolChoice: true,
-        );
-      } else if (_isResponsesToolChoiceCompatibilityError(response)) {
-        response = await _postResponsesImageGeneration(
-          uri: uri,
-          apiKey: apiKey,
-          responseModel: responseModel,
-          imageModel: imageModel,
-          prompt: prompt,
-          inputImages: inputImages,
-          size: size,
-          timeout: timeout,
-          forceToolChoice: false,
+          requireToolChoice: false,
         );
       }
       _throwIfRetryableImageStatus(response);
@@ -328,21 +314,18 @@ class OpenAiCompatibleClient {
     required Uri uri,
     required String apiKey,
     required String responseModel,
-    required String imageModel,
     required String prompt,
     required List<Map<String, dynamic>> inputImages,
     required String size,
     required Duration timeout,
-    required bool forceToolChoice,
+    required bool requireToolChoice,
   }) {
-    final effectivePrompt = forceToolChoice
-        ? prompt
-        : '''
-请使用 image_generation 工具生成图片。不要只返回文字说明。
-
+    final effectivePrompt =
+        '''
+Use the following text as the complete prompt. Do not rewrite it:
 $prompt
 '''
-              .trim();
+            .trim();
     final input = inputImages.isEmpty
         ? effectivePrompt
         : [
@@ -360,13 +343,13 @@ $prompt
       'tools': [
         {
           'type': 'image_generation',
-          'model': imageModel,
+          'action': inputImages.isEmpty ? 'generate' : 'edit',
           'size': size,
           'output_format': 'png',
         },
       ],
     };
-    if (forceToolChoice) {
+    if (requireToolChoice) {
       body['tool_choice'] = {'type': 'image_generation'};
     }
     return http
@@ -453,7 +436,6 @@ $prompt
         });
 
       var attachedCount = 0;
-      final fieldName = imageAttachments.length == 1 ? 'image' : 'image[]';
       for (final attachment in imageAttachments) {
         final file = File(attachment.path);
         if (!await file.exists()) continue;
@@ -461,7 +443,7 @@ $prompt
         final mimeType = attachment.resolvedImageMimeType(headerBytes: bytes);
         request.files.add(
           http.MultipartFile.fromBytes(
-            fieldName,
+            'image[]',
             bytes,
             filename: attachment.name,
             contentType: MediaType.parse(mimeType),
@@ -676,9 +658,11 @@ $prompt
     if (response.statusCode != 400) return false;
     final text = response.body.toLowerCase();
     return text.contains('tool_choice') &&
-        text.contains('image_generation') &&
-        text.contains('not found') &&
-        text.contains('tools');
+        (text.contains('not found') ||
+            text.contains('must be specified') ||
+            text.contains('not supported') ||
+            text.contains('unsupported') ||
+            text.contains('invalid'));
   }
 
   static bool _isTransientImageError(

@@ -228,7 +228,7 @@ void main() {
           expect(contentType, 'multipart/form-data');
           expect(
             multipartBody,
-            contains('name="image"; filename="reference.png"'),
+            contains('name="image[]"; filename="reference.png"'),
           );
           expect(
             multipartBody?.toLowerCase(),
@@ -307,6 +307,11 @@ void main() {
           expect(result.bytes, utf8.encode('fallback-image'));
           expect(requests, ['/v1/responses']);
           expect(responsesBody, contains('data:image/png;base64,'));
+          expect(responsesBody, contains('"action":"edit"'));
+          expect(
+            responsesBody,
+            contains('"tool_choice":{"type":"image_generation"}'),
+          );
           expect(responsesBody, contains('keep composition and change color'));
         } finally {
           await serving.cancel();
@@ -456,7 +461,7 @@ void main() {
       }
     });
 
-    test('uses Responses image tool without tool_choice by default', () async {
+    test('falls back to Responses image tool without tool_choice', () async {
       final tempDir = await Directory.systemTemp.createTemp('weaview-image-');
       final reference = File('${tempDir.path}/reference.png');
       await reference.writeAsBytes(utf8.encode('reference-image'));
@@ -471,6 +476,16 @@ void main() {
               jsonDecode(await utf8.decoder.bind(request).join())
                   as Map<String, dynamic>;
           responseBodies.add(body);
+          if (responsesAttempts == 1) {
+            request.response
+              ..statusCode = 400
+              ..headers.contentType = ContentType.json
+              ..write(
+                '{"error":{"message":"tool_choice is not supported by this gateway"}}',
+              );
+            await request.response.close();
+            return;
+          }
           request.response
             ..statusCode = 200
             ..headers.contentType = ContentType.json
@@ -512,10 +527,16 @@ void main() {
 
         expect(result.route, '/v1/responses');
         expect(result.bytes, utf8.encode('compat-image'));
-        expect(responsesAttempts, 1);
-        expect(responseBodies.single, isNot(contains('tool_choice')));
-        expect(jsonEncode(responseBodies.single), contains('image_generation'));
-        expect(jsonEncode(responseBodies.single), contains('不要只返回文字说明'));
+        expect(responsesAttempts, 2);
+        expect(responseBodies.first['tool_choice'], {
+          'type': 'image_generation',
+        });
+        expect(responseBodies.last, isNot(contains('tool_choice')));
+        expect(jsonEncode(responseBodies.last), contains('image_generation'));
+        expect(
+          jsonEncode(responseBodies.last),
+          contains('Use the following text as the complete prompt'),
+        );
       } finally {
         await serving.cancel();
         await server.close(force: true);

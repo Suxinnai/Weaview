@@ -71,7 +71,8 @@ class WeaviewState extends ChangeNotifier {
   bool isStreaming = false;
   int _streamRunId = 0;
   bool _cancelStreamRequested = false;
-  bool _imageGenerationActive = false;
+  int _activeImageGenerationCount = 0;
+  final Set<int> _cancelledImageRuns = {};
 
   final List<ChatMessage> messages = [];
   final List<ChatSession> chatSessions = [];
@@ -86,7 +87,7 @@ class WeaviewState extends ChangeNotifier {
   List<TtsProviderConfig> ttsProviders = TtsProviderConfig.defaults();
 
   bool get hasActiveImageGeneration =>
-      _imageGenerationActive ||
+      _activeImageGenerationCount > 0 ||
       messages.any((message) => message.isImageGenerating);
 
   ThemeMode get effectiveThemeMode {
@@ -1007,6 +1008,8 @@ ${_compactConversation(source)}
     _cancelStreamRequested = false;
     final runId = ++_streamRunId;
     _persistCurrentSession();
+    final taskSessionId = currentSessionId;
+    final responseIndex = messages.length - 1;
     notifyListeners();
 
     var lastNotify = DateTime.fromMillisecondsSinceEpoch(0);
@@ -1043,9 +1046,16 @@ ${_compactConversation(source)}
               visibleReasoningChars < reasoningLength;
           if (!hasMore) {
             if (streamDone) break;
-            final current = messages.last;
-            current.isThinking =
-                current.content.trim().isEmpty && remoteThinking;
+            _mutateModelMessageInSession(
+              sessionId: taskSessionId,
+              targetIndex: responseIndex,
+              persist: false,
+              notify: false,
+              mutate: (current) {
+                current.isThinking =
+                    current.content.trim().isEmpty && remoteThinking;
+              },
+            );
             flush();
             await Future<void>.delayed(const Duration(milliseconds: 18));
             continue;
@@ -1058,15 +1068,24 @@ ${_compactConversation(source)}
             visibleContentChars++;
           }
 
-          final current = messages.last;
-          current.content = targetContent.characters
-              .take(visibleContentChars)
-              .toString();
-          current.reasoning = targetReasoning.characters
-              .take(visibleReasoningChars)
-              .toString();
-          current.isThinking =
-              current.content.trim().isEmpty && remoteThinking && !streamDone;
+          _mutateModelMessageInSession(
+            sessionId: taskSessionId,
+            targetIndex: responseIndex,
+            persist: false,
+            notify: false,
+            mutate: (current) {
+              current.content = targetContent.characters
+                  .take(visibleContentChars)
+                  .toString();
+              current.reasoning = targetReasoning.characters
+                  .take(visibleReasoningChars)
+                  .toString();
+              current.isThinking =
+                  current.content.trim().isEmpty &&
+                  remoteThinking &&
+                  !streamDone;
+            },
+          );
           flush();
           await Future<void>.delayed(const Duration(milliseconds: 12));
         }
@@ -1098,16 +1117,30 @@ ${_compactConversation(source)}
       streamDone = true;
       await pumpTypewriter();
       if (runId != _streamRunId || _cancelStreamRequested) {
-        messages.last.isThinking = false;
+        _mutateModelMessageInSession(
+          sessionId: taskSessionId,
+          targetIndex: responseIndex,
+          persist: true,
+          mutate: (current) {
+            current.isThinking = false;
+          },
+        );
         flush(force: true);
         return;
       }
       final imageToolCall = parseImageToolCall(rawTargetContent);
       if (imageToolCall != null) {
-        messages.last
-          ..content = ''
-          ..isThinking = true
-          ..activity = 'imageGeneration';
+        _mutateModelMessageInSession(
+          sessionId: taskSessionId,
+          targetIndex: responseIndex,
+          persist: true,
+          mutate: (current) {
+            current
+              ..content = ''
+              ..isThinking = true
+              ..activity = 'imageGeneration';
+          },
+        );
         flush(force: true);
         final prepared = _prepareImageGenerationRequest(
           imageToolCall.prompt,
@@ -1117,37 +1150,61 @@ ${_compactConversation(source)}
           prompt: prepared.prompt,
           size: prepared.size,
           runId: runId,
+          sessionId: taskSessionId,
+          targetIndex: responseIndex,
         );
         return;
       }
-      messages.last.isThinking = false;
-      if (messages.last.content.trim().isEmpty) {
-        messages.last.content = '我在，但这一缕回应没有形成文字。';
-      }
+      _mutateModelMessageInSession(
+        sessionId: taskSessionId,
+        targetIndex: responseIndex,
+        persist: false,
+        mutate: (current) {
+          current.isThinking = false;
+          if (current.content.trim().isEmpty) {
+            current.content = '我在，但这一缕回应没有形成文字。';
+          }
+        },
+      );
       flush(force: true);
       if (runId == _streamRunId) {
         isStreaming = false;
-        _persistCurrentSession();
+        _persistSessionMessages(taskSessionId);
         notifyListeners();
       }
-      await _refreshCurrentSessionTitle();
-      await _refreshSuggestions();
-      unawaited(_refreshPersonalizationFromConversation());
+      if (taskSessionId == currentSessionId) {
+        await _refreshCurrentSessionTitle();
+        await _refreshSuggestions();
+        unawaited(_refreshPersonalizationFromConversation());
+      }
     } catch (error) {
       if (runId != _streamRunId || _cancelStreamRequested) {
-        messages.last.isThinking = false;
-        notifyListeners();
+        _mutateModelMessageInSession(
+          sessionId: taskSessionId,
+          targetIndex: responseIndex,
+          persist: true,
+          mutate: (current) {
+            current.isThinking = false;
+          },
+        );
         return;
       }
-      messages.last.content =
-          '连接织线时出现了问题：${_friendlyAiError(error)}\n\n请检查网络、API Key 或模型配置后重试。';
-      messages.last.isThinking = false;
-      notifyListeners();
+      _mutateModelMessageInSession(
+        sessionId: taskSessionId,
+        targetIndex: responseIndex,
+        persist: true,
+        mutate: (current) {
+          current
+            ..content =
+                '连接织线时出现了问题：${_friendlyAiError(error)}\n\n请检查网络、API Key 或模型配置后重试。'
+            ..isThinking = false;
+        },
+      );
     } finally {
       if (runId == _streamRunId) {
         if (isStreaming) isStreaming = false;
         _cancelStreamRequested = false;
-        _persistCurrentSession();
+        _persistSessionMessages(taskSessionId);
         notifyListeners();
       }
     }
@@ -1181,6 +1238,8 @@ ${_compactConversation(source)}
     final runId = ++_streamRunId;
     unawaited(_ensureNativeNotificationPermission());
     _persistCurrentSession();
+    final taskSessionId = currentSessionId;
+    final responseIndex = messages.length - 1;
     notifyListeners();
 
     try {
@@ -1189,7 +1248,8 @@ ${_compactConversation(source)}
         size: prepared.size,
         attachments: requestAttachments,
         runId: runId,
-        targetIndex: messages.length - 1,
+        sessionId: taskSessionId,
+        targetIndex: responseIndex,
       );
     } finally {
       if (runId == _streamRunId) {
@@ -1203,7 +1263,9 @@ ${_compactConversation(source)}
   Future<void> resumeInterruptedImageGeneration({
     bool retryLastFailure = false,
   }) async {
-    if (isStreaming || _imageGenerationActive || messages.isEmpty) return;
+    if (isStreaming || _activeImageGenerationCount > 0 || messages.isEmpty) {
+      return;
+    }
     var targetIndex = messages.lastIndexWhere(
       (message) => message.isImageGenerating,
     );
@@ -1241,6 +1303,7 @@ ${_compactConversation(source)}
     _cancelStreamRequested = false;
     final runId = ++_streamRunId;
     _persistCurrentSession();
+    final taskSessionId = currentSessionId;
     notifyListeners();
 
     try {
@@ -1249,6 +1312,7 @@ ${_compactConversation(source)}
         size: prepared.size,
         attachments: attachments,
         runId: runId,
+        sessionId: taskSessionId,
         targetIndex: targetIndex,
       );
     } finally {
@@ -1266,6 +1330,7 @@ ${_compactConversation(source)}
     required String size,
     List<MessageAttachment> attachments = const [],
     required int runId,
+    String? sessionId,
     int? targetIndex,
   }) async {
     final imageAssignment = _effectiveImageAssignment();
@@ -1278,19 +1343,21 @@ ${_compactConversation(source)}
       roleLabel: '生图模型',
     );
     if (configIssue != null) {
-      final current = _imageGenerationMessage(targetIndex);
-      if (current != null) {
-        current
-          ..content = configIssue
-          ..isThinking = false
-          ..activity = '';
-      }
-      _persistCurrentSession();
-      notifyListeners();
+      _mutateModelMessageInSession(
+        sessionId: sessionId,
+        targetIndex: targetIndex,
+        persist: true,
+        mutate: (current) {
+          current
+            ..content = configIssue
+            ..isThinking = false
+            ..activity = '';
+        },
+      );
       return;
     }
 
-    _imageGenerationActive = true;
+    _activeImageGenerationCount += 1;
     try {
       final result = await AiGateway.generateImage(
         provider: imageProvider!,
@@ -1299,51 +1366,74 @@ ${_compactConversation(source)}
         attachments: attachments,
         size: size,
       );
-      if (runId != _streamRunId || _cancelStreamRequested) {
-        final current = _imageGenerationMessage(targetIndex);
-        current
-          ?..isThinking = false
-          ..activity = '';
-        notifyListeners();
+      if (_cancelledImageRuns.contains(runId)) {
+        _mutateModelMessageInSession(
+          sessionId: sessionId,
+          targetIndex: targetIndex,
+          persist: true,
+          mutate: (current) {
+            current
+              ..isThinking = false
+              ..activity = '';
+          },
+        );
         return;
       }
-      final current = _imageGenerationMessage(targetIndex);
-      if (current == null) return;
       final attachment = await _writeGeneratedImageAttachment(result);
-      current
-        ..content = ''
-        ..attachments = [attachment]
-        ..isThinking = false
-        ..activity = '';
-      _persistCurrentSession();
-      await _refreshCurrentSessionTitle();
-      unawaited(_refreshPersonalizationFromConversation());
+      final updated = _mutateModelMessageInSession(
+        sessionId: sessionId,
+        targetIndex: targetIndex,
+        persist: true,
+        mutate: (current) {
+          current
+            ..content = ''
+            ..attachments = [attachment]
+            ..isThinking = false
+            ..activity = '';
+        },
+      );
+      if (!updated) return;
+      if (sessionId == currentSessionId) {
+        await _refreshCurrentSessionTitle();
+        unawaited(_refreshPersonalizationFromConversation());
+      }
       await _showNativeNotification(title: '织境生图完成', body: '图片已生成，回到织境查看结果。');
-      notifyListeners();
     } catch (error) {
-      if (runId != _streamRunId || _cancelStreamRequested) {
-        final current = _imageGenerationMessage(targetIndex);
-        current
-          ?..isThinking = false
-          ..activity = '';
-        notifyListeners();
+      if (_cancelledImageRuns.contains(runId)) {
+        _mutateModelMessageInSession(
+          sessionId: sessionId,
+          targetIndex: targetIndex,
+          persist: true,
+          mutate: (current) {
+            current
+              ..isThinking = false
+              ..activity = '';
+          },
+        );
         return;
       }
-      final current = _imageGenerationMessage(targetIndex);
-      if (current == null) return;
-      current
-        ..content =
-            '生图失败：${_friendlyAiError(error, timeout: imageRequestTimeout)}\n\n请确认当前模型支持生图接口，模型能力已标记为 image，并检查 Base URL、证书和 API Key。'
-        ..isThinking = false
-        ..activity = '';
-      _persistCurrentSession();
+      final updated = _mutateModelMessageInSession(
+        sessionId: sessionId,
+        targetIndex: targetIndex,
+        persist: true,
+        mutate: (current) {
+          current
+            ..content =
+                '生图失败：${_friendlyAiError(error, timeout: imageRequestTimeout)}\n\n请确认当前模型支持生图接口，模型能力已标记为 image，并检查 Base URL、证书和 API Key。'
+            ..isThinking = false
+            ..activity = '';
+        },
+      );
+      if (!updated) return;
       await _showNativeNotification(
         title: '织境生图失败',
         body: '图片生成未完成，请回到织境查看详情。',
       );
-      notifyListeners();
     } finally {
-      _imageGenerationActive = false;
+      if (_activeImageGenerationCount > 0) {
+        _activeImageGenerationCount -= 1;
+      }
+      _cancelledImageRuns.remove(runId);
     }
   }
 
@@ -1548,17 +1638,72 @@ $prompt
     return '1024x1024';
   }
 
-  ChatMessage? _imageGenerationMessage(int? targetIndex) {
+  ChatMessage? _modelMessageFrom(List<ChatMessage> source, int? targetIndex) {
     if (targetIndex != null &&
         targetIndex >= 0 &&
-        targetIndex < messages.length &&
-        messages[targetIndex].role == 'model') {
-      return messages[targetIndex];
+        targetIndex < source.length &&
+        source[targetIndex].role == 'model') {
+      return source[targetIndex];
     }
-    if (messages.isNotEmpty && messages.last.role == 'model') {
-      return messages.last;
+    if (source.isNotEmpty && source.last.role == 'model') {
+      return source.last;
     }
     return null;
+  }
+
+  bool _mutateModelMessageInSession({
+    required String? sessionId,
+    required int? targetIndex,
+    required void Function(ChatMessage message) mutate,
+    bool persist = false,
+    bool notify = true,
+  }) {
+    if (sessionId == null || sessionId == currentSessionId) {
+      final message = _modelMessageFrom(messages, targetIndex);
+      if (message == null) return false;
+      mutate(message);
+      if (persist) _persistCurrentSession();
+      if (notify) notifyListeners();
+      return true;
+    }
+
+    final index = chatSessions.indexWhere((session) => session.id == sessionId);
+    if (index < 0) return false;
+    final session = chatSessions[index];
+    final updatedMessages = session.messages
+        .map((message) => message.copy())
+        .toList();
+    final message = _modelMessageFrom(updatedMessages, targetIndex);
+    if (message == null) return false;
+    mutate(message);
+    chatSessions[index] = session.copyWith(
+      updatedAt: persist
+          ? DateTime.now().millisecondsSinceEpoch
+          : session.updatedAt,
+      messages: updatedMessages,
+    );
+    if (persist) {
+      _sortChatSessions();
+      _prefs?.saveChatSessions(chatSessions);
+    }
+    if (notify) notifyListeners();
+    return true;
+  }
+
+  void _persistSessionMessages(String? sessionId) {
+    if (sessionId == null || sessionId == currentSessionId) {
+      _persistCurrentSession();
+      return;
+    }
+    final index = chatSessions.indexWhere((session) => session.id == sessionId);
+    if (index < 0) return;
+    final session = chatSessions[index];
+    chatSessions[index] = session.copyWith(
+      updatedAt: DateTime.now().millisecondsSinceEpoch,
+      messages: session.messages.map((message) => message.copy()).toList(),
+    );
+    _sortChatSessions();
+    _prefs?.saveChatSessions(chatSessions);
   }
 
   Future<void> _showNativeNotification({
@@ -1587,6 +1732,7 @@ $prompt
 
   void cancelStreaming() {
     if (!isStreaming) return;
+    _cancelledImageRuns.add(_streamRunId);
     _cancelStreamRequested = true;
     _streamRunId++;
     if (messages.isNotEmpty && messages.last.role == 'model') {

@@ -2,6 +2,26 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.22 - 2026-05-12
+
+### 中文
+
+- 修复带参考图编辑 `gpt-image` 时持续等待后失败的问题：Responses 生图工具现在显式携带 `tool_choice: {"type":"image_generation"}`。
+- 保留兼容回退：如果中转站拒绝 `tool_choice`，会自动改用不带 `tool_choice` 的 Responses 请求；如果 Responses 临时不可用，再回退 `/v1/images/edits`。
+- 参考图会以真实图片 MIME 的 data URL 传入 Responses，避免被识别成 `application/octet-stream`。
+- `/v1/images/edits` 上传字段统一为 `image[]`，兼容多图编辑中转站。
+- 修复生图/对话异步结果可能写回错误会话的问题：任务完成时会写回启动任务时的原始会话和消息位置。
+- 真实接口验证：`https://api.sunoixy.cc.cd/v1` + `gpt-image-2` 带参考图 Responses 编辑可返回图片。
+
+### English
+
+- Fixed long-running reference-image `gpt-image` edits by forcing the Responses image tool with `tool_choice: {"type":"image_generation"}`.
+- Kept compatibility fallbacks: retry without `tool_choice` when a gateway rejects it, then fall back to `/v1/images/edits` only when Responses is transiently unavailable.
+- Reference images are sent as data URLs with real image MIME types, avoiding `application/octet-stream` rejections.
+- `/v1/images/edits` now always uploads images as `image[]` for multi-image gateway compatibility.
+- Fixed async image/chat completions writing into the wrong conversation by pinning each task to its original session and message index.
+- Live API verified with `https://api.sunoixy.cc.cd/v1` and `gpt-image-2` reference-image editing through Responses.
+
 ## 1.0.21 - 2026-05-12
 
 ### 中文
