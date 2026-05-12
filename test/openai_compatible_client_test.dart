@@ -218,7 +218,7 @@ void main() {
               ),
             ],
             responseModel: 'gpt-5.5',
-            imageModel: 'gpt-image-2',
+            imageModel: 'qwen-image-edit',
             timeout: const Duration(seconds: 5),
           );
 
@@ -249,7 +249,7 @@ void main() {
     );
 
     test(
-      'falls back to Responses image tool when image edits route is transiently unavailable',
+      'uses Responses image tool before image edits for gpt-image reference images',
       () async {
         final tempDir = await Directory.systemTemp.createTemp('weaview-image-');
         final reference = File('${tempDir.path}/reference.png');
@@ -260,15 +260,6 @@ void main() {
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         final serving = server.listen((request) async {
           requests.add(request.uri.path);
-          if (request.uri.path == '/v1/images/edits') {
-            await latin1.decoder.bind(request).join();
-            request.response
-              ..statusCode = 502
-              ..headers.contentType = ContentType.json
-              ..write('{"error":{"message":"temporary upstream error"}}');
-            await request.response.close();
-            return;
-          }
           if (request.uri.path == '/v1/responses') {
             responsesBody = await utf8.decoder.bind(request).join();
             request.response
@@ -288,7 +279,7 @@ void main() {
             return;
           }
           request.response
-            ..statusCode = 404
+            ..statusCode = 500
             ..write('unexpected route');
           await request.response.close();
         });
@@ -314,11 +305,7 @@ void main() {
 
           expect(result.route, '/v1/responses');
           expect(result.bytes, utf8.encode('fallback-image'));
-          expect(requests, [
-            '/v1/images/edits',
-            '/v1/images/edits',
-            '/v1/responses',
-          ]);
+          expect(requests, ['/v1/responses']);
           expect(responsesBody, contains('data:image/png;base64,'));
           expect(responsesBody, contains('keep composition and change color'));
         } finally {
@@ -330,59 +317,39 @@ void main() {
     );
 
     test(
-      'retries Responses image tool without tool_choice for compatible gateways',
+      'falls back to image edits when Responses image tool is transiently unavailable',
       () async {
         final tempDir = await Directory.systemTemp.createTemp('weaview-image-');
         final reference = File('${tempDir.path}/reference.png');
         await reference.writeAsBytes(utf8.encode('reference-image'));
 
+        final requests = <String>[];
         var responsesAttempts = 0;
-        final responseBodies = <Map<String, dynamic>>[];
         final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
         final serving = server.listen((request) async {
+          requests.add(request.uri.path);
           if (request.uri.path == '/v1/images/edits') {
             await latin1.decoder.bind(request).join();
             request.response
-              ..statusCode = 502
-              ..write('bad gateway');
+              ..statusCode = 200
+              ..headers.contentType = ContentType.json
+              ..write(
+                jsonEncode({
+                  'data': [
+                    {'b64_json': 'ZWRpdHMtZmFsbGJhY2s='},
+                  ],
+                }),
+              );
             await request.response.close();
             return;
           }
           if (request.uri.path == '/v1/responses') {
             responsesAttempts += 1;
-            final body =
-                jsonDecode(await utf8.decoder.bind(request).join())
-                    as Map<String, dynamic>;
-            responseBodies.add(body);
-            if (responsesAttempts == 1) {
-              request.response
-                ..statusCode = 400
-                ..headers.contentType = ContentType.json
-                ..write(
-                  jsonEncode({
-                    'error': {
-                      'message':
-                          "Tool choice 'image_generation' not found in 'tools' parameter.",
-                      'type': 'invalid_request_error',
-                      'param': 'tool_choice',
-                    },
-                  }),
-                );
-            } else {
-              request.response
-                ..statusCode = 200
-                ..headers.contentType = ContentType.json
-                ..write(
-                  jsonEncode({
-                    'output': [
-                      {
-                        'type': 'image_generation_call',
-                        'result': 'Y29tcGF0LWltYWdl',
-                      },
-                    ],
-                  }),
-                );
-            }
+            await utf8.decoder.bind(request).join();
+            request.response
+              ..statusCode = 502
+              ..headers.contentType = ContentType.json
+              ..write('{"error":{"message":"temporary upstream error"}}');
             await request.response.close();
             return;
           }
@@ -409,13 +376,14 @@ void main() {
             timeout: const Duration(seconds: 5),
           );
 
-          expect(result.route, '/v1/responses');
-          expect(result.bytes, utf8.encode('compat-image'));
+          expect(result.route, '/v1/images/edits');
+          expect(result.bytes, utf8.encode('edits-fallback'));
           expect(responsesAttempts, 2);
-          expect(responseBodies.first, contains('tool_choice'));
-          expect(responseBodies.last, isNot(contains('tool_choice')));
-          expect(jsonEncode(responseBodies.last), contains('image_generation'));
-          expect(jsonEncode(responseBodies.last), contains('不要只返回文字说明'));
+          expect(requests, [
+            '/v1/responses',
+            '/v1/responses',
+            '/v1/images/edits',
+          ]);
         } finally {
           await serving.cancel();
           await server.close(force: true);
@@ -423,5 +391,136 @@ void main() {
         }
       },
     );
+
+    test('retries context canceled image edits once', () async {
+      final tempDir = await Directory.systemTemp.createTemp('weaview-image-');
+      final reference = File('${tempDir.path}/reference.png');
+      await reference.writeAsBytes(utf8.encode('reference-image'));
+
+      var editAttempts = 0;
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final serving = server.listen((request) async {
+        if (request.uri.path == '/v1/images/edits') {
+          editAttempts += 1;
+          await latin1.decoder.bind(request).join();
+          if (editAttempts == 1) {
+            request.response
+              ..statusCode = 408
+              ..headers.contentType = ContentType.json
+              ..write('{"error":{"message":"context canceled"}}');
+          } else {
+            request.response
+              ..statusCode = 200
+              ..headers.contentType = ContentType.json
+              ..write(
+                jsonEncode({
+                  'data': [
+                    {'b64_json': 'cmV0cmllZC1lZGl0'},
+                  ],
+                }),
+              );
+          }
+          await request.response.close();
+          return;
+        }
+        request.response.statusCode = 404;
+        await request.response.close();
+      });
+
+      try {
+        final result = await const OpenAiCompatibleClient().generateImage(
+          apiKey: 'test-key',
+          baseUrl: 'http://127.0.0.1:${server.port}/v1',
+          prompt: 'edit this image',
+          attachments: [
+            MessageAttachment(
+              path: reference.path,
+              name: 'reference.png',
+              mimeType: 'image/png',
+              kind: 'image',
+              size: await reference.length(),
+            ),
+          ],
+          responseModel: 'gpt-5.5',
+          imageModel: 'qwen-image-edit',
+          timeout: const Duration(seconds: 5),
+        );
+
+        expect(result.route, '/v1/images/edits');
+        expect(result.bytes, utf8.encode('retried-edit'));
+        expect(editAttempts, 2);
+      } finally {
+        await serving.cancel();
+        await server.close(force: true);
+        await tempDir.delete(recursive: true);
+      }
+    });
+
+    test('uses Responses image tool without tool_choice by default', () async {
+      final tempDir = await Directory.systemTemp.createTemp('weaview-image-');
+      final reference = File('${tempDir.path}/reference.png');
+      await reference.writeAsBytes(utf8.encode('reference-image'));
+
+      var responsesAttempts = 0;
+      final responseBodies = <Map<String, dynamic>>[];
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final serving = server.listen((request) async {
+        if (request.uri.path == '/v1/responses') {
+          responsesAttempts += 1;
+          final body =
+              jsonDecode(await utf8.decoder.bind(request).join())
+                  as Map<String, dynamic>;
+          responseBodies.add(body);
+          request.response
+            ..statusCode = 200
+            ..headers.contentType = ContentType.json
+            ..write(
+              jsonEncode({
+                'output': [
+                  {
+                    'type': 'image_generation_call',
+                    'result': 'Y29tcGF0LWltYWdl',
+                  },
+                ],
+              }),
+            );
+          await request.response.close();
+          return;
+        }
+        request.response.statusCode = 404;
+        await request.response.close();
+      });
+
+      try {
+        final result = await const OpenAiCompatibleClient().generateImage(
+          apiKey: 'test-key',
+          baseUrl: 'http://127.0.0.1:${server.port}/v1',
+          prompt: 'keep ratio',
+          attachments: [
+            MessageAttachment(
+              path: reference.path,
+              name: 'reference.png',
+              mimeType: 'image/png',
+              kind: 'image',
+              size: await reference.length(),
+            ),
+          ],
+          responseModel: 'gpt-5.5',
+          imageModel: 'gpt-image-2',
+          timeout: const Duration(seconds: 5),
+        );
+
+        expect(result.route, '/v1/responses');
+        expect(result.bytes, utf8.encode('compat-image'));
+        expect(responsesAttempts, 1);
+        expect(responseBodies.single, isNot(contains('tool_choice')));
+        expect(jsonEncode(responseBodies.single), contains('image_generation'));
+        expect(jsonEncode(responseBodies.single), contains('不要只返回文字说明'));
+      } finally {
+        await serving.cancel();
+        await server.close(force: true);
+        await tempDir.delete(recursive: true);
+      }
+    });
   });
 }

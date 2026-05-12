@@ -2,6 +2,26 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.21 - 2026-05-12
+
+### 中文
+
+- 带参考图的 `gpt-image` 生图优先使用 Responses 图片工具链路，避免先卡在部分中转站不稳定的 `/v1/images/edits`。
+- Responses 图片工具链路默认不再发送 `tool_choice`，避免兼容网关返回 `Tool choice 'image_generation' not found in 'tools' parameter`。
+- 纯文字 `gpt-image` 生图仍优先走 `/v1/images/generations`，保持已验证可用的生成链路。
+- `/v1/images/edits` 现在会把 408、`context canceled` 和请求超时视为可重试的瞬时失败。
+- 生图失败提示保留实际尝试过的路由和上游错误，避免被泛化成无法定位的网络失败。
+- 补充参考图 Responses 优先、Responses 失败回退 edits、以及 edits 408 重试的回归测试。
+
+### English
+
+- Reference-image `gpt-image` requests now prefer the Responses image tool before `/v1/images/edits`, avoiding slow or unstable edit routes on some gateways.
+- Responses image-tool requests no longer send `tool_choice` by default, avoiding compatibility failures such as `Tool choice 'image_generation' not found in 'tools' parameter`.
+- Text-only `gpt-image` generation still uses `/v1/images/generations` first to preserve the verified generation path.
+- `/v1/images/edits` now treats 408, `context canceled`, and request-timeout failures as transient retry candidates.
+- Image-generation errors now preserve attempted routes and upstream details instead of collapsing everything into a generic network message.
+- Added regression coverage for Responses-first reference images, fallback to edits, and 408 edit retries.
+
 ## 1.0.20 - 2026-05-12
 
 ### 中文

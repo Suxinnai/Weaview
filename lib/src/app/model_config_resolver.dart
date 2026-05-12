@@ -53,6 +53,11 @@ class ModelConfigResolver {
         .toString()
         .replaceFirst(RegExp(r'^Exception:\s*'), '')
         .trim();
+    if (text.startsWith('生图失败。') ||
+        text.contains('/v1/images/') ||
+        text.contains('Responses API：')) {
+      return text.isEmpty ? '未知错误。' : text;
+    }
     if (text.contains('TimeoutException')) {
       return '请求超时：当前设备网络或提供商在 ${chatRequestTimeout.inSeconds} 秒内没有返回数据。'
           '如果桌面端可用但真机不可用，请确认手机网络能直接访问当前 Base URL，或为手机配置同一网络代理。';

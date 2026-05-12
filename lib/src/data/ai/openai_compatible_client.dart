@@ -162,13 +162,50 @@ class OpenAiCompatibleClient {
     required Duration timeout,
     String size = '1024x1024',
   }) async {
-    Object? imagesError;
     final imageAttachments = attachments
         .where((attachment) => attachment.isImage)
         .toList();
     final primaryImageRoute = imageAttachments.isNotEmpty
         ? '/v1/images/edits'
         : '/v1/images/generations';
+    final supportsResponsesImageTool = shouldUseResponsesImageTool(imageModel);
+
+    if (imageAttachments.isNotEmpty && supportsResponsesImageTool) {
+      Object? responsesError;
+      try {
+        return await _generateImageWithResponses(
+          apiKey: apiKey,
+          baseUrl: baseUrl,
+          prompt: prompt,
+          imageAttachments: imageAttachments,
+          responseModel: responseModel,
+          imageModel: imageModel,
+          timeout: timeout,
+          size: size,
+        );
+      } catch (error) {
+        responsesError = error;
+      }
+
+      try {
+        return await _generateImageWithImageEditsRoute(
+          apiKey: apiKey,
+          baseUrl: baseUrl,
+          prompt: prompt,
+          imageModel: imageModel,
+          imageAttachments: imageAttachments,
+          timeout: timeout,
+          size: size,
+        );
+      } catch (imagesError) {
+        throw Exception(
+          '生图失败。Responses API：${_compactError(responsesError)}；'
+          '$primaryImageRoute：${_compactError(imagesError)}',
+        );
+      }
+    }
+
+    Object? imagesError;
     try {
       if (imageAttachments.isNotEmpty) {
         return await _generateImageWithImageEditsRoute(
@@ -192,7 +229,7 @@ class OpenAiCompatibleClient {
       }
     } catch (error) {
       imagesError = error;
-      if (!shouldUseResponsesImageTool(imageModel)) {
+      if (!supportsResponsesImageTool) {
         throw Exception(
           '生图失败。$primaryImageRoute：${_compactError(imagesError)}',
         );
@@ -241,9 +278,23 @@ class OpenAiCompatibleClient {
         inputImages: inputImages,
         size: size,
         timeout: timeout,
-        forceToolChoice: true,
+        forceToolChoice: false,
       );
-      if (_isResponsesToolChoiceCompatibilityError(response)) {
+      if (response.statusCode >= 200 &&
+          response.statusCode < 300 &&
+          !parseResponsesImageGeneration(jsonDecode(response.body)).hasImage) {
+        response = await _postResponsesImageGeneration(
+          uri: uri,
+          apiKey: apiKey,
+          responseModel: responseModel,
+          imageModel: imageModel,
+          prompt: prompt,
+          inputImages: inputImages,
+          size: size,
+          timeout: timeout,
+          forceToolChoice: true,
+        );
+      } else if (_isResponsesToolChoiceCompatibilityError(response)) {
         response = await _postResponsesImageGeneration(
           uri: uri,
           apiKey: apiKey,
@@ -610,7 +661,8 @@ $prompt
   }
 
   static void _throwIfRetryableImageStatus(http.Response response) {
-    if (response.statusCode == 500 ||
+    if (response.statusCode == 408 ||
+        response.statusCode == 500 ||
         response.statusCode == 502 ||
         response.statusCode == 503 ||
         response.statusCode == 504) {
@@ -644,10 +696,13 @@ $prompt
     final text = error.toString().toLowerCase();
     return text.contains('connection closed') ||
         text.contains('connection reset') ||
+        text.contains('context canceled') ||
         text.contains('failed host lookup') ||
+        text.contains('request timeout') ||
         text.contains('network is unreachable') ||
         text.contains('temporarily unavailable') ||
         text.contains('upstream_error') ||
+        text.contains('http 408') ||
         text.contains('http 500') ||
         text.contains('http 502') ||
         text.contains('http 503') ||
