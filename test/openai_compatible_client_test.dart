@@ -328,5 +328,100 @@ void main() {
         }
       },
     );
+
+    test(
+      'retries Responses image tool without tool_choice for compatible gateways',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp('weaview-image-');
+        final reference = File('${tempDir.path}/reference.png');
+        await reference.writeAsBytes(utf8.encode('reference-image'));
+
+        var responsesAttempts = 0;
+        final responseBodies = <Map<String, dynamic>>[];
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        final serving = server.listen((request) async {
+          if (request.uri.path == '/v1/images/edits') {
+            await latin1.decoder.bind(request).join();
+            request.response
+              ..statusCode = 502
+              ..write('bad gateway');
+            await request.response.close();
+            return;
+          }
+          if (request.uri.path == '/v1/responses') {
+            responsesAttempts += 1;
+            final body =
+                jsonDecode(await utf8.decoder.bind(request).join())
+                    as Map<String, dynamic>;
+            responseBodies.add(body);
+            if (responsesAttempts == 1) {
+              request.response
+                ..statusCode = 400
+                ..headers.contentType = ContentType.json
+                ..write(
+                  jsonEncode({
+                    'error': {
+                      'message':
+                          "Tool choice 'image_generation' not found in 'tools' parameter.",
+                      'type': 'invalid_request_error',
+                      'param': 'tool_choice',
+                    },
+                  }),
+                );
+            } else {
+              request.response
+                ..statusCode = 200
+                ..headers.contentType = ContentType.json
+                ..write(
+                  jsonEncode({
+                    'output': [
+                      {
+                        'type': 'image_generation_call',
+                        'result': 'Y29tcGF0LWltYWdl',
+                      },
+                    ],
+                  }),
+                );
+            }
+            await request.response.close();
+            return;
+          }
+          request.response.statusCode = 404;
+          await request.response.close();
+        });
+
+        try {
+          final result = await const OpenAiCompatibleClient().generateImage(
+            apiKey: 'test-key',
+            baseUrl: 'http://127.0.0.1:${server.port}/v1',
+            prompt: 'keep ratio',
+            attachments: [
+              MessageAttachment(
+                path: reference.path,
+                name: 'reference.png',
+                mimeType: 'image/png',
+                kind: 'image',
+                size: await reference.length(),
+              ),
+            ],
+            responseModel: 'gpt-5.5',
+            imageModel: 'gpt-image-2',
+            timeout: const Duration(seconds: 5),
+          );
+
+          expect(result.route, '/v1/responses');
+          expect(result.bytes, utf8.encode('compat-image'));
+          expect(responsesAttempts, 2);
+          expect(responseBodies.first, contains('tool_choice'));
+          expect(responseBodies.last, isNot(contains('tool_choice')));
+          expect(jsonEncode(responseBodies.last), contains('image_generation'));
+          expect(jsonEncode(responseBodies.last), contains('不要只返回文字说明'));
+        } finally {
+          await serving.cancel();
+          await server.close(force: true);
+          await tempDir.delete(recursive: true);
+        }
+      },
+    );
   });
 }

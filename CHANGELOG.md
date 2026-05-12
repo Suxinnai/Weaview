@@ -2,6 +2,20 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.20 - 2026-05-12
+
+### 中文
+
+- 修复部分中转站在 Responses 生图 fallback 中拒绝 `tool_choice: image_generation` 导致参考图续改失败的问题。
+- Responses 生图 fallback 会先使用标准强制工具调用；遇到 `Tool choice 'image_generation' not found in 'tools' parameter` 时，自动改用不带 `tool_choice` 的兼容请求。
+- 补充兼容网关回归测试，确保第二次请求仍要求模型使用图像生成工具而不是只返回文字。
+
+### English
+
+- Fixed reference-image follow-up failures on gateways that reject `tool_choice: image_generation` during the Responses image fallback.
+- The Responses image fallback first tries the standard forced tool call, then retries without `tool_choice` when the gateway returns `Tool choice 'image_generation' not found in 'tools' parameter`.
+- Added a compatibility regression test to keep the second request image-generation oriented instead of returning plain text.
+
 ## 1.0.19 - 2026-05-12
 
 ### 中文

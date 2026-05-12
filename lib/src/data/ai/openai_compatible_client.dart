@@ -231,40 +231,31 @@ class OpenAiCompatibleClient {
   }) async {
     final payload = await _withTransientImageRetry(() async {
       final uri = Uri.parse('${_trimSlash(baseUrl)}/responses');
-      final input = imageAttachments.isEmpty
-          ? prompt
-          : [
-              {
-                'role': 'user',
-                'content': [
-                  {'type': 'input_text', 'text': prompt},
-                  ...await _responsesInputImages(imageAttachments),
-                ],
-              },
-            ];
-      final response = await http
-          .post(
-            uri,
-            headers: {
-              'Authorization': 'Bearer $apiKey',
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-            body: jsonEncode({
-              'model': responseModel,
-              'input': input,
-              'tools': [
-                {
-                  'type': 'image_generation',
-                  'model': imageModel,
-                  'size': size,
-                  'output_format': 'png',
-                },
-              ],
-              'tool_choice': {'type': 'image_generation'},
-            }),
-          )
-          .timeout(timeout);
+      final inputImages = await _responsesInputImages(imageAttachments);
+      var response = await _postResponsesImageGeneration(
+        uri: uri,
+        apiKey: apiKey,
+        responseModel: responseModel,
+        imageModel: imageModel,
+        prompt: prompt,
+        inputImages: inputImages,
+        size: size,
+        timeout: timeout,
+        forceToolChoice: true,
+      );
+      if (_isResponsesToolChoiceCompatibilityError(response)) {
+        response = await _postResponsesImageGeneration(
+          uri: uri,
+          apiKey: apiKey,
+          responseModel: responseModel,
+          imageModel: imageModel,
+          prompt: prompt,
+          inputImages: inputImages,
+          size: size,
+          timeout: timeout,
+          forceToolChoice: false,
+        );
+      }
       _throwIfRetryableImageStatus(response);
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw Exception('HTTP ${response.statusCode}: ${response.body}');
@@ -280,6 +271,64 @@ class OpenAiCompatibleClient {
       route: '/v1/responses',
       timeout: timeout,
     );
+  }
+
+  Future<http.Response> _postResponsesImageGeneration({
+    required Uri uri,
+    required String apiKey,
+    required String responseModel,
+    required String imageModel,
+    required String prompt,
+    required List<Map<String, dynamic>> inputImages,
+    required String size,
+    required Duration timeout,
+    required bool forceToolChoice,
+  }) {
+    final effectivePrompt = forceToolChoice
+        ? prompt
+        : '''
+请使用 image_generation 工具生成图片。不要只返回文字说明。
+
+$prompt
+'''
+              .trim();
+    final input = inputImages.isEmpty
+        ? effectivePrompt
+        : [
+            {
+              'role': 'user',
+              'content': [
+                {'type': 'input_text', 'text': effectivePrompt},
+                ...inputImages,
+              ],
+            },
+          ];
+    final body = <String, dynamic>{
+      'model': responseModel,
+      'input': input,
+      'tools': [
+        {
+          'type': 'image_generation',
+          'model': imageModel,
+          'size': size,
+          'output_format': 'png',
+        },
+      ],
+    };
+    if (forceToolChoice) {
+      body['tool_choice'] = {'type': 'image_generation'};
+    }
+    return http
+        .post(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $apiKey',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode(body),
+        )
+        .timeout(timeout);
   }
 
   Future<GeneratedImageResult> _generateImageWithImagesRoute({
@@ -569,6 +618,15 @@ class OpenAiCompatibleClient {
         'HTTP ${response.statusCode}: ${response.body}',
       );
     }
+  }
+
+  static bool _isResponsesToolChoiceCompatibilityError(http.Response response) {
+    if (response.statusCode != 400) return false;
+    final text = response.body.toLowerCase();
+    return text.contains('tool_choice') &&
+        text.contains('image_generation') &&
+        text.contains('not found') &&
+        text.contains('tools');
   }
 
   static bool _isTransientImageError(
