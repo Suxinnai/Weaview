@@ -2,6 +2,22 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.23 - 2026-05-13
+
+### 中文
+
+- 修复生图续改缺少上下文的问题：继续修改上一张图片时，会自动带入上一张生成图与最初的用户参考图。
+- 修复“原比例 / 原图比例 / 不要改比例”等指令退回 1:1 的问题：应用会从参考图片文件头读取 PNG、JPEG、WebP 尺寸并生成画幅提示。
+- 生图工具调用、手动生图、后台恢复生图统一使用同一套上下文附件与画幅推导逻辑，降低不同入口行为不一致的问题。
+- 补充生图续改上下文和原图比例推导的回归测试。
+
+### English
+
+- Fixed missing context during follow-up image edits: continuing from a generated image now automatically carries both the previous result and the original user reference image.
+- Fixed “keep original ratio” prompts falling back to 1:1 by deriving aspect hints from PNG, JPEG, and WebP image headers.
+- Unified contextual attachments and aspect inference across image tool calls, manual image generation, and resumed background image generation.
+- Added regression coverage for follow-up image context and source-image aspect inference.
+
 ## 1.0.22 - 2026-05-12
 
 ### 中文

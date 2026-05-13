@@ -222,19 +222,19 @@ flutter build ios
 
 ## Latest Release Notes / 最新更新日志
 
-### v1.0.15
+### v1.0.23
 
 中文：
 
-- 修复部分中转站把上传图片识别为 `application/octet-stream` 后导致参考图生图失败的问题。
-- OpenAI 兼容聊天、生图编辑和 Responses fallback 的图片 data URL 会统一兜底为真实图片 MIME。
-- `/images/edits` multipart 上传会显式声明图片 `Content-Type`，减少第三方网关拒绝参考图的情况。
+- 修复生图续改缺少上下文的问题，继续修改时会自动带入上一张生成图与最初的用户参考图。
+- “原比例 / 原图比例 / 不要改比例”等指令会从参考图片尺寸推导画幅，避免无比例文本时退回 1:1。
+- 生图工具调用、手动生图、后台恢复生图统一使用同一套上下文附件与画幅推导逻辑。
 
 English:
 
-- Fixed reference-image generation failures on proxies that saved uploaded images as `application/octet-stream`.
-- OpenAI-compatible chat, image edits, and Responses fallback image data URLs now normalize to a real image MIME type.
-- `/images/edits` multipart uploads now explicitly declare image `Content-Type`, reducing reference-image rejection by third-party gateways.
+- Fixed missing context during follow-up image edits by carrying both the previous generated image and the original user reference image.
+- “Keep original ratio” prompts now derive aspect hints from the reference image instead of falling back to 1:1.
+- Image tool calls, manual image generation, and resumed background jobs now share the same contextual attachment and aspect inference path.
 
 ## 贡献指南
 

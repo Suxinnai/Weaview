@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -17,8 +18,8 @@ import 'package:weaview_flutter/src/features/settings/settings_sheet.dart';
 
 void main() {
   test('exposes the current stable version in app constants', () {
-    expect(appVersionTag, 'v1.0.22');
-    expect(appVersionDisplay, contains('v1.0.22'));
+    expect(appVersionTag, 'v1.0.23');
+    expect(appVersionDisplay, contains('v1.0.23'));
   });
 
   testWidgets('renders the Weaview chat shell', (WidgetTester tester) async {
@@ -275,39 +276,117 @@ $$E = mc^2$$
   });
 
   test(
-    'image generation follow-up reuses the previous generated image',
+    'image generation follow-up reuses previous generated and source images',
     () async {
       SharedPreferences.setMockInitialValues({});
       final tempDir = await Directory.systemTemp.createTemp(
         'weaview-follow-up-',
       );
+      final original = File('${tempDir.path}/original.png');
       final previous = File('${tempDir.path}/previous.png');
+      await original.writeAsBytes([0x89, 0x50, 0x4E, 0x47]);
       await previous.writeAsBytes([0x89, 0x50, 0x4E, 0x47]);
       final state = WeaviewState();
 
       await state.load();
-      state.messages.add(
-        ChatMessage.model('')
-          ..attachments = [
-            MessageAttachment(
-              path: previous.path,
-              name: 'previous.png',
-              mimeType: 'image/png',
-              kind: 'image',
-              size: await previous.length(),
-            ),
-          ],
-      );
-      await state.submitImageGeneration('不要改比例');
+      state.messages
+        ..add(
+          ChatMessage.user(
+            '把这张图做成手绘注解',
+            attachments: [
+              MessageAttachment(
+                path: original.path,
+                name: 'original.png',
+                mimeType: 'image/png',
+                kind: 'image',
+                size: await original.length(),
+              ),
+            ],
+          ),
+        )
+        ..add(
+          ChatMessage.model('')
+            ..attachments = [
+              MessageAttachment(
+                path: previous.path,
+                name: 'previous.png',
+                mimeType: 'image/png',
+                kind: 'image',
+                size: await previous.length(),
+              ),
+            ],
+        );
+      await state.submitImageGeneration('图片比例我要原比例的');
 
       final user = state.messages.lastWhere(
         (message) => message.role == 'user',
       );
-      expect(user.attachments, hasLength(1));
-      expect(user.attachments.single.path, previous.path);
+      expect(user.attachments.map((item) => item.path), [
+        previous.path,
+        original.path,
+      ]);
       expect(state.messages.last.content, contains('生图模型'));
       state.dispose();
       await tempDir.delete(recursive: true);
+    },
+  );
+
+  test(
+    'image generation follow-up derives landscape size from source image',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp('weaview-aspect-');
+      final original = File('${tempDir.path}/original.png');
+      final previous = File('${tempDir.path}/previous.png');
+      final png = base64Decode(_png16x9);
+      await original.writeAsBytes(png);
+      await previous.writeAsBytes(base64Decode(_png1x1));
+      SharedPreferences.setMockInitialValues({});
+      final state = WeaviewState();
+
+      try {
+        await state.load();
+        state.messages
+          ..add(
+            ChatMessage.user(
+              '把这张图做成手绘注解',
+              attachments: [
+                MessageAttachment(
+                  path: original.path,
+                  name: 'original.png',
+                  mimeType: 'image/png',
+                  kind: 'image',
+                  size: await original.length(),
+                ),
+              ],
+            ),
+          )
+          ..add(
+            ChatMessage.model('')
+              ..attachments = [
+                MessageAttachment(
+                  path: previous.path,
+                  name: 'previous.png',
+                  mimeType: 'image/png',
+                  kind: 'image',
+                  size: await previous.length(),
+                ),
+              ],
+          );
+
+        final prepared = await state.debugPrepareImageGenerationRequest(
+          '图片比例我要原比例的',
+        );
+
+        expect(prepared['size'], '1536x1024');
+        expect(prepared['prompt'], contains('严格使用 16:9 画幅生成'));
+        expect(
+          prepared['attachmentPaths'],
+          '${previous.path}|${original.path}',
+        );
+      } finally {
+        state.dispose();
+        await tempDir.delete(recursive: true);
+      }
     },
   );
 
@@ -893,3 +972,8 @@ $$E = mc^2$$
     state.dispose();
   });
 }
+
+const _png16x9 =
+    'iVBORw0KGgoAAAANSUhEUgAAABAAAAAJCAYAAAA7KqwyAAAAE0lEQVR4nGP4TyFgGDVg1AAgAAC2ij3f20IaMgAAAABJRU5ErkJggg==';
+const _png1x1 =
+    'iVBORw0KGgoAAAANSUhEUgAAAAkAAAAJCAYAAADgkQYQAAAAEUlEQVR4nGP4TwRgGFVElCIA9NJCzAnd59wAAAAASUVORK5CYII=';

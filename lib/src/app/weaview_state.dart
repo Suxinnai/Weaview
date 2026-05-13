@@ -1142,13 +1142,18 @@ ${_compactConversation(source)}
           },
         );
         flush(force: true);
-        final prepared = _prepareImageGenerationRequest(
+        final requestAttachments = _contextualImageAttachments(
           imageToolCall.prompt,
-          hasImageAttachments: false,
+          const [],
+        );
+        final prepared = await _prepareImageGenerationRequest(
+          imageToolCall.prompt,
+          imageAttachments: requestAttachments,
         );
         await _generateImageIntoCurrentResponse(
           prompt: prepared.prompt,
           size: prepared.size,
+          attachments: requestAttachments,
           runId: runId,
           sessionId: taskSessionId,
           targetIndex: responseIndex,
@@ -1220,11 +1225,9 @@ ${_compactConversation(source)}
       content,
       attachments,
     );
-    final prepared = _prepareImageGenerationRequest(
+    final prepared = await _prepareImageGenerationRequest(
       content,
-      hasImageAttachments: requestAttachments.any(
-        (attachment) => attachment.isImage,
-      ),
+      imageAttachments: requestAttachments,
     );
 
     messages
@@ -1289,12 +1292,14 @@ ${_compactConversation(source)}
     if (userIndex < 0) return;
     final prompt = messages[userIndex].content.trim();
     if (prompt.isEmpty) return;
-    final attachments = messages[userIndex].attachments
-        .map((attachment) => attachment.copy())
-        .toList();
-    final prepared = _prepareImageGenerationRequest(
+    final attachments = _contextualImageAttachments(
       prompt,
-      hasImageAttachments: attachments.any((attachment) => attachment.isImage),
+      messages[userIndex].attachments,
+      beforeIndex: userIndex,
+    );
+    final prepared = await _prepareImageGenerationRequest(
+      prompt,
+      imageAttachments: attachments,
       beforeIndex: userIndex,
     );
 
@@ -1437,24 +1442,57 @@ ${_compactConversation(source)}
     }
   }
 
-  _PreparedImageRequest _prepareImageGenerationRequest(
+  Future<_PreparedImageRequest> _prepareImageGenerationRequest(
     String value, {
-    required bool hasImageAttachments,
+    required List<MessageAttachment> imageAttachments,
     int? beforeIndex,
-  }) {
+  }) async {
     final basePrompt = value.trim();
+    final hasImageAttachments = imageAttachments.any(
+      (attachment) => attachment.isImage,
+    );
     final contextualPrompt = _contextualImagePrompt(
       basePrompt,
       hasImageAttachments: hasImageAttachments,
       beforeIndex: beforeIndex,
     );
-    final aspect =
+    final promptAspect =
         _imageAspectRatioFromPrompt(contextualPrompt) ??
         _imageAspectRatioFromPrompt(basePrompt);
+    final imageAspect = promptAspect == null
+        ? await _imageAspectRatioFromAttachments(
+            imageAttachments,
+            preferLast: _requestsOriginalImageAspect(contextualPrompt),
+          )
+        : null;
+    final aspect = promptAspect ?? imageAspect;
     return _PreparedImageRequest(
       prompt: _imagePromptWithAspectHint(contextualPrompt, aspect),
       size: _imageSizeForAspect(aspect),
     );
+  }
+
+  @visibleForTesting
+  Future<Map<String, String>> debugPrepareImageGenerationRequest(
+    String value, {
+    List<MessageAttachment> attachments = const [],
+    int? beforeIndex,
+  }) async {
+    final requestAttachments = _contextualImageAttachments(
+      value,
+      attachments,
+      beforeIndex: beforeIndex,
+    );
+    final prepared = await _prepareImageGenerationRequest(
+      value,
+      imageAttachments: requestAttachments,
+      beforeIndex: beforeIndex,
+    );
+    return {
+      'prompt': prepared.prompt,
+      'size': prepared.size,
+      'attachmentPaths': requestAttachments.map((item) => item.path).join('|'),
+    };
   }
 
   String _contextualImagePrompt(
@@ -1479,6 +1517,7 @@ $previousPrompt
 
 [本轮执行要求]
 如果本轮上传了新的参考图片，请以本轮图片为主要输入，对新图执行同样的处理、风格迁移或版式规则；不要返回上一轮图片或原图。
+如果本轮是继续修改上一轮生成图，请把自动附带的上一轮生成图当作待编辑结果，把原始参考图当作构图、主体和宽高比约束。
 '''
         .trim();
   }
@@ -1492,8 +1531,19 @@ $previousPrompt
     if (copied.any((attachment) => attachment.isImage)) return copied;
     if (!_isImageFollowUpPrompt(prompt)) return copied;
     final previous = _lastGeneratedImageAttachment(beforeIndex: beforeIndex);
-    if (previous == null) return copied;
-    return [...copied, previous.copy()];
+    final reference = _lastUserImageAttachment(beforeIndex: beforeIndex);
+    final contextual = [
+      if (previous != null) previous.copy(),
+      if (reference != null) reference.copy(),
+    ];
+    final seen = <String>{};
+    for (final attachment in contextual) {
+      final key = attachment.path.isNotEmpty
+          ? attachment.path
+          : attachment.name;
+      if (seen.add(key)) copied.add(attachment);
+    }
+    return copied;
   }
 
   bool _shouldCarryImageContext(
@@ -1503,7 +1553,8 @@ $previousPrompt
   }) {
     if (!hasImageAttachments && !_isImageFollowUpPrompt(prompt)) return false;
     if (!hasImageAttachments &&
-        _lastGeneratedImageAttachment(beforeIndex: beforeIndex) == null) {
+        _lastGeneratedImageAttachment(beforeIndex: beforeIndex) == null &&
+        _lastUserImageAttachment(beforeIndex: beforeIndex) == null) {
       return false;
     }
     return _isImageFollowUpPrompt(prompt);
@@ -1512,6 +1563,20 @@ $previousPrompt
   bool _isImageFollowUpPrompt(String prompt) {
     final text = prompt.toLowerCase();
     return text.contains('不要改') ||
+        text.contains('不改比例') ||
+        text.contains('不要改比例') ||
+        text.contains('原比例') ||
+        text.contains('原始比例') ||
+        text.contains('原图比例') ||
+        text.contains('原画幅') ||
+        text.contains('原尺寸') ||
+        text.contains('原始尺寸') ||
+        text.contains('宽高比') ||
+        text.contains('比例') ||
+        text.contains('画幅') ||
+        text.contains('尺寸') ||
+        text.contains('分辨率') ||
+        text.contains('构图') ||
         text.contains('别改') ||
         text.contains('改成') ||
         text.contains('修改') ||
@@ -1555,6 +1620,22 @@ $previousPrompt
     return null;
   }
 
+  MessageAttachment? _lastUserImageAttachment({int? beforeIndex}) {
+    final end = (beforeIndex ?? messages.length).clamp(0, messages.length);
+    for (var i = end - 1; i >= 0; i--) {
+      final message = messages[i];
+      if (message.role != 'user') continue;
+      for (final attachment in message.attachments.reversed) {
+        if (!attachment.isImage) continue;
+        if (attachment.path.isEmpty || !File(attachment.path).existsSync()) {
+          continue;
+        }
+        return attachment;
+      }
+    }
+    return null;
+  }
+
   String? _lastImagePrompt({int? beforeIndex}) {
     final end = (beforeIndex ?? messages.length).clamp(0, messages.length);
     for (var i = end - 1; i >= 0; i--) {
@@ -1581,6 +1662,21 @@ $previousPrompt
       if (content.isNotEmpty) return content.characters.take(1200).toString();
     }
     return null;
+  }
+
+  bool _requestsOriginalImageAspect(String prompt) {
+    final text = prompt.toLowerCase();
+    return text.contains('原比例') ||
+        text.contains('原始比例') ||
+        text.contains('原图比例') ||
+        text.contains('原画幅') ||
+        text.contains('原尺寸') ||
+        text.contains('原始尺寸') ||
+        text.contains('宽高比') ||
+        text.contains('不改比例') ||
+        text.contains('不要改比例') ||
+        text.contains('保持比例') ||
+        text.contains('保持原比例');
   }
 
   _ImageAspect? _imageAspectRatioFromPrompt(String prompt) {
@@ -1617,6 +1713,153 @@ $previousPrompt
       return const _ImageAspect(label: '9:16', ratio: 9 / 16);
     }
     return null;
+  }
+
+  Future<_ImageAspect?> _imageAspectRatioFromAttachments(
+    List<MessageAttachment> attachments, {
+    required bool preferLast,
+  }) async {
+    final images = attachments
+        .where(
+          (attachment) =>
+              attachment.isImage &&
+              attachment.path.isNotEmpty &&
+              File(attachment.path).existsSync(),
+        )
+        .toList();
+    final ordered = preferLast ? images.reversed : images;
+    for (final attachment in ordered) {
+      try {
+        final bytes = await File(attachment.path).readAsBytes();
+        final dimensions = _imageDimensionsFromBytes(bytes);
+        if (dimensions == null) continue;
+        final (width, height) = dimensions;
+        return _ImageAspect(
+          label: _aspectLabelFromDimensions(width, height),
+          ratio: width / height,
+        );
+      } catch (_) {
+        continue;
+      }
+    }
+    return null;
+  }
+
+  (int width, int height)? _imageDimensionsFromBytes(List<int> bytes) {
+    if (bytes.length >= 24 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4E &&
+        bytes[3] == 0x47) {
+      return (_readUint32BigEndian(bytes, 16), _readUint32BigEndian(bytes, 20));
+    }
+
+    if (bytes.length >= 10 && bytes[0] == 0xFF && bytes[1] == 0xD8) {
+      var offset = 2;
+      while (offset + 9 < bytes.length) {
+        if (bytes[offset] != 0xFF) {
+          offset += 1;
+          continue;
+        }
+        final marker = bytes[offset + 1];
+        final hasSize =
+            marker >= 0xC0 &&
+            marker <= 0xCF &&
+            marker != 0xC4 &&
+            marker != 0xC8 &&
+            marker != 0xCC;
+        final length = _readUint16BigEndian(bytes, offset + 2);
+        if (hasSize && offset + 8 < bytes.length) {
+          return (
+            _readUint16BigEndian(bytes, offset + 7),
+            _readUint16BigEndian(bytes, offset + 5),
+          );
+        }
+        if (length <= 0) break;
+        offset += 2 + length;
+      }
+    }
+
+    if (bytes.length >= 30 &&
+        bytes[0] == 0x52 &&
+        bytes[1] == 0x49 &&
+        bytes[2] == 0x46 &&
+        bytes[3] == 0x46 &&
+        bytes[8] == 0x57 &&
+        bytes[9] == 0x45 &&
+        bytes[10] == 0x42 &&
+        bytes[11] == 0x50) {
+      if (bytes[12] == 0x56 &&
+          bytes[13] == 0x50 &&
+          bytes[14] == 0x38 &&
+          bytes[15] == 0x58 &&
+          bytes.length >= 30) {
+        final width = 1 + _readUint24LittleEndian(bytes, 24);
+        final height = 1 + _readUint24LittleEndian(bytes, 27);
+        return (width, height);
+      }
+      if (bytes[12] == 0x56 &&
+          bytes[13] == 0x50 &&
+          bytes[14] == 0x38 &&
+          bytes[15] == 0x20 &&
+          bytes.length >= 30) {
+        return (
+          _readUint16LittleEndian(bytes, 26) & 0x3FFF,
+          _readUint16LittleEndian(bytes, 28) & 0x3FFF,
+        );
+      }
+      if (bytes[12] == 0x56 &&
+          bytes[13] == 0x50 &&
+          bytes[14] == 0x38 &&
+          bytes[15] == 0x4C &&
+          bytes.length >= 25) {
+        final b0 = bytes[21];
+        final b1 = bytes[22];
+        final b2 = bytes[23];
+        final b3 = bytes[24];
+        final width = 1 + (((b1 & 0x3F) << 8) | b0);
+        final height = 1 + (((b3 & 0x0F) << 10) | (b2 << 2) | (b1 >> 6));
+        return (width, height);
+      }
+    }
+
+    return null;
+  }
+
+  int _readUint16BigEndian(List<int> bytes, int offset) =>
+      (bytes[offset] << 8) | bytes[offset + 1];
+
+  int _readUint32BigEndian(List<int> bytes, int offset) =>
+      (bytes[offset] << 24) |
+      (bytes[offset + 1] << 16) |
+      (bytes[offset + 2] << 8) |
+      bytes[offset + 3];
+
+  int _readUint16LittleEndian(List<int> bytes, int offset) =>
+      bytes[offset] | (bytes[offset + 1] << 8);
+
+  int _readUint24LittleEndian(List<int> bytes, int offset) =>
+      bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16);
+
+  String _aspectLabelFromDimensions(int width, int height) {
+    final divisor = _greatestCommonDivisor(width, height);
+    final ratioWidth = width ~/ divisor;
+    final ratioHeight = height ~/ divisor;
+    if (ratioWidth <= 64 && ratioHeight <= 64) {
+      return '$ratioWidth:$ratioHeight';
+    }
+    return '${width}x$height';
+  }
+
+  int _greatestCommonDivisor(int a, int b) {
+    var x = a.abs();
+    var y = b.abs();
+    while (y != 0) {
+      final next = x % y;
+      x = y;
+      y = next;
+    }
+    return x == 0 ? 1 : x;
   }
 
   String _imagePromptWithAspectHint(String prompt, _ImageAspect? aspect) {
