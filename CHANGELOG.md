@@ -2,6 +2,22 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.25 - 2026-05-15
+
+### 中文
+
+- 修复复杂 `gpt-image-2` 生图在 CLIProxyAPI 中转站上约 120 秒无响应头后断连的问题：`/images/generations` 瞬断后会改走 Responses `stream:true` 生图工具。
+- Responses 生图工具恢复携带 `model: gpt-image-2`，兼容 CLIProxyAPI 的工具模型路由。
+- Responses 流式生图会请求 `partial_images`，当上游未返回最终 `response.completed` 但已返回 `partial_image_b64` 时，应用会使用可见的 partial 图片，避免整次生图失败。
+- 真实接口验证：同一条重庆城市漫游海报长提示词通过 `https://api.sunoixy.cc.cd/v1` 的 Responses 流式路径可在 142 秒左右返回 partial 图片数据。
+
+### English
+
+- Fixed complex `gpt-image-2` prompts disconnecting around the gateway's 120-second no-header window by falling back from `/images/generations` to the Responses image tool with `stream:true`.
+- Restored `model: gpt-image-2` on the Responses image tool for CLIProxyAPI routing compatibility.
+- Responses streaming image generation now requests `partial_images`; if the upstream stream ends before final `response.completed` but has emitted `partial_image_b64`, the app uses that visible partial image instead of failing the whole request.
+- Live API verified with the long Chongqing travel-poster prompt through `https://api.sunoixy.cc.cd/v1`, receiving partial image data at around 142 seconds.
+
 ## 1.0.24 - 2026-05-15
 
 ### 中文

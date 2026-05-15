@@ -18,8 +18,8 @@ import 'package:weaview_flutter/src/features/settings/settings_sheet.dart';
 
 void main() {
   test('exposes the current stable version in app constants', () {
-    expect(appVersionTag, 'v1.0.24');
-    expect(appVersionDisplay, contains('v1.0.24'));
+    expect(appVersionTag, 'v1.0.25');
+    expect(appVersionDisplay, contains('v1.0.25'));
   });
 
   testWidgets('renders the Weaview chat shell', (WidgetTester tester) async {

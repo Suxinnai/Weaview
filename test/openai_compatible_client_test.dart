@@ -110,6 +110,65 @@ void main() {
       }
     });
 
+    test('uses streaming images route after a transient gateway failure', () async {
+      var generationAttempts = 0;
+      final requestBodies = <Map<String, dynamic>>[];
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final serving = server.listen((request) async {
+        if (request.uri.path == '/v1/images/generations') {
+          generationAttempts += 1;
+          final body =
+              jsonDecode(await utf8.decoder.bind(request).join())
+                  as Map<String, dynamic>;
+          requestBodies.add(body);
+          if (generationAttempts == 1) {
+            request.response
+              ..statusCode = 408
+              ..headers.contentType = ContentType.json
+              ..write('{"error":{"message":"upstream request timeout"}}');
+            await request.response.close();
+            return;
+          }
+          request.response
+            ..statusCode = 200
+            ..headers.contentType = ContentType('text', 'event-stream')
+            ..write(
+              'event: image_generation.partial_image\n'
+              'data: {"type":"image_generation.partial_image","b64_json":"cGFydGlhbA=="}\n\n'
+              'event: image_generation.completed\n'
+              'data: {"type":"image_generation.completed","b64_json":"c3RyZWFtLWltYWdl","revised_prompt":"stream ok"}\n\n',
+            );
+          await request.response.close();
+          return;
+        }
+        request.response
+          ..statusCode = 404
+          ..write('unexpected route');
+        await request.response.close();
+      });
+
+      try {
+        final result = await const OpenAiCompatibleClient().generateImage(
+          apiKey: 'test-key',
+          baseUrl: 'http://127.0.0.1:${server.port}/v1',
+          prompt: 'a streaming retry image',
+          responseModel: 'gpt-5.5',
+          imageModel: 'gpt-image-2',
+          timeout: const Duration(seconds: 5),
+        );
+
+        expect(result.route, '/v1/images/generations?stream=true');
+        expect(result.bytes, utf8.encode('stream-image'));
+        expect(result.revisedPrompt, 'stream ok');
+        expect(generationAttempts, 2);
+        expect(requestBodies.first, isNot(contains('stream')));
+        expect(requestBodies.last['stream'], isTrue);
+      } finally {
+        await serving.cancel();
+        await server.close(force: true);
+      }
+    });
+
     test(
       'retries transient generated image URL downloads without regenerating',
       () async {
@@ -303,15 +362,18 @@ void main() {
             timeout: const Duration(seconds: 5),
           );
 
-          expect(result.route, '/v1/responses');
+          expect(result.route, '/v1/responses?stream=true');
           expect(result.bytes, utf8.encode('fallback-image'));
           expect(requests, ['/v1/responses']);
           expect(responsesBody, contains('data:image/png;base64,'));
           expect(responsesBody, contains('"action":"edit"'));
+          expect(responsesBody, contains('"stream":true'));
+          expect(responsesBody, contains('"partial_images":3'));
           expect(
             responsesBody,
             contains('"tool_choice":{"type":"image_generation"}'),
           );
+          expect(responsesBody, contains('"model":"gpt-image-2"'));
           expect(responsesBody, contains('keep composition and change color'));
         } finally {
           await serving.cancel();
@@ -525,7 +587,7 @@ void main() {
           timeout: const Duration(seconds: 5),
         );
 
-        expect(result.route, '/v1/responses');
+        expect(result.route, '/v1/responses?stream=true');
         expect(result.bytes, utf8.encode('compat-image'));
         expect(responsesAttempts, 2);
         expect(responseBodies.first['tool_choice'], {
@@ -533,6 +595,10 @@ void main() {
         });
         expect(responseBodies.last, isNot(contains('tool_choice')));
         expect(jsonEncode(responseBodies.last), contains('image_generation'));
+        expect(
+          jsonEncode(responseBodies.last),
+          contains('"model":"gpt-image-2"'),
+        );
         expect(
           jsonEncode(responseBodies.last),
           contains('Use the following text as the complete prompt'),
@@ -613,7 +679,7 @@ void main() {
             timeout: const Duration(seconds: 5),
           );
 
-          expect(result.route, '/v1/responses');
+          expect(result.route, '/v1/responses?stream=true');
           expect(result.bytes, utf8.encode('tool-choice-compat'));
           expect(requests, [
             '/v1/images/generations',
@@ -625,6 +691,75 @@ void main() {
             'type': 'image_generation',
           });
           expect(responseBodies.last, isNot(contains('tool_choice')));
+          expect(
+            jsonEncode(responseBodies.last),
+            contains('"model":"gpt-image-2"'),
+          );
+        } finally {
+          await serving.cancel();
+          await server.close(force: true);
+        }
+      },
+    );
+
+    test(
+      'uses partial Responses stream image when final completion is missing',
+      () async {
+        final requests = <String>[];
+        final responseBodies = <Map<String, dynamic>>[];
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        final serving = server.listen((request) async {
+          requests.add(request.uri.path);
+          if (request.uri.path == '/v1/images/generations') {
+            await utf8.decoder.bind(request).join();
+            request.response
+              ..statusCode = 408
+              ..headers.contentType = ContentType.json
+              ..write('{"error":{"message":"upstream request timeout"}}');
+            await request.response.close();
+            return;
+          }
+          if (request.uri.path == '/v1/responses') {
+            final body =
+                jsonDecode(await utf8.decoder.bind(request).join())
+                    as Map<String, dynamic>;
+            responseBodies.add(body);
+            request.response
+              ..statusCode = 200
+              ..headers.contentType = ContentType('text', 'event-stream')
+              ..write(
+                'event: response.image_generation_call.partial_image\n'
+                'data: {"type":"response.image_generation_call.partial_image","partial_image_b64":"cGFydGlhbC1pbWFnZQ==","output_format":"png"}\n\n',
+              );
+            await request.response.close();
+            return;
+          }
+          request.response.statusCode = 404;
+          await request.response.close();
+        });
+
+        try {
+          final result = await const OpenAiCompatibleClient().generateImage(
+            apiKey: 'test-key',
+            baseUrl: 'http://127.0.0.1:${server.port}/v1',
+            prompt: 'a long poster prompt',
+            responseModel: 'gpt-5.5',
+            imageModel: 'gpt-image-2',
+            timeout: const Duration(seconds: 5),
+          );
+
+          expect(result.route, '/v1/responses?stream=true');
+          expect(result.bytes, utf8.encode('partial-image'));
+          expect(requests, [
+            '/v1/images/generations',
+            '/v1/images/generations',
+            '/v1/responses',
+          ]);
+          expect(responseBodies.single['stream'], isTrue);
+          expect(
+            jsonEncode(responseBodies.single),
+            contains('"partial_images":3'),
+          );
         } finally {
           await serving.cancel();
           await server.close(force: true);

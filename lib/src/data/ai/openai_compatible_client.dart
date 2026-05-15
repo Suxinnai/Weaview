@@ -179,6 +179,7 @@ class OpenAiCompatibleClient {
           prompt: prompt,
           imageAttachments: imageAttachments,
           responseModel: responseModel,
+          imageModel: imageModel,
           timeout: timeout,
           size: size,
         );
@@ -242,6 +243,7 @@ class OpenAiCompatibleClient {
         prompt: prompt,
         imageAttachments: imageAttachments,
         responseModel: responseModel,
+        imageModel: imageModel,
         timeout: timeout,
         size: size,
       );
@@ -260,16 +262,62 @@ class OpenAiCompatibleClient {
     required String prompt,
     required List<MessageAttachment> imageAttachments,
     required String responseModel,
+    required String imageModel,
     required Duration timeout,
     required String size,
   }) async {
-    final payload = await _withTransientImageRetry(() async {
-      final uri = Uri.parse('${_trimSlash(baseUrl)}/responses');
-      final inputImages = await _responsesInputImages(imageAttachments);
+    final uri = Uri.parse('${_trimSlash(baseUrl)}/responses');
+    final inputImages = await _responsesInputImages(imageAttachments);
+
+    Object? streamError;
+    try {
+      final payload = await _postResponsesImageGenerationStream(
+        uri: uri,
+        apiKey: apiKey,
+        responseModel: responseModel,
+        imageModel: imageModel,
+        prompt: prompt,
+        inputImages: inputImages,
+        size: size,
+        timeout: timeout,
+        requireToolChoice: true,
+      );
+      return _imageResultFromPayload(
+        payload,
+        route: '/v1/responses?stream=true',
+        timeout: timeout,
+      );
+    } on _ResponsesToolChoiceCompatibilityException {
+      try {
+        final payload = await _postResponsesImageGenerationStream(
+          uri: uri,
+          apiKey: apiKey,
+          responseModel: responseModel,
+          imageModel: imageModel,
+          prompt: prompt,
+          inputImages: inputImages,
+          size: size,
+          timeout: timeout,
+          requireToolChoice: false,
+        );
+        return _imageResultFromPayload(
+          payload,
+          route: '/v1/responses?stream=true',
+          timeout: timeout,
+        );
+      } catch (error) {
+        streamError = error;
+      }
+    } catch (error) {
+      streamError = error;
+    }
+
+    try {
       var response = await _postResponsesImageGeneration(
         uri: uri,
         apiKey: apiKey,
         responseModel: responseModel,
+        imageModel: imageModel,
         prompt: prompt,
         inputImages: inputImages,
         size: size,
@@ -286,6 +334,7 @@ class OpenAiCompatibleClient {
           uri: uri,
           apiKey: apiKey,
           responseModel: responseModel,
+          imageModel: imageModel,
           prompt: prompt,
           inputImages: inputImages,
           size: size,
@@ -301,19 +350,24 @@ class OpenAiCompatibleClient {
       if (!payload.hasImage) {
         throw Exception('Responses API 未返回 image_generation_call 结果。');
       }
-      return payload;
-    });
-    return _imageResultFromPayload(
-      payload,
-      route: '/v1/responses',
-      timeout: timeout,
-    );
+      return _imageResultFromPayload(
+        payload,
+        route: '/v1/responses',
+        timeout: timeout,
+      );
+    } catch (error) {
+      throw Exception(
+        'Responses API stream：${_compactError(streamError)}；'
+        'Responses API：${_compactError(error)}',
+      );
+    }
   }
 
   Future<http.Response> _postResponsesImageGeneration({
     required Uri uri,
     required String apiKey,
     required String responseModel,
+    required String imageModel,
     required String prompt,
     required List<Map<String, dynamic>> inputImages,
     required String size,
@@ -343,6 +397,7 @@ $prompt
       'tools': [
         {
           'type': 'image_generation',
+          'model': imageModel,
           'action': inputImages.isEmpty ? 'generate' : 'edit',
           'size': size,
           'output_format': 'png',
@@ -365,6 +420,93 @@ $prompt
         .timeout(timeout);
   }
 
+  Future<ParsedImageGenerationResult> _postResponsesImageGenerationStream({
+    required Uri uri,
+    required String apiKey,
+    required String responseModel,
+    required String imageModel,
+    required String prompt,
+    required List<Map<String, dynamic>> inputImages,
+    required String size,
+    required Duration timeout,
+    required bool requireToolChoice,
+  }) async {
+    final effectivePrompt =
+        '''
+Use the following text as the complete prompt. Do not rewrite it:
+$prompt
+'''
+            .trim();
+    final input = inputImages.isEmpty
+        ? effectivePrompt
+        : [
+            {
+              'role': 'user',
+              'content': [
+                {'type': 'input_text', 'text': effectivePrompt},
+                ...inputImages,
+              ],
+            },
+          ];
+    final body = <String, dynamic>{
+      'model': responseModel,
+      'input': input,
+      'stream': true,
+      'tools': [
+        {
+          'type': 'image_generation',
+          'model': imageModel,
+          'action': inputImages.isEmpty ? 'generate' : 'edit',
+          'size': size,
+          'output_format': 'png',
+          'partial_images': 3,
+        },
+      ],
+    };
+    if (requireToolChoice) {
+      body['tool_choice'] = {'type': 'image_generation'};
+    }
+
+    final client = http.Client();
+    try {
+      final request = http.Request('POST', uri)
+        ..headers.addAll({
+          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream, application/json',
+        })
+        ..body = jsonEncode(body);
+      final response = await client.send(request).timeout(timeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final responseBody = await response.stream.bytesToString().timeout(
+          timeout,
+        );
+        final buffered = http.Response(responseBody, response.statusCode);
+        if (_isResponsesToolChoiceCompatibilityError(buffered)) {
+          throw _ResponsesToolChoiceCompatibilityException(responseBody);
+        }
+        _throwIfRetryableImageStatus(buffered);
+        throw Exception('HTTP ${response.statusCode}: $responseBody');
+      }
+
+      final contentType = response.headers['content-type']?.toLowerCase() ?? '';
+      if (!contentType.contains('text/event-stream')) {
+        final responseBody = await response.stream.bytesToString().timeout(
+          timeout,
+        );
+        final payload = parseResponsesImageGeneration(jsonDecode(responseBody));
+        if (!payload.hasImage) {
+          throw Exception('Responses API stream 未返回 image_generation_call 结果。');
+        }
+        return payload;
+      }
+
+      return await _readResponsesImageGenerationStream(response, timeout);
+    } finally {
+      client.close();
+    }
+  }
+
   Future<GeneratedImageResult> _generateImageWithImagesRoute({
     required String apiKey,
     required String baseUrl,
@@ -373,8 +515,62 @@ $prompt
     required Duration timeout,
     required String size,
   }) async {
-    final payload = await _withTransientImageRetry(() async {
-      final uri = Uri.parse('${_trimSlash(baseUrl)}/images/generations');
+    final uri = Uri.parse('${_trimSlash(baseUrl)}/images/generations');
+    Object? directError;
+    try {
+      final payload = await _postImagesGeneration(
+        uri: uri,
+        apiKey: apiKey,
+        prompt: prompt,
+        imageModel: imageModel,
+        timeout: timeout,
+        size: size,
+        retryTransient: false,
+      );
+      return _imageResultFromPayload(
+        payload,
+        route: '/v1/images/generations',
+        timeout: timeout,
+      );
+    } catch (error) {
+      directError = error;
+      if (!_isTransientImageError(error, retryTimeouts: true)) {
+        rethrow;
+      }
+    }
+
+    try {
+      final payload = await _postImagesGenerationStream(
+        uri: uri,
+        apiKey: apiKey,
+        prompt: prompt,
+        imageModel: imageModel,
+        timeout: timeout,
+        size: size,
+      );
+      return _imageResultFromPayload(
+        payload,
+        route: '/v1/images/generations?stream=true',
+        timeout: timeout,
+      );
+    } catch (streamError) {
+      throw Exception(
+        '非流式请求：${_compactError(directError)}；'
+        '流式请求：${_compactError(streamError)}',
+      );
+    }
+  }
+
+  Future<ParsedImageGenerationResult> _postImagesGeneration({
+    required Uri uri,
+    required String apiKey,
+    required String prompt,
+    required String imageModel,
+    required Duration timeout,
+    required String size,
+    bool retryTransient = true,
+  }) {
+    Future<ParsedImageGenerationResult> operation() async {
       final response = await http
           .post(
             uri,
@@ -402,12 +598,206 @@ $prompt
         throw Exception('/v1/images/generations 未返回图片数据。');
       }
       return payload;
-    });
-    return _imageResultFromPayload(
-      payload,
-      route: '/v1/images/generations',
-      timeout: timeout,
-    );
+    }
+
+    return retryTransient ? _withTransientImageRetry(operation) : operation();
+  }
+
+  Future<ParsedImageGenerationResult> _postImagesGenerationStream({
+    required Uri uri,
+    required String apiKey,
+    required String prompt,
+    required String imageModel,
+    required Duration timeout,
+    required String size,
+  }) async {
+    final client = http.Client();
+    try {
+      final request = http.Request('POST', uri)
+        ..headers.addAll({
+          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream, application/json',
+        })
+        ..body = jsonEncode({
+          'model': imageModel,
+          'prompt': prompt,
+          'size': size,
+          'output_format': 'png',
+          'response_format': 'b64_json',
+          'n': 1,
+          'stream': true,
+        });
+      final response = await client.send(request).timeout(timeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        final body = await response.stream.bytesToString().timeout(timeout);
+        throw Exception('HTTP ${response.statusCode}: $body');
+      }
+
+      final contentType = response.headers['content-type']?.toLowerCase() ?? '';
+      if (!contentType.contains('text/event-stream')) {
+        final body = await response.stream.bytesToString().timeout(timeout);
+        final payload = parseImagesGeneration(jsonDecode(body));
+        if (!payload.hasImage) {
+          throw Exception('/v1/images/generations stream 未返回图片数据。');
+        }
+        return payload;
+      }
+
+      return await _readImagesGenerationStream(response, timeout);
+    } finally {
+      client.close();
+    }
+  }
+
+  Future<ParsedImageGenerationResult> _readImagesGenerationStream(
+    http.StreamedResponse response,
+    Duration timeout,
+  ) async {
+    var eventName = '';
+    final dataLines = <String>[];
+
+    ParsedImageGenerationResult? processEvent() {
+      if (dataLines.isEmpty) return null;
+      final data = dataLines.join('\n').trim();
+      dataLines.clear();
+      if (data.isEmpty || data == '[DONE]') return null;
+
+      final decoded = jsonDecode(data);
+      if (decoded is Map && decoded['error'] != null) {
+        final error = decoded['error'];
+        final message = error is Map ? error['message'] : error;
+        throw Exception(message?.toString() ?? '流式生图返回错误。');
+      }
+
+      final type = decoded is Map ? decoded['type']?.toString() ?? '' : '';
+      final event = eventName;
+      eventName = '';
+      if (type.contains('partial_image') || event.contains('partial_image')) {
+        return null;
+      }
+      if (type.contains('completed') || event.contains('completed')) {
+        final payload = parseImagesGeneration(decoded);
+        if (payload.hasImage) return payload;
+      }
+      return null;
+    }
+
+    await for (final line
+        in response.stream
+            .timeout(timeout)
+            .transform(utf8.decoder)
+            .transform(const LineSplitter())) {
+      if (line.isEmpty) {
+        final payload = processEvent();
+        if (payload != null) return payload;
+        continue;
+      }
+      if (line.startsWith('event:')) {
+        eventName = line.substring('event:'.length).trim();
+      } else if (line.startsWith('data:')) {
+        dataLines.add(line.substring('data:'.length).trimLeft());
+      }
+    }
+
+    final payload = processEvent();
+    if (payload != null) return payload;
+    throw Exception('/v1/images/generations stream 未返回完成图片。');
+  }
+
+  Future<ParsedImageGenerationResult> _readResponsesImageGenerationStream(
+    http.StreamedResponse response,
+    Duration timeout,
+  ) async {
+    var eventName = '';
+    final dataLines = <String>[];
+    ParsedImageGenerationResult? lastPartial;
+
+    ParsedImageGenerationResult? processEvent() {
+      if (dataLines.isEmpty) return null;
+      final data = dataLines.join('\n').trim();
+      dataLines.clear();
+      if (data.isEmpty || data == '[DONE]') return null;
+
+      final decoded = jsonDecode(data);
+      if (decoded is Map && decoded['error'] != null) {
+        final error = decoded['error'];
+        final message = error is Map ? error['message'] : error;
+        throw Exception(message?.toString() ?? 'Responses API stream 返回错误。');
+      }
+
+      final type = decoded is Map ? decoded['type']?.toString() ?? '' : '';
+      final event = eventName;
+      eventName = '';
+      if (type.contains('partial_image') || event.contains('partial_image')) {
+        if (decoded is Map) {
+          final partial = decoded['partial_image_b64']?.toString().trim();
+          if (partial != null && partial.isNotEmpty) {
+            lastPartial = ParsedImageGenerationResult(
+              base64Data: partial,
+              mimeType: _mimeTypeFromOutputFormat(
+                decoded['output_format']?.toString(),
+              ),
+            );
+          }
+        }
+        return null;
+      }
+      if (type == 'response.completed' || event == 'response.completed') {
+        final responseNode = decoded is Map && decoded['response'] != null
+            ? decoded['response']
+            : decoded;
+        final payload = parseResponsesImageGeneration(responseNode);
+        if (payload.hasImage) return payload;
+      }
+      if (type == 'response.failed' || event == 'response.failed') {
+        final responseNode = decoded is Map ? decoded['response'] : null;
+        final error = responseNode is Map ? responseNode['error'] : null;
+        final message = error is Map ? error['message'] : error;
+        throw Exception(message?.toString() ?? 'Responses API stream 失败。');
+      }
+      return null;
+    }
+
+    try {
+      await for (final line
+          in response.stream
+              .timeout(timeout)
+              .transform(utf8.decoder)
+              .transform(const LineSplitter())) {
+        if (line.isEmpty) {
+          final payload = processEvent();
+          if (payload != null) return payload;
+          continue;
+        }
+        if (line.startsWith('event:')) {
+          eventName = line.substring('event:'.length).trim();
+        } else if (line.startsWith('data:')) {
+          dataLines.add(line.substring('data:'.length).trimLeft());
+        }
+      }
+
+      final payload = processEvent();
+      if (payload != null) return payload;
+      if (lastPartial != null && lastPartial!.hasImage) return lastPartial!;
+      throw Exception('Responses API stream 未返回 image_generation_call 结果。');
+    } catch (error) {
+      if (lastPartial != null && lastPartial!.hasImage) return lastPartial!;
+      rethrow;
+    }
+  }
+
+  static String _mimeTypeFromOutputFormat(String? outputFormat) {
+    switch (outputFormat?.trim().toLowerCase()) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'webp':
+        return 'image/webp';
+      case 'png':
+      default:
+        return 'image/png';
+    }
   }
 
   Future<GeneratedImageResult> _generateImageWithImageEditsRoute({
@@ -704,6 +1094,15 @@ $prompt
 
 class _RetryableImageException implements Exception {
   const _RetryableImageException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+class _ResponsesToolChoiceCompatibilityException implements Exception {
+  const _ResponsesToolChoiceCompatibilityException(this.message);
 
   final String message;
 

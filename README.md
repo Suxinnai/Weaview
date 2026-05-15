@@ -222,19 +222,19 @@ flutter build ios
 
 ## Latest Release Notes / 最新更新日志
 
-### v1.0.24
+### v1.0.25
 
 中文：
 
-- 修复生图回复点“重试”时可能改变背景的问题，生图消息会继续走生图路径。
-- 修复部分中转站把 Responses `tool_choice` 兼容错误返回为 408 时的生图 fallback。
-- OpenAI 兼容 Base URL 支持 IPv6 字面量地址，例如 `http://[2409:...]:3141/v1`。
+- 修复复杂 `gpt-image-2` 生图在 CLIProxyAPI 中转站上约 120 秒无响应头后断连的问题。
+- `/images/generations` 瞬断后会改走 Responses `stream:true` 生图工具，并请求 `partial_images`。
+- 当上游没返回最终完成事件但已返回 partial 图片时，应用会展示 partial 图，避免整次失败。
 
 English:
 
-- Fixed image-reply retries that could change the chat background by accidentally using the regular chat path.
-- Fixed image fallback when gateways return Responses `tool_choice` compatibility errors as HTTP 408.
-- OpenAI-compatible Base URLs now cover IPv6 literal addresses such as `http://[2409:...]:3141/v1`.
+- Fixed complex `gpt-image-2` prompts disconnecting around CLIProxyAPI gateway's 120-second no-header window.
+- `/images/generations` transient failures now fall back to the Responses image tool with `stream:true` and `partial_images`.
+- If the upstream misses final completion but emits a partial image, the app displays that partial image instead of failing the whole generation.
 
 ## 贡献指南
 

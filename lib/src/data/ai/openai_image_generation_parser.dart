@@ -38,6 +38,7 @@ ParsedImageGenerationResult parseResponsesImageGeneration(dynamic decoded) {
 
   return _payloadFromKeys(
     decoded,
+    revisedPrompt: _stringForKey(decoded, 'revised_prompt'),
     base64Keys: const ['result', 'image_base64', 'b64_json'],
     urlKeys: const ['url'],
   );
@@ -63,6 +64,7 @@ ParsedImageGenerationResult parseImagesGeneration(dynamic decoded) {
 
   return _payloadFromKeys(
     decoded,
+    revisedPrompt: _stringForKey(decoded, 'revised_prompt'),
     base64Keys: const ['b64_json', 'image_base64', 'result'],
     urlKeys: const ['url'],
   );
