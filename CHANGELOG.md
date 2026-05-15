@@ -2,6 +2,18 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.26 - 2026-05-15
+
+### 中文
+
+- 复杂海报、路线图、信息图、题字、清晰文字类 `gpt-image-2` 提示词会优先走 Responses `stream:true`，避免先等待 `/images/generations` 约 120 秒断连。
+- 保留 `partial_images` 兜底：如果最终完成事件缺失但已经收到 partial 图片，应用会直接展示 partial 图。
+
+### English
+
+- Complex poster, route-map, infographic, title-text, and readable-text `gpt-image-2` prompts now use Responses `stream:true` first, avoiding the initial `/images/generations` no-header timeout.
+- Kept the `partial_images` fallback: if final completion is missing but a partial image arrives, the app displays the partial image.
+
 ## 1.0.25 - 2026-05-15
 
 ### 中文

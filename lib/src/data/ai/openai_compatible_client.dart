@@ -170,8 +170,29 @@ class OpenAiCompatibleClient {
         : '/v1/images/generations';
     final supportsResponsesImageTool = shouldUseResponsesImageTool(imageModel);
 
+    var triedResponsesFirst = false;
+    Object? responsesError;
+    if (imageAttachments.isEmpty &&
+        supportsResponsesImageTool &&
+        _shouldPreferResponsesImageStream(prompt)) {
+      triedResponsesFirst = true;
+      try {
+        return await _generateImageWithResponses(
+          apiKey: apiKey,
+          baseUrl: baseUrl,
+          prompt: prompt,
+          imageAttachments: imageAttachments,
+          responseModel: responseModel,
+          imageModel: imageModel,
+          timeout: timeout,
+          size: size,
+        );
+      } catch (error) {
+        responsesError = error;
+      }
+    }
+
     if (imageAttachments.isNotEmpty && supportsResponsesImageTool) {
-      Object? responsesError;
       try {
         return await _generateImageWithResponses(
           apiKey: apiKey,
@@ -237,6 +258,9 @@ class OpenAiCompatibleClient {
     }
 
     try {
+      if (triedResponsesFirst) {
+        throw responsesError ?? Exception('Responses API 生图失败。');
+      }
       return await _generateImageWithResponses(
         apiKey: apiKey,
         baseUrl: baseUrl,
@@ -254,6 +278,26 @@ class OpenAiCompatibleClient {
         '生图失败。$primaryImageRoute：$imagesMessage；Responses API：$responsesMessage',
       );
     }
+  }
+
+  static bool _shouldPreferResponsesImageStream(String prompt) {
+    final text = prompt.toLowerCase();
+    if (text.length >= 280) return true;
+    const streamFirstNeedles = [
+      '路线图',
+      '信息图',
+      '题字',
+      '标题',
+      '文字清晰',
+      '书法',
+      'poster',
+      'infographic',
+      'route map',
+      'travel map',
+      'readable text',
+      'title text',
+    ];
+    return streamFirstNeedles.any(text.contains);
   }
 
   Future<GeneratedImageResult> _generateImageWithResponses({

@@ -59,6 +59,60 @@ void main() {
       },
     );
 
+    test(
+      'uses Responses streaming first for complex poster text prompts',
+      () async {
+        final requests = <String>[];
+        final requestBodies = <Map<String, dynamic>>[];
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        final serving = server.listen((request) async {
+          requests.add(request.uri.path);
+          final body =
+              jsonDecode(await utf8.decoder.bind(request).join())
+                  as Map<String, dynamic>;
+          requestBodies.add(body);
+          if (request.uri.path == '/v1/responses') {
+            request.response
+              ..statusCode = 200
+              ..headers.contentType = ContentType('text', 'event-stream')
+              ..write(
+                'event: response.image_generation_call.partial_image\n'
+                'data: {"type":"response.image_generation_call.partial_image","partial_image_b64":"Y29tcGxleC1wb3N0ZXI=","output_format":"png"}\n\n',
+              );
+            await request.response.close();
+            return;
+          }
+          request.response
+            ..statusCode = 500
+            ..write('unexpected route');
+          await request.response.close();
+        });
+
+        try {
+          final result = await const OpenAiCompatibleClient().generateImage(
+            apiKey: 'test-key',
+            baseUrl: 'http://127.0.0.1:${server.port}/v1',
+            prompt: '重庆城市漫游路线图海报，顶部标题文字清晰，底部加入古风题字。',
+            responseModel: 'gpt-5.5',
+            imageModel: 'gpt-image-2',
+            timeout: const Duration(seconds: 5),
+          );
+
+          expect(result.route, '/v1/responses?stream=true');
+          expect(result.bytes, utf8.encode('complex-poster'));
+          expect(requests, ['/v1/responses']);
+          expect(requestBodies.single['stream'], isTrue);
+          expect(
+            jsonEncode(requestBodies.single),
+            contains('"partial_images":3'),
+          );
+        } finally {
+          await serving.cancel();
+          await server.close(force: true);
+        }
+      },
+    );
+
     test('retries transient image generation gateway failures once', () async {
       var generationAttempts = 0;
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -750,11 +804,7 @@ void main() {
 
           expect(result.route, '/v1/responses?stream=true');
           expect(result.bytes, utf8.encode('partial-image'));
-          expect(requests, [
-            '/v1/images/generations',
-            '/v1/images/generations',
-            '/v1/responses',
-          ]);
+          expect(requests, ['/v1/responses']);
           expect(responseBodies.single['stream'], isTrue);
           expect(
             jsonEncode(responseBodies.single),

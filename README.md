@@ -222,19 +222,19 @@ flutter build ios
 
 ## Latest Release Notes / 最新更新日志
 
-### v1.0.25
+### v1.0.26
 
 中文：
 
-- 修复复杂 `gpt-image-2` 生图在 CLIProxyAPI 中转站上约 120 秒无响应头后断连的问题。
-- `/images/generations` 瞬断后会改走 Responses `stream:true` 生图工具，并请求 `partial_images`。
-- 当上游没返回最终完成事件但已返回 partial 图片时，应用会展示 partial 图，避免整次失败。
+- 复杂海报、路线图、信息图、题字、清晰文字类 `gpt-image-2` 提示词优先走 Responses `stream:true`。
+- 避免先等待 `/images/generations` 约 120 秒无响应头断连。
+- 如果上游没有最终完成事件但已返回 partial 图片，应用会展示 partial 图。
 
 English:
 
-- Fixed complex `gpt-image-2` prompts disconnecting around CLIProxyAPI gateway's 120-second no-header window.
-- `/images/generations` transient failures now fall back to the Responses image tool with `stream:true` and `partial_images`.
-- If the upstream misses final completion but emits a partial image, the app displays that partial image instead of failing the whole generation.
+- Complex poster, route-map, infographic, title-text, and readable-text `gpt-image-2` prompts use Responses `stream:true` first.
+- This avoids waiting for `/images/generations` to hit the gateway's roughly 120-second no-header disconnect.
+- If final completion is missing but a partial image arrives, the app displays that partial image.
 
 ## 贡献指南
 
