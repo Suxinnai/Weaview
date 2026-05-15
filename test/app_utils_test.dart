@@ -17,6 +17,12 @@ void main() {
         normalizeBaseUrl('http:///localhost:11434/v1'),
         'http://localhost:11434/v1',
       );
+      expect(
+        normalizeBaseUrl(
+          'http://[2409:8a60:365b:e0a0:fe6f:f17:1f82:dedf]:3141/v1/',
+        ),
+        'http://[2409:8a60:365b:e0a0:fe6f:f17:1f82:dedf]:3141/v1',
+      );
     });
 
     test('parses enum and opacity inputs defensively', () {

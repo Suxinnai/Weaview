@@ -222,19 +222,19 @@ flutter build ios
 
 ## Latest Release Notes / 最新更新日志
 
-### v1.0.23
+### v1.0.24
 
 中文：
 
-- 修复生图续改缺少上下文的问题，继续修改时会自动带入上一张生成图与最初的用户参考图。
-- “原比例 / 原图比例 / 不要改比例”等指令会从参考图片尺寸推导画幅，避免无比例文本时退回 1:1。
-- 生图工具调用、手动生图、后台恢复生图统一使用同一套上下文附件与画幅推导逻辑。
+- 修复生图回复点“重试”时可能改变背景的问题，生图消息会继续走生图路径。
+- 修复部分中转站把 Responses `tool_choice` 兼容错误返回为 408 时的生图 fallback。
+- OpenAI 兼容 Base URL 支持 IPv6 字面量地址，例如 `http://[2409:...]:3141/v1`。
 
 English:
 
-- Fixed missing context during follow-up image edits by carrying both the previous generated image and the original user reference image.
-- “Keep original ratio” prompts now derive aspect hints from the reference image instead of falling back to 1:1.
-- Image tool calls, manual image generation, and resumed background jobs now share the same contextual attachment and aspect inference path.
+- Fixed image-reply retries that could change the chat background by accidentally using the regular chat path.
+- Fixed image fallback when gateways return Responses `tool_choice` compatibility errors as HTTP 408.
+- OpenAI-compatible Base URLs now cover IPv6 literal addresses such as `http://[2409:...]:3141/v1`.
 
 ## 贡献指南
 

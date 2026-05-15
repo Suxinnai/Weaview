@@ -18,8 +18,8 @@ import 'package:weaview_flutter/src/features/settings/settings_sheet.dart';
 
 void main() {
   test('exposes the current stable version in app constants', () {
-    expect(appVersionTag, 'v1.0.23');
-    expect(appVersionDisplay, contains('v1.0.23'));
+    expect(appVersionTag, 'v1.0.24');
+    expect(appVersionDisplay, contains('v1.0.24'));
   });
 
   testWidgets('renders the Weaview chat shell', (WidgetTester tester) async {
@@ -274,6 +274,38 @@ $$E = mc^2$$
     expect(state.messages.last.content, contains('生图模型'));
     state.dispose();
   });
+
+  test(
+    'retrying image replies does not apply chat appearance intents',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final state = WeaviewState();
+
+      await state.load();
+      state.messages
+        ..add(ChatMessage.user('背景改成黑色'))
+        ..add(
+          ChatMessage.model('')
+            ..attachments = const [
+              MessageAttachment(
+                path: '/tmp/generated.png',
+                name: 'generated.png',
+                mimeType: 'image/png',
+                kind: 'image',
+                size: 12,
+              ),
+            ],
+        );
+
+      await state.retryMessageAt(1);
+
+      expect(state.backgroundOverride, isNull);
+      expect(state.messages.first.role, 'user');
+      expect(state.messages.first.content, '背景改成黑色');
+      expect(state.messages.last.content, contains('生图模型'));
+      state.dispose();
+    },
+  );
 
   test(
     'image generation follow-up reuses previous generated and source images',

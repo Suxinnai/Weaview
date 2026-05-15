@@ -655,9 +655,11 @@ $prompt
   }
 
   static bool _isResponsesToolChoiceCompatibilityError(http.Response response) {
-    if (response.statusCode != 400) return false;
+    if (response.statusCode < 400) return false;
     final text = response.body.toLowerCase();
-    return text.contains('tool_choice') &&
+    final mentionsToolChoice =
+        text.contains('tool_choice') || text.contains('tool choice');
+    return mentionsToolChoice &&
         (text.contains('not found') ||
             text.contains('must be specified') ||
             text.contains('not supported') ||

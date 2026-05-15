@@ -2,6 +2,22 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.24 - 2026-05-15
+
+### 中文
+
+- 修复生图回复点“重试”时可能被当成普通聊天重新发送、从而触发背景/主题变化的问题。
+- 修复部分中转站把 Responses `tool_choice` 兼容错误返回为 408 时，生图 fallback 没有改用无 `tool_choice` 请求的问题。
+- OpenAI 兼容 Base URL 规范化新增 IPv6 字面量地址覆盖，例如 `http://[2409:...]:3141/v1`。
+- 真实接口验证：`https://api.sunoixy.cc.cd/v1` + `gpt-image-2` 在 1:1、竖图、横图尺寸下均可返回图片。
+
+### English
+
+- Fixed image-reply retries being resent as regular chat turns, which could trigger background/theme changes.
+- Fixed image fallback when gateways report Responses `tool_choice` compatibility errors as HTTP 408 instead of HTTP 400.
+- Added coverage for OpenAI-compatible IPv6 literal Base URLs such as `http://[2409:...]:3141/v1`.
+- Live API verified with `https://api.sunoixy.cc.cd/v1` and `gpt-image-2` for square, portrait, and landscape image sizes.
+
 ## 1.0.23 - 2026-05-13
 
 ### 中文

@@ -199,7 +199,6 @@ class _WeaviewHomeState extends State<WeaviewHome>
     await widget.state.retryMessageAt(
       index,
       useWebSearch: _webSearchEnabled && widget.state.hasActiveSearchKey,
-      imageGeneration: _imageGenerationMode,
     );
   }
 

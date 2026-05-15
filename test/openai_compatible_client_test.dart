@@ -543,5 +543,93 @@ void main() {
         await tempDir.delete(recursive: true);
       }
     });
+
+    test(
+      'falls back to Responses without tool_choice on 408 compatibility error',
+      () async {
+        final requests = <String>[];
+        final responseBodies = <Map<String, dynamic>>[];
+        var responsesAttempts = 0;
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        final serving = server.listen((request) async {
+          requests.add(request.uri.path);
+          if (request.uri.path == '/v1/images/generations') {
+            await utf8.decoder.bind(request).join();
+            request.response
+              ..statusCode = 408
+              ..headers.contentType = ContentType.json
+              ..write('{"error":{"message":"upstream request timeout"}}');
+            await request.response.close();
+            return;
+          }
+          if (request.uri.path == '/v1/responses') {
+            responsesAttempts += 1;
+            final body =
+                jsonDecode(await utf8.decoder.bind(request).join())
+                    as Map<String, dynamic>;
+            responseBodies.add(body);
+            if (responsesAttempts == 1) {
+              request.response
+                ..statusCode = 408
+                ..headers.contentType = ContentType.json
+                ..write(
+                  jsonEncode({
+                    'error': {
+                      'message':
+                          "Tool choice 'image_generation' not found in 'tools' parameter.",
+                    },
+                  }),
+                );
+              await request.response.close();
+              return;
+            }
+            request.response
+              ..statusCode = 200
+              ..headers.contentType = ContentType.json
+              ..write(
+                jsonEncode({
+                  'output': [
+                    {
+                      'type': 'image_generation_call',
+                      'result': 'dG9vbC1jaG9pY2UtY29tcGF0',
+                    },
+                  ],
+                }),
+              );
+            await request.response.close();
+            return;
+          }
+          request.response.statusCode = 404;
+          await request.response.close();
+        });
+
+        try {
+          final result = await const OpenAiCompatibleClient().generateImage(
+            apiKey: 'test-key',
+            baseUrl: 'http://127.0.0.1:${server.port}/v1',
+            prompt: 'a direct image generation prompt',
+            responseModel: 'gpt-5.5',
+            imageModel: 'gpt-image-2',
+            timeout: const Duration(seconds: 5),
+          );
+
+          expect(result.route, '/v1/responses');
+          expect(result.bytes, utf8.encode('tool-choice-compat'));
+          expect(requests, [
+            '/v1/images/generations',
+            '/v1/images/generations',
+            '/v1/responses',
+            '/v1/responses',
+          ]);
+          expect(responseBodies.first['tool_choice'], {
+            'type': 'image_generation',
+          });
+          expect(responseBodies.last, isNot(contains('tool_choice')));
+        } finally {
+          await serving.cancel();
+          await server.close(force: true);
+        }
+      },
+    );
   });
 }

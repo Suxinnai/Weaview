@@ -1356,7 +1356,7 @@ ${_compactConversation(source)}
           current
             ..content = configIssue
             ..isThinking = false
-            ..activity = '';
+            ..activity = 'imageGeneration';
         },
       );
       return;
@@ -1379,7 +1379,7 @@ ${_compactConversation(source)}
           mutate: (current) {
             current
               ..isThinking = false
-              ..activity = '';
+              ..activity = 'imageGeneration';
           },
         );
         return;
@@ -1394,7 +1394,7 @@ ${_compactConversation(source)}
             ..content = ''
             ..attachments = [attachment]
             ..isThinking = false
-            ..activity = '';
+            ..activity = 'imageGeneration';
         },
       );
       if (!updated) return;
@@ -1412,7 +1412,7 @@ ${_compactConversation(source)}
           mutate: (current) {
             current
               ..isThinking = false
-              ..activity = '';
+              ..activity = 'imageGeneration';
           },
         );
         return;
@@ -1426,7 +1426,7 @@ ${_compactConversation(source)}
             ..content =
                 '生图失败：${_friendlyAiError(error, timeout: imageRequestTimeout)}\n\n请确认当前模型支持生图接口，模型能力已标记为 image，并检查 Base URL、证书和 API Key。'
             ..isThinking = false
-            ..activity = '';
+            ..activity = 'imageGeneration';
         },
       );
       if (!updated) return;
@@ -2361,6 +2361,8 @@ Treat background style, font/text style, bubble style, and message alignment as 
     bool imageGeneration = false,
   }) async {
     if (isStreaming || index < 0 || index >= messages.length) return;
+    final retryAsImageGeneration =
+        imageGeneration || _looksLikeImageGenerationRetry(index);
     var userIndex = index;
     if (messages[userIndex].role != 'user') {
       userIndex = messages
@@ -2379,7 +2381,7 @@ Treat background style, font/text style, bubble style, and message alignment as 
       ..addAll(prefix);
     suggestions = [];
     notifyListeners();
-    if (imageGeneration) {
+    if (retryAsImageGeneration) {
       await submitImageGeneration(
         original.content,
         attachments: original.attachments.map((item) => item.copy()).toList(),
@@ -2391,6 +2393,25 @@ Treat background style, font/text style, bubble style, and message alignment as 
       attachments: original.attachments.map((item) => item.copy()).toList(),
       useWebSearch: useWebSearch,
     );
+  }
+
+  bool _looksLikeImageGenerationRetry(int index) {
+    if (index < 0 || index >= messages.length) return false;
+    final target = messages[index];
+    if (_isImageGenerationReply(target)) return true;
+    if (target.role == 'user' && index + 1 < messages.length) {
+      final next = messages[index + 1];
+      if (next.role == 'model' && _isImageGenerationReply(next)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool _isImageGenerationReply(ChatMessage message) {
+    return message.activity == 'imageGeneration' ||
+        message.attachments.any((attachment) => attachment.isImage) ||
+        message.content.trim().startsWith('生图失败');
   }
 
   Future<void> translateMessageAt(int index) async {
