@@ -2,6 +2,28 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.28 - 2026-05-21
+
+### 中文
+
+- 修复 Skills 安装必须连接本机 runner 的问题：现在 App 会直接从 GitHub 仓库下载并解析 `SKILL.md`，支持根目录和 `/tree/branch/subdir` 路径。
+- Skills runner 只保留给外部脚本执行阶段；安装 GitHub Skill 不再因为手机上没有 `127.0.0.1:8765` runner 而失败。
+- 参考 RikkaHub 的技能加载方式，安装后会保存 `SKILL.md` frontmatter、描述和正文提示词，并在执行时传给 runner。
+- 修复编辑用户消息时追加新消息的问题：现在会覆盖原消息、截断后续分支并从原位置重新生成。
+- 优化生图续改上下文，像“添加一顶帽子”“去掉文字”“换背景”“优化颜色”等追加描述会自动带上上一张生成图。
+- 优化后台生图恢复：后台期间被系统中断时不会立刻写死为失败，回到前台后会继续尝试恢复同一个生图占位消息。
+- Runner 的 `SKILL.md` 解析补充 frontmatter 支持和技能路径逃逸防护。
+
+### English
+
+- Fixed Skills installation requiring a local runner. The app now downloads and parses `SKILL.md` directly from GitHub, including root repos and `/tree/branch/subdir` paths.
+- The Skills runner is now only needed when executing external scripts; GitHub Skill installation no longer fails just because `127.0.0.1:8765` is unavailable on the phone.
+- Aligned the loading model closer to RikkaHub: frontmatter, description, and body instructions are stored locally and passed to the runner when needed.
+- Fixed user-message editing appending a new message; edited user turns now replace the original branch and regenerate from that position.
+- Improved image follow-up context for additive edits such as adding objects, removing text, changing backgrounds, and refining colors.
+- Improved background image generation recovery so interrupted background tasks stay resumable instead of immediately becoming final failures.
+- Added frontmatter parsing and path-escape protection to the Python skill runner.
+
 ## 1.0.27 - 2026-05-21
 
 ### 中文

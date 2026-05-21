@@ -1,13 +1,18 @@
-import '../../data/skills/skill_runner_client.dart';
 import '../../core/app_utils.dart';
+import '../../data/skills/github_skill_client.dart';
+import '../../data/skills/skill_runner_client.dart';
 import '../../domain/models.dart';
 import '../weaview_preferences.dart';
 
 class SkillService {
-  SkillService({SkillRunnerClient client = const SkillRunnerClient()})
-    : _client = client;
+  SkillService({
+    SkillRunnerClient client = const SkillRunnerClient(),
+    GithubSkillClient githubClient = const GithubSkillClient(),
+  }) : _client = client,
+       _githubClient = githubClient;
 
   final SkillRunnerClient _client;
+  final GithubSkillClient _githubClient;
   List<SkillConfig> skills = [];
   String activeSkillId = '';
   String runnerBaseUrl = 'http://127.0.0.1:8765';
@@ -154,12 +159,20 @@ class SkillService {
   }
 
   Future<SkillConfig> installFromUrl(String sourceUrl) async {
-    final skill = await _client.install(
+    final normalized = _normalizeGithubUrl(sourceUrl);
+    final skill = await _githubClient.install(
+      sourceUrl: normalized,
+      timeout: const Duration(seconds: 30),
+    );
+    return skill;
+  }
+
+  Future<SkillConfig> installFromRunner(String sourceUrl) async {
+    return _client.install(
       baseUrl: runnerBaseUrl,
       sourceUrl: sourceUrl,
       timeout: const Duration(seconds: 90),
     );
-    return skill;
   }
 
   Future<SkillRunResult> runSkill({
@@ -186,6 +199,15 @@ class SkillService {
         .where((trigger) => trigger.isNotEmpty)
         .toSet()
         .toList();
+  }
+
+  static String _normalizeGithubUrl(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) throw Exception('请输入 GitHub Skill URL。');
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    return 'https://$trimmed';
   }
 }
 

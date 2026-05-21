@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 VERSION = "0.1.0"
 ROOT = Path(__file__).resolve().parent
 SKILLS_DIR = ROOT / ".skills"
+FRONTMATTER_END = re.compile(r"\r?\n---(?:\r?\n|$)")
 
 
 def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict[str, Any]) -> None:
@@ -40,6 +41,35 @@ def _skill_id_from_url(url: str) -> str:
     return slug or "skill"
 
 
+def _resolve_skill_dir(skill_id: str) -> Path:
+    if not skill_id or skill_id in {".", ".."} or "/" in skill_id or "\\" in skill_id:
+        raise ValueError("Invalid skill id.")
+    root = SKILLS_DIR.resolve()
+    target = (root / skill_id).resolve()
+    if target != root and root not in target.parents:
+        raise ValueError("Skill path escapes the skills directory.")
+    return target
+
+
+def _split_frontmatter(text: str) -> tuple[dict[str, str], str]:
+    if not text.startswith("---"):
+        return {}, text
+    match = FRONTMATTER_END.search(text, 3)
+    if not match:
+        return {}, text
+    raw = text[3 : match.start()].strip()
+    meta: dict[str, str] = {}
+    for line in raw.splitlines():
+        key, sep, value = line.partition(":")
+        if not sep:
+            continue
+        key = key.strip()
+        value = value.strip().strip('"')
+        if key and value:
+            meta[key] = value
+    return meta, text[match.end() :].lstrip("\r\n")
+
+
 def _clone_or_copy(url: str, target: Path) -> None:
     SKILLS_DIR.mkdir(parents=True, exist_ok=True)
     local = Path(url).expanduser()
@@ -58,9 +88,13 @@ def _clone_or_copy(url: str, target: Path) -> None:
 
 def _parse_skill_markdown(path: Path, fallback_id: str, source_url: str) -> dict[str, Any]:
     text = path.read_text(encoding="utf-8", errors="replace")
-    lines = [line.strip() for line in text.splitlines()]
-    title = next((line.lstrip("#").strip() for line in lines if line.startswith("#")), fallback_id)
-    description = next(
+    frontmatter, body = _split_frontmatter(text)
+    lines = [line.strip() for line in body.splitlines()]
+    title = frontmatter.get("name") or next(
+        (line.lstrip("#").strip() for line in lines if line.startswith("#")),
+        fallback_id,
+    )
+    description = frontmatter.get("description") or next(
         (line for line in lines if line and not line.startswith("#") and not line.startswith("```")),
         "",
     )
@@ -80,6 +114,7 @@ def _parse_skill_markdown(path: Path, fallback_id: str, source_url: str) -> dict
         "description": description,
         "sourceUrl": source_url,
         "localPath": str(path.parent),
+        "systemPrompt": body.strip(),
         "entrypoints": entrypoints,
     }
 
@@ -88,7 +123,7 @@ def install_skill(url: str) -> dict[str, Any]:
     if not url.strip():
         raise ValueError("Missing skill URL.")
     skill_id = _skill_id_from_url(url)
-    target = SKILLS_DIR / skill_id
+    target = _resolve_skill_dir(skill_id)
     _clone_or_copy(url, target)
     skill_md = target / "SKILL.md"
     if not skill_md.exists():
@@ -102,7 +137,7 @@ def install_skill(url: str) -> dict[str, Any]:
 
 
 def _load_skill(skill_id: str) -> dict[str, Any]:
-    path = SKILLS_DIR / skill_id / "skill.runner.json"
+    path = _resolve_skill_dir(skill_id) / "skill.runner.json"
     if not path.exists():
         raise ValueError(f"Skill is not installed: {skill_id}")
     return json.loads(path.read_text(encoding="utf-8"))

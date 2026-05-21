@@ -422,6 +422,73 @@ $$E = mc^2$$
     },
   );
 
+  test(
+    'image generation follow-up treats additive edits as image context',
+    () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'weaview-add-edit-',
+      );
+      final previous = File('${tempDir.path}/previous.png');
+      await previous.writeAsBytes(base64Decode(_png1x1));
+      SharedPreferences.setMockInitialValues({});
+      final state = WeaviewState();
+
+      try {
+        await state.load();
+        state.messages
+          ..add(ChatMessage.user('生成一个蓝色机器人'))
+          ..add(
+            ChatMessage.model('')
+              ..attachments = [
+                MessageAttachment(
+                  path: previous.path,
+                  name: 'previous.png',
+                  mimeType: 'image/png',
+                  kind: 'image',
+                  size: await previous.length(),
+                ),
+              ],
+          );
+
+        final prepared = await state.debugPrepareImageGenerationRequest(
+          '给它添加一顶帽子',
+        );
+
+        expect(prepared['attachmentPaths'], previous.path);
+        expect(prepared['prompt'], contains('上一轮图像处理上下文'));
+      } finally {
+        state.dispose();
+        await tempDir.delete(recursive: true);
+      }
+    },
+  );
+
+  test('editing a user message replaces the original branch', () async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+
+    await state.load();
+    state.messages
+      ..add(ChatMessage.user('旧问题'))
+      ..add(ChatMessage.model('旧回答'))
+      ..add(ChatMessage.user('后续问题'));
+
+    await state.replaceUserMessageAndSubmit(0, '新问题');
+
+    expect(state.messages.first.role, 'user');
+    expect(state.messages.first.content, '新问题');
+    expect(state.messages, hasLength(2));
+    expect(
+      state.messages.map((message) => message.content),
+      isNot(contains('旧回答')),
+    );
+    expect(
+      state.messages.map((message) => message.content),
+      isNot(contains('后续问题')),
+    );
+    state.dispose();
+  });
+
   test('reorders providers and keeps order in state', () async {
     SharedPreferences.setMockInitialValues({});
     final state = WeaviewState();

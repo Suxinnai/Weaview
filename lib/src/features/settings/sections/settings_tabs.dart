@@ -505,7 +505,7 @@ extension SettingsTabs on SettingsSheetState {
               Padding(
                 padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
                 child: Text(
-                  '安装 GitHub Skill 后，可在聊天中手动固定或由触发词自动推荐。外部技能执行前始终需要确认。',
+                  '安装 GitHub Skill 会直接读取仓库中的 SKILL.md；只有执行本地脚本类技能时才需要 Runner，且执行前始终需要确认。',
                   style: state.textStyle(context, size: 12, opacity: 0.58),
                 ),
               ),

@@ -62,7 +62,7 @@ class SkillRunnerClient {
         ...decoded.cast<String, dynamic>(),
         'enabled': true,
         'triggers': _defaultTriggersFor(decoded),
-        'systemPrompt': '',
+        'systemPrompt': decoded['systemPrompt']?.toString() ?? '',
         'createdAt': now,
         'updatedAt': now,
       });
@@ -90,6 +90,7 @@ class SkillRunnerClient {
               'input': input,
               'entrypoint': entrypoint ?? skill.primaryEntrypoint,
               'context': {
+                'skillPrompt': skill.systemPrompt,
                 'messages': messages
                     .map(
                       (message) => {

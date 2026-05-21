@@ -33,6 +33,10 @@ void main() {
             }),
           );
       } else if (request.uri.path == '/skills/run') {
+        final body =
+            jsonDecode(await utf8.decoder.bind(request).join())
+                as Map<String, dynamic>;
+        expect((body['context'] as Map)['skillPrompt'], isA<String>());
         request.response
           ..headers.contentType = ContentType.json
           ..write('{"ok":true,"text":"tweet result","json":{"id":"1"}}');

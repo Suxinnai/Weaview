@@ -58,6 +58,7 @@ class WeaviewState extends ChangeNotifier {
   bool _cancelStreamRequested = false;
   int _activeImageGenerationCount = 0;
   final Set<int> _cancelledImageRuns = {};
+  final Set<int> _backgroundedImageRuns = {};
 
   // Chat state
   final List<ChatMessage> messages = [];
@@ -146,6 +147,12 @@ class WeaviewState extends ChangeNotifier {
   bool get hasActiveImageGeneration =>
       _activeImageGenerationCount > 0 ||
       messages.any((message) => message.isImageGenerating);
+
+  void markAppBackgrounded() {
+    if (hasActiveImageGeneration) {
+      _backgroundedImageRuns.add(_streamRunId);
+    }
+  }
 
   ThemeMode get effectiveThemeMode => _theme.effectiveThemeMode;
 
@@ -781,6 +788,33 @@ class WeaviewState extends ChangeNotifier {
     }
   }
 
+  Future<void> replaceUserMessageAndSubmit(
+    int index,
+    String value, {
+    List<MessageAttachment> attachments = const [],
+    bool useWebSearch = false,
+  }) async {
+    if (index < 0 ||
+        index >= messages.length ||
+        messages[index].role != 'user' ||
+        isStreaming) {
+      return;
+    }
+    final content = value.trim();
+    if (content.isEmpty && attachments.isEmpty) return;
+    final preservedAttachments = attachments.isEmpty
+        ? messages[index].attachments
+              .map((attachment) => attachment.copy())
+              .toList()
+        : attachments;
+    messages.removeRange(index, messages.length);
+    await submitMessage(
+      content,
+      attachments: preservedAttachments,
+      useWebSearch: useWebSearch,
+    );
+  }
+
   Future<void> submitImageGeneration(
     String value, {
     List<MessageAttachment> attachments = const [],
@@ -827,6 +861,28 @@ class WeaviewState extends ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  Future<void> replaceUserImageGenerationAndSubmit(
+    int index,
+    String value, {
+    List<MessageAttachment> attachments = const [],
+  }) async {
+    if (index < 0 ||
+        index >= messages.length ||
+        messages[index].role != 'user' ||
+        isStreaming) {
+      return;
+    }
+    final content = value.trim();
+    if (content.isEmpty && attachments.isEmpty) return;
+    final preservedAttachments = attachments.isEmpty
+        ? messages[index].attachments
+              .map((attachment) => attachment.copy())
+              .toList()
+        : attachments;
+    messages.removeRange(index, messages.length);
+    await submitImageGeneration(content, attachments: preservedAttachments);
   }
 
   Future<void> resumeInterruptedImageGeneration({
@@ -983,6 +1039,21 @@ class WeaviewState extends ChangeNotifier {
         );
         return;
       }
+      if (_backgroundedImageRuns.contains(runId)) {
+        _mutateModelMessageInSession(
+          sessionId: sessionId,
+          targetIndex: targetIndex,
+          persist: true,
+          mutate: (current) {
+            current
+              ..content = '后台期间生图被系统中断，回到前台后会继续生成。'
+              ..attachments = []
+              ..isThinking = true
+              ..activity = 'imageGeneration';
+          },
+        );
+        return;
+      }
       final updated = _mutateModelMessageInSession(
         sessionId: sessionId,
         targetIndex: targetIndex,
@@ -1005,6 +1076,7 @@ class WeaviewState extends ChangeNotifier {
         _activeImageGenerationCount -= 1;
       }
       _cancelledImageRuns.remove(runId);
+      _backgroundedImageRuns.remove(runId);
     }
   }
 
@@ -1155,6 +1227,26 @@ $previousPrompt
         text.contains('上图') ||
         text.contains('刚才') ||
         text.contains('重新') ||
+        text.contains('添加') ||
+        text.contains('加上') ||
+        text.contains('增加') ||
+        text.contains('补充') ||
+        text.contains('减少') ||
+        text.contains('删掉') ||
+        text.contains('删除') ||
+        text.contains('去掉') ||
+        text.contains('移除') ||
+        text.contains('擦除') ||
+        text.contains('替换') ||
+        text.contains('优化') ||
+        text.contains('细化') ||
+        text.contains('增强') ||
+        text.contains('弱化') ||
+        text.contains('文字') ||
+        text.contains('背景') ||
+        text.contains('颜色') ||
+        text.contains('人物') ||
+        text.contains('主体') ||
         text.contains('换成') ||
         text.contains('变成') ||
         text.contains('同样') ||
@@ -1167,7 +1259,14 @@ $previousPrompt
         text.contains('也做') ||
         text.contains('这个也') ||
         text.contains('处理') ||
-        text.contains('风格');
+        text.contains('风格') ||
+        text.contains('add') ||
+        text.contains('remove') ||
+        text.contains('replace') ||
+        text.contains('change') ||
+        text.contains('edit') ||
+        text.contains('modify') ||
+        text.contains('keep');
   }
 
   MessageAttachment? _lastGeneratedImageAttachment({int? beforeIndex}) {

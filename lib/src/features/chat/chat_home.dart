@@ -45,6 +45,8 @@ class _WeaviewHomeState extends State<WeaviewHome>
   bool _recording = false;
   bool _webSearchEnabled = false;
   bool _imageGenerationMode = false;
+  int? _editingUserMessageIndex;
+  bool _editingImageGenerationMessage = false;
   String _recordingPrefix = '';
   int _seenMessageCount = 0;
   DateTime _lastAutoScroll = DateTime.fromMillisecondsSinceEpoch(0);
@@ -101,17 +103,27 @@ class _WeaviewHomeState extends State<WeaviewHome>
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
+      widget.state.markAppBackgrounded();
       _backgroundedWithImageGeneration = widget.state.hasActiveImageGeneration;
       return;
     }
     if (state != AppLifecycleState.resumed) return;
     final shouldRetry = _backgroundedWithImageGeneration;
     _backgroundedWithImageGeneration = false;
-    unawaited(
-      widget.state.resumeInterruptedImageGeneration(
-        retryLastFailure: shouldRetry,
-      ),
-    );
+    for (final delay in const [
+      Duration.zero,
+      Duration(milliseconds: 700),
+      Duration(seconds: 2),
+    ]) {
+      Future<void>.delayed(delay, () {
+        if (!mounted) return;
+        unawaited(
+          widget.state.resumeInterruptedImageGeneration(
+            retryLastFailure: shouldRetry,
+          ),
+        );
+      });
+    }
     _scheduleKeyboardAwareScroll();
   }
 
@@ -167,6 +179,34 @@ class _WeaviewHomeState extends State<WeaviewHome>
       setState(() => _recording = false);
     }
     final attachments = List<MessageAttachment>.from(_pendingAttachments);
+    final editingIndex = _editingUserMessageIndex;
+    if (editingIndex != null) {
+      if (text.trim().isEmpty) return;
+      final editAsImage =
+          _editingImageGenerationMessage || _imageGenerationMode;
+      _input.clear();
+      setState(() {
+        _editingUserMessageIndex = null;
+        _editingImageGenerationMessage = false;
+        _pendingAttachments = [];
+        _dockExpanded = false;
+      });
+      if (editAsImage) {
+        await widget.state.replaceUserImageGenerationAndSubmit(
+          editingIndex,
+          text,
+          attachments: attachments,
+        );
+      } else {
+        await widget.state.replaceUserMessageAndSubmit(
+          editingIndex,
+          text,
+          attachments: attachments,
+          useWebSearch: _webSearchEnabled && widget.state.hasActiveSearchKey,
+        );
+      }
+      return;
+    }
     if (_imageGenerationMode) {
       if (text.trim().isEmpty) return;
       _input.clear();
@@ -300,9 +340,23 @@ class _WeaviewHomeState extends State<WeaviewHome>
     if (index < 0 || index >= widget.state.messages.length) return;
     final message = widget.state.messages[index];
     if (message.role == 'user') {
+      final next = index + 1 < widget.state.messages.length
+          ? widget.state.messages[index + 1]
+          : null;
       _input.text = message.content;
       _input.selection = TextSelection.collapsed(offset: _input.text.length);
-      setState(() => _dockExpanded = false);
+      setState(() {
+        _editingUserMessageIndex = index;
+        _editingImageGenerationMessage =
+            next?.activity == 'imageGeneration' ||
+            (next?.attachments.any((attachment) => attachment.isImage) ??
+                false);
+        _imageGenerationMode = _editingImageGenerationMessage;
+        _pendingAttachments = message.attachments
+            .map((attachment) => attachment.copy())
+            .toList();
+        _dockExpanded = false;
+      });
       _inputFocus.requestFocus();
       return;
     }
