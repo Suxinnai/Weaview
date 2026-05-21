@@ -583,6 +583,7 @@ $$E = mc^2$$
             pendingAttachments: const [],
             onToggleExpanded: () {},
             onToggleWebSearch: () {},
+            onOpenSkillPicker: () {},
             onSubmit: () async {},
             onToggleRecording: () async {},
             onPickChatImages: () async {},
@@ -680,6 +681,95 @@ $$E = mc^2$$
     await tester.pumpAndSettle();
 
     expect(find.text('已选择'), findsOneWidget);
+    state.dispose();
+  });
+
+  testWidgets('settings displays installed skills and runner config', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'skill_runner_base_url': 'http://127.0.0.1:8765',
+      'skills':
+          '[{"id":"x-tweet-fetcher","name":"X Tweet Fetcher","description":"Fetch tweets","sourceUrl":"https://github.com/ythx-101/x-tweet-fetcher","enabled":true,"triggers":["tweet","推文"],"entrypoints":[{"id":"fetch_tweet","label":"抓取推文"}],"createdAt":1,"updatedAt":1}]',
+    });
+    final state = WeaviewState();
+
+    await state.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsSheet(
+          state: state,
+          open: true,
+          onClose: () {},
+          onPickAvatar: (_) async {},
+          showSnack: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('扩展服务'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Skills 技能'), findsOneWidget);
+    expect(find.text('X Tweet Fetcher'), findsOneWidget);
+    expect(find.textContaining('tweet'), findsWidgets);
+    state.dispose();
+  });
+
+  testWidgets('chat dock opens manual skill picker', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'skills':
+          '[{"id":"x-tweet-fetcher","name":"X Tweet Fetcher","description":"Fetch tweets","sourceUrl":"https://github.com/ythx-101/x-tweet-fetcher","enabled":true,"triggers":["tweet"],"createdAt":1,"updatedAt":1}]',
+    });
+    final state = WeaviewState();
+
+    await state.load();
+    await tester.pumpWidget(MaterialApp(home: WeaviewHome(state: state)));
+    await tester.tap(find.byIcon(Icons.add_rounded).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('技能'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('选择技能'), findsOneWidget);
+    expect(find.text('X Tweet Fetcher'), findsOneWidget);
+    state.dispose();
+  });
+
+  testWidgets('auto matched skill asks for confirmation without executing', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'skill_runner_base_url': 'http://127.0.0.1:8765',
+      'skills':
+          '[{"id":"x-tweet-fetcher","name":"X Tweet Fetcher","description":"Fetch tweets","sourceUrl":"https://github.com/ythx-101/x-tweet-fetcher","enabled":true,"triggers":["tweet"],"createdAt":1,"updatedAt":1}]',
+    });
+    final state = WeaviewState();
+
+    await state.load();
+    await tester.pumpWidget(MaterialApp(home: WeaviewHome(state: state)));
+    await tester.enterText(
+      find
+          .descendant(
+            of: find.byType(ChatInputDock),
+            matching: find.byType(TextField),
+          )
+          .first,
+      'tweet https://x.com/example/status/123',
+    );
+    await tester.pump();
+    await tester.tap(find.text('编织'));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.textContaining('执行技能'), findsOneWidget);
+    expect(state.messages, isEmpty);
+
+    await tester.tap(find.text('取消'));
+    await tester.pump(const Duration(milliseconds: 250));
+
+    expect(state.messages, isEmpty);
+    await tester.pump(const Duration(seconds: 1));
     state.dispose();
   });
 
@@ -965,6 +1055,27 @@ $$E = mc^2$$
     expect(state.textOverride, isNull);
     expect(state.bubbleStyle, 'minimal');
     expect(state.fontStyleMood, 'normal');
+    state.dispose();
+  });
+
+  test('open-ended background requests stay in the poetic palette', () async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+
+    await state.load();
+    state.applyAiTheme({
+      'backgroundColor': '#FF0000',
+      'isDark': false,
+    }, userPrompt: '换个背景');
+
+    expect(colorToHex(state.backgroundOverride!), '#F6F1FF');
+
+    state.applyAiTheme({
+      'backgroundColor': '#DC2626',
+      'isDark': false,
+    }, userPrompt: '再换个背景');
+
+    expect(colorToHex(state.backgroundOverride!), '#F1F6F4');
     state.dispose();
   });
 

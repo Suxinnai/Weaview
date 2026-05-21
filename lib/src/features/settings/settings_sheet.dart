@@ -60,11 +60,16 @@ class SettingsSheetState extends State<SettingsSheet> {
   final TextEditingController feedbackStepsController = TextEditingController();
   final TextEditingController feedbackContactController =
       TextEditingController();
+  final TextEditingController skillInstallController = TextEditingController();
+  final TextEditingController skillRunnerController = TextEditingController();
+  final TextEditingController skillTriggersController = TextEditingController();
+  final TextEditingController skillPromptController = TextEditingController();
   late ModelAssignment roleDraft;
   final Set<String> deletingProviders = {};
   String? providerDeleteTarget;
   String? draggingProviderName;
   String feedbackType = '问题反馈';
+  String? editingSkillId;
 
   static const settingsTabs = [
     ('general', '通用', Icons.settings_outlined),
@@ -116,6 +121,10 @@ class SettingsSheetState extends State<SettingsSheet> {
     feedbackDetailController.dispose();
     feedbackStepsController.dispose();
     feedbackContactController.dispose();
+    skillInstallController.dispose();
+    skillRunnerController.dispose();
+    skillTriggersController.dispose();
+    skillPromptController.dispose();
     super.dispose();
   }
 
@@ -155,6 +164,7 @@ class SettingsSheetState extends State<SettingsSheet> {
             : SettingsSheetState.settingsRoles[editingRole!]!.$1,
       'search_engine_config' => '搜索服务配置',
       'tts_config' => '语音服务配置',
+      'skill_config' => '技能配置',
       'feedback_form' => '报告问题 / 提供反馈',
       _ => '设置',
     };
@@ -304,6 +314,7 @@ class SettingsSheetState extends State<SettingsSheet> {
               'model_role_config' => modelRoleConfigView(),
               'search_engine_config' => searchConfigView(),
               'tts_config' => ttsConfigView(),
+              'skill_config' => skillConfigView(),
               'feedback_form' => feedbackView(),
               _ => const SizedBox.shrink(),
             },

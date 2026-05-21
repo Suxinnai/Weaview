@@ -22,6 +22,7 @@ class ChatInputDock extends StatelessWidget {
     required this.pendingAttachments,
     required this.onToggleExpanded,
     required this.onToggleWebSearch,
+    required this.onOpenSkillPicker,
     required this.onSubmit,
     required this.onToggleRecording,
     required this.onPickChatImages,
@@ -42,6 +43,7 @@ class ChatInputDock extends StatelessWidget {
   final List<MessageAttachment> pendingAttachments;
   final VoidCallback onToggleExpanded;
   final VoidCallback onToggleWebSearch;
+  final VoidCallback onOpenSkillPicker;
   final Future<void> Function() onSubmit;
   final Future<void> Function() onToggleRecording;
   final Future<void> Function() onPickChatImages;
@@ -258,6 +260,14 @@ class ChatInputDock extends StatelessWidget {
                           label: '文件',
                           state: state,
                           onTap: onPickChatFiles,
+                        ),
+                        ToolChip(
+                          icon: Icons.extension_outlined,
+                          label: state.activeSkill == null
+                              ? '技能'
+                              : state.activeSkill!.name,
+                          state: state,
+                          onTap: onOpenSkillPicker,
                         ),
                         ToolChip(
                           icon: Icons.public_rounded,

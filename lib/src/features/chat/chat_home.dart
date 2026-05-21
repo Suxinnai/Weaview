@@ -178,6 +178,22 @@ class _WeaviewHomeState extends State<WeaviewHome>
       return;
     }
     final useWebSearch = _webSearchEnabled;
+    final skill = widget.state.matchSkillForInput(text);
+    if (skill != null) {
+      final confirmed = await _confirmSkillExecution(skill, text);
+      if (!confirmed) return;
+      _input.clear();
+      setState(() {
+        _pendingAttachments = [];
+        _dockExpanded = false;
+      });
+      await widget.state.submitSkillMessage(
+        text,
+        skill: skill,
+        attachments: attachments,
+      );
+      return;
+    }
     _input.clear();
     setState(() => _pendingAttachments = []);
     await widget.state.submitMessage(
@@ -185,6 +201,84 @@ class _WeaviewHomeState extends State<WeaviewHome>
       attachments: attachments,
       useWebSearch: useWebSearch,
     );
+  }
+
+  Future<bool> _confirmSkillExecution(SkillConfig skill, String input) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('执行技能「${skill.name}」？'),
+            content: Text(
+              '来源：${skill.sourceUrl}\n\nRunner：${widget.state.skillRunnerBaseUrl}\n\n输入：$input',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('执行'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
+  Future<void> _openSkillPicker() async {
+    final state = widget.state;
+    if (state.skills.isEmpty) {
+      _snack('请先在「设置 > 扩展服务 > Skills 技能」中安装技能。');
+      return;
+    }
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: state.background(context),
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(18, 8, 18, 22),
+          children: [
+            Text('选择技能', style: state.textStyle(context, size: 18)),
+            const SizedBox(height: 10),
+            ListTile(
+              leading: const Icon(Icons.block_rounded),
+              title: const Text('不固定技能'),
+              selected: state.activeSkill == null,
+              onTap: () {
+                state.clearActiveSkill();
+                Navigator.of(context).pop();
+              },
+            ),
+            for (final skill in state.skills)
+              ListTile(
+                enabled: skill.enabled,
+                leading: Icon(
+                  state.activeSkillId == skill.id
+                      ? Icons.push_pin
+                      : Icons.extension_outlined,
+                ),
+                title: Text(skill.name),
+                subtitle: Text(
+                  skill.triggers.isEmpty
+                      ? skill.description
+                      : '触发：${skill.triggers.join('、')}',
+                ),
+                selected: state.activeSkillId == skill.id,
+                onTap: skill.enabled
+                    ? () {
+                        state.setActiveSkill(skill.id);
+                        Navigator.of(context).pop();
+                      }
+                    : null,
+              ),
+          ],
+        ),
+      ),
+    );
+    setState(() => _dockExpanded = false);
   }
 
   void _toggleWebSearch() {
@@ -726,6 +820,7 @@ class _WeaviewHomeState extends State<WeaviewHome>
                     onToggleExpanded: () =>
                         setState(() => _dockExpanded = !_dockExpanded),
                     onToggleWebSearch: _toggleWebSearch,
+                    onOpenSkillPicker: _openSkillPicker,
                     onSubmit: _submit,
                     onToggleRecording: _toggleRecording,
                     onPickChatImages: _pickChatImages,

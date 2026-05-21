@@ -29,6 +29,9 @@ class WeaviewPreferences {
   String get userName => _prefs.getString(_PrefsKey.userName) ?? '织梦者';
   String get assistantName => _prefs.getString(_PrefsKey.assistantName) ?? '织境';
   String get userProfile => _prefs.getString(_PrefsKey.userProfile) ?? '';
+  String get activeSkillId => _prefs.getString(_PrefsKey.activeSkillId) ?? '';
+  String get skillRunnerBaseUrl =>
+      _prefs.getString(_PrefsKey.skillRunnerBaseUrl) ?? 'http://127.0.0.1:8765';
 
   ThemeMode get themeMode =>
       decodeThemeMode(_prefs.getString(_PrefsKey.themeMode));
@@ -123,6 +126,10 @@ class WeaviewPreferences {
       _prefs.getString(_PrefsKey.aiTtsProviders),
       TtsProviderConfig.fromJson,
     );
+  }
+
+  List<SkillConfig> loadSkills() {
+    return decodeList(_prefs.getString(_PrefsKey.skills), SkillConfig.fromJson);
   }
 
   void saveThemeMode(ThemeMode value) {
@@ -296,6 +303,30 @@ class WeaviewPreferences {
       ..setString(_PrefsKey.aiActiveTtsId, activeId);
   }
 
+  void saveSkills(List<SkillConfig> skills) {
+    _prefs.setString(
+      _PrefsKey.skills,
+      jsonEncode(skills.map((skill) => skill.toJson()).toList()),
+    );
+  }
+
+  void saveActiveSkillId(String value) {
+    if (value.trim().isEmpty) {
+      _prefs.remove(_PrefsKey.activeSkillId);
+    } else {
+      _prefs.setString(_PrefsKey.activeSkillId, value.trim());
+    }
+  }
+
+  void saveSkillRunnerBaseUrl(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      _prefs.remove(_PrefsKey.skillRunnerBaseUrl);
+    } else {
+      _prefs.setString(_PrefsKey.skillRunnerBaseUrl, trimmed);
+    }
+  }
+
   Future<void> clear() => _prefs.clear();
 }
 
@@ -328,4 +359,7 @@ abstract final class _PrefsKey {
   static const aiSearchConfig = 'ai_search_config';
   static const aiActiveTtsId = 'ai_active_tts_id';
   static const aiTtsProviders = 'ai_tts_providers';
+  static const skills = 'skills';
+  static const activeSkillId = 'active_skill_id';
+  static const skillRunnerBaseUrl = 'skill_runner_base_url';
 }

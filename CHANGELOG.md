@@ -2,6 +2,32 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.27 - 2026-05-21
+
+### 中文
+
+![Weaview 1.0.27 release cover](docs/releases/v1.0.27-cover.png)
+
+- 新增 Skills 技能系统：可在设置页通过 GitHub URL 安装兼容技能，启用/禁用、删除、编辑触发词和系统提示词。
+- 聊天输入区新增“技能”入口，支持手动固定当前技能；未固定时会根据触发词和 URL 场景做本地推荐。
+- 外部技能执行前必须弹窗确认，确认内容包括技能名、来源 URL、用户输入和 runner 地址，避免误调用本机脚本。
+- 新增本地 Python `skill_runner`，提供 `/health`、`/skills/install`、`/skills/run`，第一版对 `x-tweet-fetcher` 提供 allowlisted 兼容执行。
+- `gpt-image-2` 现在优先走 Responses 生图链路，其它图片模型优先走 `/v1/images/generations`。
+- 修复用户称呼/资料同步后部分界面仍显示旧称呼的问题。
+- 优化“换个背景”等自然语言外观指令，默认保持低饱和、文艺和诗意的视觉风格，降低大红/高饱和背景误触发。
+
+### English
+
+![Weaview 1.0.27 release cover](docs/releases/v1.0.27-cover.png)
+
+- Added the local Skills system: install compatible skills from GitHub URLs, enable/disable, delete, and edit triggers or system prompts from settings.
+- Added a Skills entry in the chat input dock, with manual pinning and local trigger/URL-based recommendations.
+- External skill runs now require a confirmation dialog showing the skill name, source URL, user input, and runner address.
+- Added a local Python `skill_runner` with `/health`, `/skills/install`, and `/skills/run`; v0.1.0 includes an allowlisted `x-tweet-fetcher` path.
+- `gpt-image-2` now prefers the Responses image route, while other image models prefer `/v1/images/generations`.
+- Fixed stale user display names after profile updates.
+- Tuned natural-language background/theme changes toward low-saturation, literary visual styles and away from accidental vivid red backgrounds.
+
 ## 1.0.26 - 2026-05-15
 
 ### 中文

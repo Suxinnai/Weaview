@@ -396,6 +396,124 @@ extension SettingsTabs on SettingsSheetState {
         ),
       ),
       const SizedBox(height: 28),
+      SectionLabel(
+        state: state,
+        label: 'Skills 技能',
+        icon: Icons.extension_outlined,
+      ),
+      CardShell(
+        state: state,
+        child: Column(
+          children: [
+            SettingsRow(
+              state: state,
+              title: 'Skill Runner',
+              subtitle: state.skillRunnerBaseUrl,
+              trailing: SizedBox(
+                width: 150,
+                child: TextFormField(
+                  controller: skillRunnerController
+                    ..text = state.skillRunnerBaseUrl,
+                  onFieldSubmitted: state.saveSkillRunnerBaseUrl,
+                  textAlign: TextAlign.right,
+                  style: state.textStyle(context, size: 13),
+                  decoration: inputDecoration(
+                    state,
+                    hint: 'http://127.0.0.1:8765',
+                  ),
+                ),
+              ),
+            ),
+            DividerLine(state: state),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: skillInstallController,
+                      style: state.textStyle(context, size: 13),
+                      decoration: inputDecoration(
+                        state,
+                        hint: 'GitHub Skill URL',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: _installSkillFromUrl,
+                    child: const Text('安装'),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+              child: Row(
+                children: [
+                  TextButton.icon(
+                    onPressed: _testSkillRunner,
+                    icon: const Icon(Icons.lan_outlined, size: 17),
+                    label: const Text('测试 Runner'),
+                  ),
+                  const Spacer(),
+                  Text(
+                    state.activeSkill == null
+                        ? '未固定技能'
+                        : '已固定：${state.activeSkill!.name}',
+                    style: state.textStyle(context, size: 12, opacity: 0.58),
+                  ),
+                ],
+              ),
+            ),
+            for (final skill in state.skills) ...[
+              DividerLine(state: state),
+              SettingsRow(
+                state: state,
+                title: skill.name,
+                subtitle: [
+                  if (!skill.enabled) '已停用',
+                  if (state.activeSkillId == skill.id) '已固定',
+                  if (skill.triggers.isNotEmpty)
+                    '触发：${skill.triggers.take(4).join('、')}',
+                  if (skill.triggers.isEmpty) skill.description,
+                ].where((item) => item.trim().isNotEmpty).join(' · '),
+                showChevron: true,
+                onTap: () => _openSkillConfig(skill),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TinyIcon(
+                      icon: state.activeSkillId == skill.id
+                          ? Icons.push_pin
+                          : Icons.push_pin_outlined,
+                      color: state.accents[0],
+                      onTap: () => state.setActiveSkill(skill.id),
+                    ),
+                    WeaveSwitch(
+                      state: state,
+                      value: skill.enabled,
+                      onChanged: (value) =>
+                          state.updateSkillEnabled(skill.id, value),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            if (state.skills.isEmpty) ...[
+              DividerLine(state: state),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+                child: Text(
+                  '安装 GitHub Skill 后，可在聊天中手动固定或由触发词自动推荐。外部技能执行前始终需要确认。',
+                  style: state.textStyle(context, size: 12, opacity: 0.58),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(height: 28),
       SectionLabel(state: state, label: '语音服务 (TTS)', icon: Icons.mic_none),
       CardShell(
         state: state,
@@ -466,6 +584,132 @@ extension SettingsTabs on SettingsSheetState {
         ),
       ),
     ]);
+  }
+
+  Widget skillConfigView() {
+    final state = widget.state;
+    final skill = state.skills.firstWhereOrNull(
+      (item) => item.id == editingSkillId,
+    );
+    if (skill == null) return const SizedBox.shrink();
+    return scrollContent([
+      SectionLabel(state: state, label: skill.name, icon: Icons.extension),
+      CardShell(
+        state: state,
+        child: Column(
+          children: [
+            SettingsRow(state: state, title: '来源', subtitle: skill.sourceUrl),
+            DividerLine(state: state),
+            SettingsRow(
+              state: state,
+              title: '启用',
+              subtitle: skill.enabled ? '自动匹配和手动固定均可使用' : '停用后不会被推荐',
+              trailing: WeaveSwitch(
+                state: state,
+                value: skill.enabled,
+                onChanged: (value) => state.updateSkillEnabled(skill.id, value),
+              ),
+            ),
+            DividerLine(state: state),
+            SettingsRow(
+              state: state,
+              title: '固定技能',
+              subtitle: state.activeSkillId == skill.id
+                  ? '发送消息时优先推荐该技能'
+                  : '不固定时按触发词自动推荐',
+              trailing: WeaveSwitch(
+                state: state,
+                value: state.activeSkillId == skill.id,
+                onChanged: (_) => state.setActiveSkill(skill.id),
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 18),
+      TextFormField(
+        controller: skillTriggersController,
+        minLines: 1,
+        maxLines: 3,
+        style: state.textStyle(context, size: 14),
+        decoration: inputDecoration(state, hint: '触发词，用逗号分隔'),
+      ),
+      const SizedBox(height: 12),
+      TextFormField(
+        controller: skillPromptController,
+        minLines: 4,
+        maxLines: 8,
+        style: state.textStyle(context, size: 14),
+        decoration: inputDecoration(state, hint: '可选：技能执行前提示词'),
+      ),
+      const SizedBox(height: 16),
+      Row(
+        children: [
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: () {
+                state
+                  ..updateSkillTriggers(
+                    skill.id,
+                    skillTriggersController.text
+                        .split(RegExp(r'[,，\n]'))
+                        .map((item) => item.trim())
+                        .where((item) => item.isNotEmpty)
+                        .toList(),
+                  )
+                  ..updateSkillPrompt(skill.id, skillPromptController.text);
+                widget.showSnack('技能已保存。');
+              },
+              icon: const Icon(Icons.save_outlined, size: 18),
+              label: const Text('保存'),
+            ),
+          ),
+          const SizedBox(width: 10),
+          IconButton(
+            onPressed: () {
+              state.deleteSkill(skill.id);
+              updateSheet(() {
+                editingSkillId = null;
+                subView = 'main';
+              });
+              widget.showSnack('技能已删除。');
+            },
+            icon: const Icon(Icons.delete_outline_rounded),
+          ),
+        ],
+      ),
+    ]);
+  }
+
+  void _openSkillConfig(SkillConfig skill) {
+    updateSheet(() {
+      editingSkillId = skill.id;
+      skillTriggersController.text = skill.triggers.join('，');
+      skillPromptController.text = skill.systemPrompt;
+      subView = 'skill_config';
+    });
+  }
+
+  Future<void> _installSkillFromUrl() async {
+    final url = skillInstallController.text.trim();
+    if (url.isEmpty) {
+      widget.showSnack('请输入 GitHub Skill URL。');
+      return;
+    }
+    try {
+      final skill = await widget.state.installSkillFromUrl(url);
+      skillInstallController.clear();
+      widget.showSnack('已安装技能：${skill.name}');
+      updateSheet(() {});
+    } catch (error) {
+      widget.showSnack(error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<void> _testSkillRunner() async {
+    widget.state.saveSkillRunnerBaseUrl(skillRunnerController.text);
+    final ok = await widget.state.testSkillRunner();
+    widget.showSnack(ok ? 'Skill Runner 连接正常。' : 'Skill Runner 未响应。');
   }
 
   Widget dataTab() {

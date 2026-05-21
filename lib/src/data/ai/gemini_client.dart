@@ -263,7 +263,7 @@ class GeminiClient {
               'backgroundColor': {
                 'type': 'string',
                 'description':
-                    'CSS hex color for the chat background/canvas only. Do not set this for bubble-only or font-only requests.',
+                    'CSS hex color for the chat background/canvas only. Do not set this for bubble-only or font-only requests. For open-ended background requests, choose quiet, poetic, low-saturation colors that fit Weaview; avoid pure red, neon, high-saturation, or aggressively bright backgrounds unless explicitly requested.',
               },
               'textColor': {
                 'type': 'string',

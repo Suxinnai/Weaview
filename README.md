@@ -6,7 +6,7 @@
 
 织境提供一个可本地配置的多模型聊天环境。它不内置任何真实 API Key，所有模型服务、搜索服务和语音服务凭据都需要用户在 App 设置中显式配置。
 
-Latest stable / 最新正式版：`v1.0.22`
+Latest stable / 最新正式版：`v1.0.27`
 
 主要能力包括：
 
@@ -20,6 +20,7 @@ Latest stable / 最新正式版：`v1.0.22`
 - Tavily 联网搜索配置入口。
 - 手动启用的 TTS 服务配置，支持系统 TTS fallback 与远程 TTS provider。
 - Flutter 移动端 UI，包含 Android 原生语音识别 fallback 与麦克风权限恢复引导。
+- 本地 Skills 技能系统：可从 GitHub 安装兼容技能，聊天时手动固定或自动推荐，并通过本机 runner 确认后执行。
 
 English summary:
 
@@ -40,6 +41,7 @@ English summary:
 - 支持人物画像、助手昵称、用户资料和工具模型辅助整理。
 - 支持 Markdown、代码块、公式块、思考链、翻译块等富文本消息渲染。
 - 支持 SharedPreferences 本地持久化，不要求后端服务。
+- 支持本地 Skills runner：外部脚本不在 App 内直接执行，需通过本机 HTTP runner 并经用户确认。
 - 支持 Flutter 单元测试与 widget 测试。
 
 ## 技术栈
@@ -137,7 +139,6 @@ Chat API: POST /chat/completions
 ├── .github/                         # Issue/PR 模板与 CI
 ├── android/                         # Flutter Android 宿主工程源码，不是 APK 产物
 ├── assets/                          # App 图标与 provider 图标资源
-├── ios/                             # Flutter iOS 宿主工程源码，不是 IPA 产物
 ├── lib/main.dart                    # App 入口
 ├── lib/src/app/                     # 应用装配、状态、偏好设置、主题守卫
 │   └── prompt_appearance_intent.dart # 本地聊天外观提示解析
@@ -154,7 +155,7 @@ Chat API: POST /chat/completions
 └── README.md
 ```
 
-说明：`android/` 和 `ios/` 是 Flutter 项目必须提交的平台宿主源码，用于编译、权限、原生能力和签名配置；真正的 `.apk`、`.ipa`、`.aab`、`.xcarchive` 等包产物已在 `.gitignore` 中忽略，只通过 GitHub Releases 发布。
+说明：当前仓库保留 Android 宿主工程源码，用于编译、权限、原生能力和签名配置；iOS 宿主工程已移除。真正的 `.apk`、`.aab` 等包产物已在 `.gitignore` 中忽略，只通过 GitHub Releases 发布。
 
 ## 测试
 
@@ -194,12 +195,6 @@ Android release：
 
 ```bash
 flutter build apk --release --split-per-abi
-```
-
-iOS 需要在 macOS + Xcode 环境下配置签名后构建：
-
-```bash
-flutter build ios
 ```
 
 当前仓库不包含后端服务，也不提供 Docker 部署。

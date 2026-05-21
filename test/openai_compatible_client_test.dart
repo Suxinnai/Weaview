@@ -8,7 +8,7 @@ import 'package:weaview_flutter/src/data/ai/openai_compatible_client.dart';
 void main() {
   group('OpenAiCompatibleClient image generation routing', () {
     test(
-      'uses /images/generations before Responses for gpt-image models',
+      'uses /images/generations before Responses for non gpt-image-2 models',
       () async {
         final requests = <String>[];
         final requestBodies = <Map<String, dynamic>>[];
@@ -44,7 +44,7 @@ void main() {
             baseUrl: 'http://127.0.0.1:${server.port}/v1',
             prompt: 'a small test image',
             responseModel: 'gpt-5.5',
-            imageModel: 'gpt-image-2',
+            imageModel: 'gpt-image-1',
             timeout: const Duration(seconds: 5),
           );
 
@@ -59,59 +59,56 @@ void main() {
       },
     );
 
-    test(
-      'uses Responses streaming first for complex poster text prompts',
-      () async {
-        final requests = <String>[];
-        final requestBodies = <Map<String, dynamic>>[];
-        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-        final serving = server.listen((request) async {
-          requests.add(request.uri.path);
-          final body =
-              jsonDecode(await utf8.decoder.bind(request).join())
-                  as Map<String, dynamic>;
-          requestBodies.add(body);
-          if (request.uri.path == '/v1/responses') {
-            request.response
-              ..statusCode = 200
-              ..headers.contentType = ContentType('text', 'event-stream')
-              ..write(
-                'event: response.image_generation_call.partial_image\n'
-                'data: {"type":"response.image_generation_call.partial_image","partial_image_b64":"Y29tcGxleC1wb3N0ZXI=","output_format":"png"}\n\n',
-              );
-            await request.response.close();
-            return;
-          }
+    test('uses Responses streaming first for gpt-image-2', () async {
+      final requests = <String>[];
+      final requestBodies = <Map<String, dynamic>>[];
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final serving = server.listen((request) async {
+        requests.add(request.uri.path);
+        final body =
+            jsonDecode(await utf8.decoder.bind(request).join())
+                as Map<String, dynamic>;
+        requestBodies.add(body);
+        if (request.uri.path == '/v1/responses') {
           request.response
-            ..statusCode = 500
-            ..write('unexpected route');
+            ..statusCode = 200
+            ..headers.contentType = ContentType('text', 'event-stream')
+            ..write(
+              'event: response.image_generation_call.partial_image\n'
+              'data: {"type":"response.image_generation_call.partial_image","partial_image_b64":"Y29tcGxleC1wb3N0ZXI=","output_format":"png"}\n\n',
+            );
           await request.response.close();
-        });
-
-        try {
-          final result = await const OpenAiCompatibleClient().generateImage(
-            apiKey: 'test-key',
-            baseUrl: 'http://127.0.0.1:${server.port}/v1',
-            prompt: '重庆城市漫游路线图海报，顶部标题文字清晰，底部加入古风题字。',
-            responseModel: 'gpt-5.5',
-            imageModel: 'gpt-image-2',
-            timeout: const Duration(seconds: 5),
-          );
-
-          expect(result.route, '/v1/responses?stream=true');
-          expect(result.bytes, utf8.encode('complex-poster'));
-          expect(requests, ['/v1/responses']);
-          expect(requestBodies.single['stream'], isTrue);
-          expect(
-            jsonEncode(requestBodies.single),
-            contains('"partial_images":3'),
-          );
-        } finally {
-          await serving.cancel();
-          await server.close(force: true);
+          return;
         }
-      },
-    );
+        request.response
+          ..statusCode = 500
+          ..write('unexpected route');
+        await request.response.close();
+      });
+
+      try {
+        final result = await const OpenAiCompatibleClient().generateImage(
+          apiKey: 'test-key',
+          baseUrl: 'http://127.0.0.1:${server.port}/v1',
+          prompt: '重庆城市漫游路线图海报，顶部标题文字清晰，底部加入古风题字。',
+          responseModel: 'gpt-5.5',
+          imageModel: 'gpt-image-2',
+          timeout: const Duration(seconds: 5),
+        );
+
+        expect(result.route, '/v1/responses?stream=true');
+        expect(result.bytes, utf8.encode('complex-poster'));
+        expect(requests, ['/v1/responses']);
+        expect(requestBodies.single['stream'], isTrue);
+        expect(
+          jsonEncode(requestBodies.single),
+          contains('"partial_images":3'),
+        );
+      } finally {
+        await serving.cancel();
+        await server.close(force: true);
+      }
+    });
 
     test('retries transient image generation gateway failures once', () async {
       var generationAttempts = 0;
@@ -152,7 +149,7 @@ void main() {
           baseUrl: 'http://127.0.0.1:${server.port}/v1',
           prompt: 'a retry test image',
           responseModel: 'gpt-5.5',
-          imageModel: 'gpt-image-2',
+          imageModel: 'gpt-image-1',
           timeout: const Duration(seconds: 5),
         );
 
@@ -207,7 +204,7 @@ void main() {
           baseUrl: 'http://127.0.0.1:${server.port}/v1',
           prompt: 'a streaming retry image',
           responseModel: 'gpt-5.5',
-          imageModel: 'gpt-image-2',
+          imageModel: 'gpt-image-1',
           timeout: const Duration(seconds: 5),
         );
 
@@ -274,7 +271,7 @@ void main() {
             baseUrl: 'http://127.0.0.1:${server.port}/v1',
             prompt: 'a url retry test image',
             responseModel: 'gpt-5.5',
-            imageModel: 'gpt-image-2',
+            imageModel: 'gpt-image-1',
             timeout: const Duration(seconds: 5),
           );
 
@@ -729,7 +726,7 @@ void main() {
             baseUrl: 'http://127.0.0.1:${server.port}/v1',
             prompt: 'a direct image generation prompt',
             responseModel: 'gpt-5.5',
-            imageModel: 'gpt-image-2',
+            imageModel: 'gpt-image-1',
             timeout: const Duration(seconds: 5),
           );
 
@@ -747,7 +744,7 @@ void main() {
           expect(responseBodies.last, isNot(contains('tool_choice')));
           expect(
             jsonEncode(responseBodies.last),
-            contains('"model":"gpt-image-2"'),
+            contains('"model":"gpt-image-1"'),
           );
         } finally {
           await serving.cancel();
