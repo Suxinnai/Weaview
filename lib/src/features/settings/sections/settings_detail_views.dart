@@ -316,7 +316,9 @@ extension SettingsDetailViews on SettingsSheetState {
               ),
             const SizedBox(height: 6),
             Text(
-              '配置此提供商的API凭据以启用相关模型',
+              editingProvider?.enabled == false
+                  ? '此提供商已禁用，模型不会参与默认选择'
+                  : '配置此提供商的API凭据以启用相关模型',
               style: state.textStyle(context, size: 13, opacity: 0.52),
             ),
           ],
@@ -441,10 +443,24 @@ extension SettingsDetailViews on SettingsSheetState {
                 Expanded(
                   child: SoftButton(
                     state: state,
-                    label: '启用',
+                    label: '设为当前',
                     onTap: () => saveProvider(true),
                   ),
                 ),
+                if (editingProvider != null) ...[
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SoftButton(
+                      state: state,
+                      label: editingProvider!.enabled ? '禁用当前' : '重新启用',
+                      danger: editingProvider!.enabled,
+                      onTap: () => saveProvider(
+                        false,
+                        enabledOverride: !editingProvider!.enabled,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             )
           : Row(
@@ -975,7 +991,7 @@ extension SettingsDetailViews on SettingsSheetState {
         field(
           label: '标题',
           controller: feedbackTitleController,
-          hint: '例如：语音输入无法识别',
+          hint: '例如：设置页面切换异常',
         ),
         field(
           label: '详细描述',

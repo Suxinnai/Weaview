@@ -9,7 +9,9 @@ class ModelConfigResolver {
     ModelAssignment assignment,
   ) {
     if (assignment.provider.isEmpty) return null;
-    return providers.firstWhereOrNull((p) => p.name == assignment.provider);
+    return providers.firstWhereOrNull(
+      (p) => p.enabled && p.name == assignment.provider,
+    );
   }
 
   static String? modelConfigIssue({
@@ -38,11 +40,16 @@ class ModelConfigResolver {
     final assignment = assignments['chat'];
     if (assignment != null && assignment.provider.isNotEmpty) {
       final matched = providers.firstWhereOrNull(
-        (p) => p.name == assignment.provider,
+        (p) => p.enabled && p.name == assignment.provider,
       );
       if (matched != null) return matched;
     }
-    return providers.firstWhereOrNull((p) => p.current) ?? providers.first;
+    return providers.firstWhereOrNull((p) => p.enabled && p.current) ??
+        providers.firstWhereOrNull(
+          (p) => p.enabled && p.apiKey.trim().isNotEmpty,
+        ) ??
+        providers.firstWhereOrNull((p) => p.enabled) ??
+        providers.first;
   }
 
   static String friendlyAiError(

@@ -1,5 +1,5 @@
 name: weaview_flutter
-description: "Weaview is a Flutter AI chat app with configurable providers, memory, search, translation, and voice input."
+description: "Weaview is a Flutter AI chat app with configurable providers, memory, search, translation, image generation, and TTS."
 repository: https://github.com/Suxinnai/Weaview
 issue_tracker: https://github.com/Suxinnai/Weaview/issues
 # The following line prevents the package from being accidentally published to
@@ -18,7 +18,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.28+30
+version: 1.0.30+32
 
 environment:
   sdk: ^3.11.5
@@ -40,7 +40,6 @@ dependencies:
   http_parser: ^4.1.2
   shared_preferences: ^2.5.5
   image_picker: ^1.2.2
-  speech_to_text: ^7.3.0
   flutter_markdown_plus: ^1.0.7
   file_picker: ^11.0.2
   mime: ^2.0.0
@@ -68,6 +67,7 @@ flutter:
   uses-material-design: true
 
   assets:
+    - pubspec.yaml
     - assets/app_icon.png
     - assets/icons/
 

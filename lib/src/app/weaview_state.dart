@@ -33,6 +33,23 @@ class _PreparedImageRequest {
   final String size;
 }
 
+class BackupImportResult {
+  const BackupImportResult({
+    required this.sessions,
+    required this.memories,
+    required this.providers,
+    required this.skills,
+  });
+
+  final int sessions;
+  final int memories;
+  final int providers;
+  final int skills;
+
+  String get summary =>
+      '已合并 $sessions 个会话、$memories 条记忆、$providers 个提供商、$skills 个技能。';
+}
+
 class WeaviewState extends ChangeNotifier {
   static const MethodChannel _nativeMedia = MethodChannel(
     'weaview/native_media',
@@ -432,6 +449,11 @@ class WeaviewState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setProviderEnabled(String name, bool enabled) {
+    _providers.setProviderEnabled(name, enabled, _prefs);
+    notifyListeners();
+  }
+
   void deleteProvider(String name) {
     _providers.deleteProvider(name, _prefs);
     notifyListeners();
@@ -507,43 +529,14 @@ class WeaviewState extends ChangeNotifier {
     required SkillConfig skill,
     List<MessageAttachment> attachments = const [],
   }) async {
-    final content = value.trim();
-    if ((content.isEmpty && attachments.isEmpty) || isStreaming) return;
-    suggestions = [];
-    final userMessage = ChatMessage.user(content, attachments: attachments);
-    messages
-      ..add(userMessage)
-      ..add(ChatMessage.model('正在执行技能「${skill.name}」...', isThinking: true));
-    _persistCurrentSession();
-    notifyListeners();
-
-    final responseIndex = messages.length - 1;
-    final result = await _skills.runSkill(
-      skill: skill,
-      input: content,
-      messages: messages
-          .take(responseIndex)
-          .map((message) => message.copy())
-          .toList(),
-    );
-    final text = result.ok
-        ? (result.text.trim().isEmpty
-              ? '技能执行完成，但没有返回文本结果。'
-              : result.text.trim())
-        : '技能执行失败：${result.error.trim().isEmpty ? '未知错误' : result.error.trim()}';
-    if (responseIndex < messages.length) {
-      messages[responseIndex]
-        ..content = text
-        ..isThinking = false;
-    }
-    _persistCurrentSession();
-    notifyListeners();
+    await submitMessage(value, attachments: attachments, skill: skill);
   }
 
   Future<void> submitMessage(
     String value, {
     List<MessageAttachment> attachments = const [],
     bool useWebSearch = false,
+    SkillConfig? skill,
   }) async {
     final content = value.trim();
     if ((content.isEmpty && attachments.isEmpty) || isStreaming) return;
@@ -671,6 +664,7 @@ class WeaviewState extends ChangeNotifier {
     try {
       final prompt = await _expandedSystemPrompt(
         webQuery: useWebSearch ? content : null,
+        skill: skill,
       );
       await AiGateway.generateStream(
         messages: conversation,
@@ -1656,13 +1650,19 @@ $prompt
     notifyListeners();
   }
 
-  Future<String> _expandedSystemPrompt({String? webQuery}) async {
+  Future<String> _expandedSystemPrompt({
+    String? webQuery,
+    SkillConfig? skill,
+  }) async {
     var prompt = _personal.expandedSystemPrompt(
       webQuery: null,
       chatSessions: chatSessions,
       searchConfig: searchConfig,
       appearanceDirective: _theme.currentAppearanceDirective(),
     );
+    if (skill != null) {
+      prompt += _skillSystemPrompt(skill);
+    }
     if (webQuery != null && webQuery.trim().isNotEmpty) {
       try {
         final searchBlock = await AiGateway.searchWeb(
@@ -1679,6 +1679,36 @@ $prompt
       }
     }
     return prompt;
+  }
+
+  String _skillSystemPrompt(SkillConfig skill) {
+    final source = skill.sourceUrl.trim();
+    final description = skill.description.trim();
+    final body = skill.systemPrompt.trim();
+    final triggers = skill.triggers
+        .map((trigger) => trigger.trim())
+        .where((trigger) => trigger.isNotEmpty)
+        .join('、');
+    final entrypoints = skill.entrypoints
+        .map(
+          (entrypoint) => entrypoint.label.trim().isNotEmpty
+              ? entrypoint.label.trim()
+              : entrypoint.id.trim(),
+        )
+        .where((entrypoint) => entrypoint.isNotEmpty)
+        .join('、');
+    return '''
+
+[System directive: The user selected the local Skill "${skill.name}" for this turn. Load the Skill instructions below as context. Do not claim that a local script, runner, browser, API, or external command has been executed unless the conversation explicitly provides that result. If the Skill describes an external action that is unavailable, explain the limitation briefly and still help from the visible conversation context.]
+Skill name: ${skill.name}
+Source URL: ${source.isEmpty ? 'unknown' : source}
+Description: ${description.isEmpty ? 'none' : description}
+Triggers: ${triggers.isEmpty ? 'none' : triggers}
+Entrypoints: ${entrypoints.isEmpty ? 'none' : entrypoints}
+
+[Skill instructions from SKILL.md]
+${body.isEmpty ? 'No SKILL.md body was stored for this Skill.' : body}
+''';
   }
 
   Future<void> _refreshCurrentSessionTitle() async {
@@ -2002,6 +2032,8 @@ $prompt
       'ai_search_config': searchConfig.safeJson(),
       'ai_active_tts_id': activeTtsId,
       'ai_tts_providers': ttsProviders.map((p) => p.safeJson()).toList(),
+      'skills': skills.map((s) => s.toJson()).toList(),
+      'active_skill_id': activeSkillId,
       'user_name': userName,
       'assistant_name': assistantName,
       'user_profile': userProfile,
@@ -2027,6 +2059,116 @@ $prompt
     ]);
   }
 
+  Future<BackupImportResult> importBackupBytes(
+    Uint8List bytes, {
+    String fileName = '',
+  }) async {
+    final lowerName = fileName.toLowerCase();
+    final isZip =
+        lowerName.endsWith('.zip') ||
+        (bytes.length >= 4 &&
+            bytes[0] == 0x50 &&
+            bytes[1] == 0x4B &&
+            bytes[2] == 0x03 &&
+            bytes[3] == 0x04);
+    final text = isZip
+        ? readZipUtf8Entry(bytes, 'weaview-export.json')
+        : utf8.decode(bytes, allowMalformed: true);
+    if (text == null || text.trim().isEmpty) {
+      throw const FormatException('备份文件中未找到 weaview-export.json。');
+    }
+    return importBackupJson(text);
+  }
+
+  Future<BackupImportResult> importBackupJson(String text) async {
+    final decoded = jsonDecode(text);
+    if (decoded is! Map) {
+      throw const FormatException('备份 JSON 格式无效。');
+    }
+    final data = decoded.cast<String, dynamic>();
+
+    final importedSessions = _decodeImportList(
+      data['chat_sessions'],
+      ChatSession.fromJson,
+    );
+    final importedMemories = _decodeStringList(data['ai_memories']);
+    final importedProviders = _decodeImportList(
+      data['ai_providers'],
+      AiProvider.fromJson,
+    );
+    final importedSkills = _decodeImportList(
+      data['skills'],
+      SkillConfig.fromJson,
+    );
+
+    final mergedSessions = _mergeSessions(chatSessions, importedSessions);
+    final mergedMemories = _mergeStrings(memories, importedMemories);
+    final mergedProviders = _mergeProviders(providers, importedProviders);
+    final mergedSkills = _mergeSkills(skills, importedSkills);
+
+    _sessions.chatSessions
+      ..clear()
+      ..addAll(mergedSessions);
+    memories = mergedMemories;
+    _providers.saveProviders(mergedProviders, _prefs);
+    _skills.skills = mergedSkills;
+
+    final importedAssignments = _decodeAssignments(
+      data['ai_model_assignments'],
+    );
+    if (importedAssignments.isNotEmpty) {
+      modelAssignments = {...modelAssignments, ...importedAssignments};
+      _prefs?.saveModelAssignments(modelAssignments);
+    }
+
+    final importedSearch = _decodeSearchConfig(data['ai_search_config']);
+    if (importedSearch != null) {
+      final mergedKeys = _mergeMaskedMap(
+        searchConfig.keys,
+        importedSearch.keys,
+      );
+      searchConfig = importedSearch.copyWith(keys: mergedKeys);
+      _prefs?.saveSearchConfig(searchConfig);
+    }
+
+    final importedTts = _decodeImportList(
+      data['ai_tts_providers'],
+      TtsProviderConfig.fromJson,
+    );
+    if (importedTts.isNotEmpty) {
+      final mergedTts = _mergeTtsProviders(ttsProviders, importedTts);
+      final importedActiveTts = data['ai_active_tts_id']?.toString() ?? '';
+      _providers.saveTtsConfig(
+        mergedTts,
+        importedActiveTts.trim().isEmpty ? activeTtsId : importedActiveTts,
+        _prefs,
+      );
+    }
+
+    final importedActiveSkill = data['active_skill_id']?.toString() ?? '';
+    if (importedActiveSkill.trim().isNotEmpty &&
+        mergedSkills.any((skill) => skill.id == importedActiveSkill)) {
+      _skills.activeSkillId = importedActiveSkill;
+      _prefs?.saveActiveSkillId(importedActiveSkill);
+    }
+
+    _applyImportedPreferences(data);
+    final prefs = _prefs;
+    if (prefs != null) {
+      prefs.saveChatSessions(chatSessions);
+      prefs.saveMemories(memories);
+      prefs.saveSkills(skills);
+    }
+    notifyListeners();
+
+    return BackupImportResult(
+      sessions: importedSessions.length,
+      memories: importedMemories.length,
+      providers: importedProviders.length,
+      skills: importedSkills.length,
+    );
+  }
+
   Future<void> clearAllLocalData() async {
     await _prefs?.clear();
     messages.clear();
@@ -2048,6 +2190,9 @@ $prompt
     searchConfig = const SearchConfig(active: 'tavily', keys: {});
     activeTtsId = '';
     ttsProviders = TtsProviderConfig.defaults();
+    _skills.skills = [];
+    _skills.activeSkillId = '';
+    _skills.runnerBaseUrl = 'http://127.0.0.1:8765';
     themeMode = ThemeMode.system;
     backgroundOverride = null;
     textOverride = null;
@@ -2061,5 +2206,224 @@ $prompt
     assistantBubbleOpacity = 0.08;
     userBubbleOpacity = 0.12;
     notifyListeners();
+  }
+
+  List<T> _decodeImportList<T>(dynamic value, T Function(dynamic) fromJson) {
+    if (value is! List) return const [];
+    final items = <T>[];
+    for (final item in value) {
+      try {
+        items.add(fromJson(item));
+      } catch (_) {
+        continue;
+      }
+    }
+    return items;
+  }
+
+  List<String> _decodeStringList(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .map((item) => item.toString().trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+  }
+
+  Map<String, ModelAssignment> _decodeAssignments(dynamic value) {
+    if (value is! Map) return const {};
+    final result = <String, ModelAssignment>{};
+    for (final entry in value.entries) {
+      try {
+        result[entry.key.toString()] = ModelAssignment.fromJson(entry.value);
+      } catch (_) {
+        continue;
+      }
+    }
+    return result;
+  }
+
+  SearchConfig? _decodeSearchConfig(dynamic value) {
+    if (value == null) return null;
+    try {
+      return SearchConfig.fromJson(value);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  List<ChatSession> _mergeSessions(
+    List<ChatSession> current,
+    List<ChatSession> imported,
+  ) {
+    final byId = {for (final session in current) session.id: session};
+    for (final session in imported) {
+      final existing = byId[session.id];
+      if (existing == null || session.updatedAt >= existing.updatedAt) {
+        byId[session.id] = session;
+      }
+    }
+    final sessions = byId.values.toList()
+      ..sort((a, b) {
+        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+        return b.updatedAt.compareTo(a.updatedAt);
+      });
+    return sessions;
+  }
+
+  List<String> _mergeStrings(List<String> current, List<String> imported) {
+    final seen = <String>{};
+    return [
+      for (final item in [...current, ...imported])
+        if (seen.add(item.trim().toLowerCase()) && item.trim().isNotEmpty)
+          item.trim(),
+    ];
+  }
+
+  List<AiProvider> _mergeProviders(
+    List<AiProvider> current,
+    List<AiProvider> imported,
+  ) {
+    final byName = {
+      for (final provider in current) provider.name.toLowerCase(): provider,
+    };
+    for (final provider in imported) {
+      final key = provider.name.toLowerCase();
+      final existing = byName[key];
+      if (existing == null) {
+        byName[key] = provider.copyWith(
+          apiKey: _isMaskedSecret(provider.apiKey) ? '' : provider.apiKey,
+          status: provider.enabled
+              ? provider.apiKey.isEmpty || _isMaskedSecret(provider.apiKey)
+                    ? '未配置'
+                    : provider.status
+              : '已禁用',
+        );
+        continue;
+      }
+      final apiKey =
+          provider.apiKey.trim().isEmpty || _isMaskedSecret(provider.apiKey)
+          ? existing.apiKey
+          : provider.apiKey;
+      byName[key] = provider.copyWith(
+        apiKey: apiKey,
+        baseUrl: provider.baseUrl.trim().isEmpty
+            ? existing.baseUrl
+            : provider.baseUrl,
+        models: provider.models.isEmpty ? existing.models : provider.models,
+        current: provider.enabled && provider.current,
+        status: !provider.enabled
+            ? '已禁用'
+            : provider.current
+            ? '使用中'
+            : apiKey.isEmpty
+            ? '未配置'
+            : '已连接',
+      );
+    }
+    return byName.values.toList();
+  }
+
+  List<TtsProviderConfig> _mergeTtsProviders(
+    List<TtsProviderConfig> current,
+    List<TtsProviderConfig> imported,
+  ) {
+    final byId = {for (final provider in current) provider.id: provider};
+    for (final provider in imported) {
+      final existing = byId[provider.id];
+      if (existing == null) {
+        byId[provider.id] = provider.copyWith(
+          apiKey: _isMaskedSecret(provider.apiKey) ? '' : provider.apiKey,
+        );
+        continue;
+      }
+      byId[provider.id] = provider.copyWith(
+        apiKey:
+            provider.apiKey.trim().isEmpty || _isMaskedSecret(provider.apiKey)
+            ? existing.apiKey
+            : provider.apiKey,
+        baseUrl: provider.baseUrl.trim().isEmpty
+            ? existing.baseUrl
+            : provider.baseUrl,
+        model: provider.model.trim().isEmpty ? existing.model : provider.model,
+        voice: provider.voice.trim().isEmpty ? existing.voice : provider.voice,
+      );
+    }
+    return byId.values.toList();
+  }
+
+  List<SkillConfig> _mergeSkills(
+    List<SkillConfig> current,
+    List<SkillConfig> imported,
+  ) {
+    final byId = {for (final skill in current) skill.id: skill};
+    for (final skill in imported) {
+      final existing = byId[skill.id];
+      if (existing == null || skill.updatedAt >= existing.updatedAt) {
+        byId[skill.id] = skill;
+      }
+    }
+    return byId.values.toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  }
+
+  Map<String, String> _mergeMaskedMap(
+    Map<String, String> current,
+    Map<String, String> imported,
+  ) {
+    return {
+      ...current,
+      for (final entry in imported.entries)
+        entry.key: _isMaskedSecret(entry.value) || entry.value.trim().isEmpty
+            ? current[entry.key] ?? ''
+            : entry.value,
+    };
+  }
+
+  bool _isMaskedSecret(String value) => value.trim() == '***';
+
+  void _applyImportedPreferences(Map<String, dynamic> data) {
+    final importedUserName = data['user_name']?.toString().trim();
+    if (importedUserName != null && importedUserName.isNotEmpty) {
+      userName = importedUserName;
+      _prefs?.saveUserName(userName);
+    }
+    final importedAssistantName = data['assistant_name']?.toString().trim();
+    if (importedAssistantName != null && importedAssistantName.isNotEmpty) {
+      assistantName = importedAssistantName;
+      _prefs?.saveAssistantName(assistantName);
+    }
+    final importedProfile = data['user_profile']?.toString().trim();
+    if (importedProfile != null && importedProfile.isNotEmpty) {
+      userProfile = importedProfile;
+      _prefs?.saveUserProfile(userProfile);
+    }
+    final importedThemeMode = data['theme_mode']?.toString().trim();
+    if (importedThemeMode != null && importedThemeMode.isNotEmpty) {
+      themeMode = ThemeMode.values.firstWhere(
+        (mode) => mode.name == importedThemeMode,
+        orElse: () => themeMode,
+      );
+      _prefs?.saveThemeMode(themeMode);
+    }
+    final importedBubbleStyle = data['theme_bubble_style']?.toString().trim();
+    if (importedBubbleStyle != null &&
+        [
+          'minimal',
+          'none',
+          'glass',
+          'solid',
+          'outline',
+        ].contains(importedBubbleStyle)) {
+      bubbleStyle = importedBubbleStyle;
+      _prefs?.saveBubbleStyle(bubbleStyle);
+    }
+    final importedAlignment = data['theme_message_alignment']
+        ?.toString()
+        .trim();
+    if (importedAlignment != null &&
+        ['left', 'center', 'right'].contains(importedAlignment)) {
+      messageAlignment = importedAlignment;
+      _prefs?.saveMessageAlignment(messageAlignment);
+    }
   }
 }

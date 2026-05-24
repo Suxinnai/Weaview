@@ -9,6 +9,7 @@ class AiProvider {
     required this.status,
     required this.current,
     required this.color,
+    this.enabled = true,
     this.apiKey = '',
     this.baseUrl = '',
     this.models = const [],
@@ -22,6 +23,7 @@ class AiProvider {
       name: name,
       status: map['status']?.toString() ?? '未配置',
       current: map['current'] == true,
+      enabled: map['enabled'] != false,
       color:
           colorFromHex(map['colorHex']?.toString()) ??
           providerFallbackColor(name),
@@ -36,6 +38,7 @@ class AiProvider {
   final String name;
   final String status;
   final bool current;
+  final bool enabled;
   final Color color;
   final String apiKey;
   final String baseUrl;
@@ -99,6 +102,7 @@ class AiProvider {
     String? name,
     String? status,
     bool? current,
+    bool? enabled,
     Color? color,
     String? apiKey,
     String? baseUrl,
@@ -108,6 +112,7 @@ class AiProvider {
       name: name ?? this.name,
       status: status ?? this.status,
       current: current ?? this.current,
+      enabled: enabled ?? this.enabled,
       color: color ?? this.color,
       apiKey: apiKey ?? this.apiKey,
       baseUrl: baseUrl ?? this.baseUrl,
@@ -119,6 +124,7 @@ class AiProvider {
     'name': name,
     'status': status,
     'current': current,
+    'enabled': enabled,
     'colorHex': colorToHex(color),
     'apiKey': apiKey,
     'baseUrl': baseUrl,

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../../app/app_constants.dart';
+import '../../app/app_version.dart';
 import '../../app/weaview_state.dart';
 import '../../core/app_utils.dart';
 import '../../data/ai/ai_gateway.dart';
@@ -64,6 +65,7 @@ class SettingsSheetState extends State<SettingsSheet> {
   final TextEditingController skillRunnerController = TextEditingController();
   final TextEditingController skillTriggersController = TextEditingController();
   final TextEditingController skillPromptController = TextEditingController();
+  late final Future<AppVersionInfo> appVersionInfoFuture;
   late ModelAssignment roleDraft;
   final Set<String> deletingProviders = {};
   String? providerDeleteTarget;
@@ -100,6 +102,7 @@ class SettingsSheetState extends State<SettingsSheet> {
     super.initState();
     systemPromptController.text = widget.state.systemPrompt;
     profileController.text = widget.state.userProfile;
+    appVersionInfoFuture = loadAppVersionInfo();
     roleDraft = widget.state.modelAssignments['chat']!;
   }
 
@@ -164,6 +167,7 @@ class SettingsSheetState extends State<SettingsSheet> {
             : SettingsSheetState.settingsRoles[editingRole!]!.$1,
       'search_engine_config' => '搜索服务配置',
       'tts_config' => '语音服务配置',
+      'skills_list' => 'Skills 技能',
       'skill_config' => '技能配置',
       'feedback_form' => '报告问题 / 提供反馈',
       _ => '设置',
@@ -290,17 +294,35 @@ class SettingsSheetState extends State<SettingsSheet> {
   }
 
   Widget sheetBody() {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final duration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 220);
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 240),
+      duration: duration,
+      reverseDuration: duration,
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
+      layoutBuilder: (currentChild, previousChildren) {
+        return Stack(
+          fit: StackFit.expand,
+          alignment: Alignment.topCenter,
+          children: [...previousChildren, ?currentChild],
+        );
+      },
       transitionBuilder: (child, animation) {
+        if (reduceMotion) return child;
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
         final offset = Tween<Offset>(
-          begin: const Offset(0.04, 0),
+          begin: const Offset(0.035, 0),
           end: Offset.zero,
-        ).animate(animation);
+        ).animate(curved);
         return FadeTransition(
-          opacity: animation,
+          opacity: curved,
           child: SlideTransition(position: offset, child: child),
         );
       },
@@ -314,6 +336,7 @@ class SettingsSheetState extends State<SettingsSheet> {
               'model_role_config' => modelRoleConfigView(),
               'search_engine_config' => searchConfigView(),
               'tts_config' => ttsConfigView(),
+              'skills_list' => skillsListView(),
               'skill_config' => skillConfigView(),
               'feedback_form' => feedbackView(),
               _ => const SizedBox.shrink(),
@@ -384,6 +407,13 @@ class SettingsSheetState extends State<SettingsSheet> {
     if (subView == 'provider_config') {
       saveProvider(false, pop: false);
     }
+    if (subView == 'skill_config') {
+      setState(() {
+        subView = 'skills_list';
+        editingSkillId = null;
+      });
+      return;
+    }
     setState(() {
       subView = 'main';
       editingRole = null;
@@ -444,14 +474,22 @@ class SettingsSheetState extends State<SettingsSheet> {
     });
   }
 
-  void saveProvider(bool makeCurrent, {bool pop = true}) {
+  void saveProvider(
+    bool makeCurrent, {
+    bool pop = true,
+    bool? enabledOverride,
+  }) {
     final name = (editingProvider?.name ?? providerName).trim();
     if (name.isEmpty) {
       if (pop) widget.showSnack('请输入提供商名称。');
       return;
     }
-    final keepCurrent = makeCurrent || (editingProvider?.current ?? false);
-    final status = keepCurrent
+    final enabled = enabledOverride ?? editingProvider?.enabled ?? true;
+    final keepCurrent =
+        enabled && (makeCurrent || (editingProvider?.current ?? false));
+    final status = !enabled
+        ? '已禁用'
+        : keepCurrent
         ? '使用中'
         : providerKey.trim().isEmpty
         ? '未配置'
@@ -461,6 +499,7 @@ class SettingsSheetState extends State<SettingsSheet> {
         name: name,
         status: status,
         current: keepCurrent,
+        enabled: enabled,
         color: editingProvider?.color ?? providerFallbackColor(name),
         apiKey: providerKey.trim(),
         baseUrl: providerBaseUrl.trim().isEmpty
@@ -697,11 +736,12 @@ class SettingsSheetState extends State<SettingsSheet> {
       widget.showSnack('请填写标题和详细描述。');
       return;
     }
+    final version = await appVersionInfoFuture;
     final text =
         '''
 [$feedbackType] $title
 
-版本：$appVersionDisplay ($appVersionTag)
+版本：${version.display} (${version.tag})
 
 详细描述：
 $detail
@@ -720,6 +760,7 @@ ${feedbackContactController.text.trim().isEmpty ? '未填写' : feedbackContactC
   }
 
   Future<void> checkForUpdates() async {
+    final version = await appVersionInfoFuture;
     widget.showSnack('正在检查 GitHub Releases...');
     try {
       final response = await http
@@ -751,7 +792,7 @@ ${feedbackContactController.text.trim().isEmpty ? '未填写' : feedbackContactC
       final latestUrl = latest['html_url']?.toString() ?? githubReleasesUrl;
       final publishedAt = latest['published_at']?.toString() ?? '';
       final body = latest['body']?.toString().trim() ?? '';
-      final current = latestTag == appVersionTag;
+      final current = latestTag == version.tag;
       if (!mounted) return;
       await showDialog<void>(
         context: context,
@@ -761,7 +802,7 @@ ${feedbackContactController.text.trim().isEmpty ? '未填写' : feedbackContactC
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('当前版本：$appVersionDisplay'),
+              Text('当前版本：${version.display}'),
               const SizedBox(height: 8),
               Text('GitHub 最新：$latestName'),
               if (publishedAt.isNotEmpty) ...[

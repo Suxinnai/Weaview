@@ -6,10 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
-import 'package:speech_to_text/speech_to_text.dart' as speech;
 
 import '../../app/weaview_state.dart';
-import '../../core/app_utils.dart';
 import '../../data/ai/ai_gateway.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets/shared_widgets.dart';
@@ -26,28 +24,20 @@ class WeaviewHome extends StatefulWidget {
   State<WeaviewHome> createState() => _WeaviewHomeState();
 }
 
-class _WeaviewHomeState extends State<WeaviewHome>
-    with TickerProviderStateMixin, WidgetsBindingObserver {
+class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
   final TextEditingController _input = TextEditingController();
   final TextEditingController _modelSearch = TextEditingController();
   final FocusNode _inputFocus = FocusNode();
   final ScrollController _scroll = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
-  static const MethodChannel _nativeSpeech = MethodChannel(
-    'weaview/native_speech',
-  );
   static const MethodChannel _nativeTts = MethodChannel('weaview/native_tts');
-  late final speech.SpeechToText _speech;
-  late final AnimationController _wave;
   bool _sidebarOpen = false;
   bool _dockExpanded = false;
   bool _modelDropdownOpen = false;
-  bool _recording = false;
   bool _webSearchEnabled = false;
   bool _imageGenerationMode = false;
   int? _editingUserMessageIndex;
   bool _editingImageGenerationMessage = false;
-  String _recordingPrefix = '';
   int _seenMessageCount = 0;
   DateTime _lastAutoScroll = DateTime.fromMillisecondsSinceEpoch(0);
   List<MessageAttachment> _pendingAttachments = [];
@@ -57,11 +47,6 @@ class _WeaviewHomeState extends State<WeaviewHome>
   @override
   void initState() {
     super.initState();
-    _speech = speech.SpeechToText();
-    _wave = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    );
     WidgetsBinding.instance.addObserver(this);
     _inputFocus.addListener(_handleInputFocusChange);
     widget.state.addListener(_stateChanged);
@@ -76,8 +61,6 @@ class _WeaviewHomeState extends State<WeaviewHome>
     _modelSearch.dispose();
     _inputFocus.dispose();
     _scroll.dispose();
-    _wave.dispose();
-    _speech.cancel();
     super.dispose();
   }
 
@@ -173,11 +156,6 @@ class _WeaviewHomeState extends State<WeaviewHome>
     if (text.trim().isEmpty && _pendingAttachments.isEmpty) {
       return;
     }
-    if (_recording) {
-      await _speech.stop();
-      _wave.stop();
-      setState(() => _recording = false);
-    }
     final attachments = List<MessageAttachment>.from(_pendingAttachments);
     final editingIndex = _editingUserMessageIndex;
     if (editingIndex != null) {
@@ -220,8 +198,6 @@ class _WeaviewHomeState extends State<WeaviewHome>
     final useWebSearch = _webSearchEnabled;
     final skill = widget.state.matchSkillForInput(text);
     if (skill != null) {
-      final confirmed = await _confirmSkillExecution(skill, text);
-      if (!confirmed) return;
       _input.clear();
       setState(() {
         _pendingAttachments = [];
@@ -243,33 +219,10 @@ class _WeaviewHomeState extends State<WeaviewHome>
     );
   }
 
-  Future<bool> _confirmSkillExecution(SkillConfig skill, String input) async {
-    return await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text('执行技能「${skill.name}」？'),
-            content: Text(
-              '来源：${skill.sourceUrl}\n\nRunner：${widget.state.skillRunnerBaseUrl}\n\n输入：$input',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('取消'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('执行'),
-              ),
-            ],
-          ),
-        ) ??
-        false;
-  }
-
   Future<void> _openSkillPicker() async {
     final state = widget.state;
     if (state.skills.isEmpty) {
-      _snack('请先在「设置 > 扩展服务 > Skills 技能」中安装技能。');
+      _snack('请先在「设置 > 扩展服务 > Skills 技能」中导入技能。');
       return;
     }
     await showModalBottomSheet<void>(
@@ -490,182 +443,6 @@ class _WeaviewHomeState extends State<WeaviewHome>
     if (path != null) _snack('文件已保存。');
   }
 
-  Future<void> _toggleRecording() async {
-    if (_recording) {
-      await _speech.stop();
-      await _nativeSpeech.invokeMethod<void>('cancel').catchError((_) {});
-      _wave.stop();
-      setState(() => _recording = false);
-      return;
-    }
-    FocusManager.instance.primaryFocus?.unfocus();
-    if (Platform.isAndroid) {
-      await _listenWithNativeSpeech('android native recognizer');
-      return;
-    }
-    _recordingPrefix = _input.text;
-    final available = await _speech.initialize(
-      debugLogging: true,
-      onStatus: (status) {
-        if (status == 'done' || status == 'notListening') {
-          if (mounted) {
-            _wave.stop();
-            setState(() => _recording = false);
-          }
-        }
-      },
-      onError: (error) {
-        if (mounted) {
-          _wave.stop();
-          setState(() => _recording = false);
-          if (error.permanent) {
-            _snack('语音插件不可用，正在尝试系统语音输入。');
-            unawaited(_nativeSpeechFallback(error.errorMsg));
-          } else {
-            _snack('语音输入失败：${error.errorMsg}');
-          }
-        }
-      },
-    );
-    if (!available) {
-      await _nativeSpeechFallback('speech_to_text unavailable');
-      return;
-    }
-    final locales = await _speech.locales();
-    final systemLocale = await _speech.systemLocale();
-    final localeId =
-        locales
-            .firstWhereOrNull(
-              (locale) => locale.localeId.toLowerCase().startsWith('zh'),
-            )
-            ?.localeId ??
-        systemLocale?.localeId;
-    _wave.repeat();
-    setState(() => _recording = true);
-    await _speech.listen(
-      localeId: localeId,
-      listenFor: const Duration(minutes: 2),
-      pauseFor: const Duration(seconds: 5),
-      listenOptions: speech.SpeechListenOptions(
-        partialResults: true,
-        cancelOnError: false,
-        listenMode: speech.ListenMode.dictation,
-      ),
-      onResult: (result) {
-        _applyRecognizedSpeech(result.recognizedWords);
-      },
-    );
-  }
-
-  Future<void> _nativeSpeechFallback(String reason) async {
-    await _listenWithNativeSpeech(reason);
-  }
-
-  Future<void> _listenWithNativeSpeech(String reason) async {
-    try {
-      _recordingPrefix = _input.text;
-      FocusManager.instance.primaryFocus?.unfocus();
-      _wave.repeat();
-      if (mounted) setState(() => _recording = true);
-      final text = await _nativeSpeech.invokeMethod<String>('listen', {
-        'locale': 'zh-CN',
-      });
-      if (!mounted) return;
-      if (text == null || text.trim().isEmpty) {
-        _snack('没有识别到语音内容。');
-        return;
-      }
-      _applyRecognizedSpeech(text);
-      setState(() {});
-    } on PlatformException catch (error) {
-      if (!mounted) return;
-      if (error.code == 'CANCELLED') return;
-      final message = error.message?.trim().isNotEmpty == true
-          ? error.message!
-          : reason;
-      if (_isMicrophonePermissionError(error, message)) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) unawaited(_showMicrophonePermissionDialog(message));
-        });
-        return;
-      }
-      if (error.code == 'SPEECH_ENGINE_AUTH_REQUIRED') {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) unawaited(_showSpeechEngineDialog(message));
-        });
-        return;
-      }
-      _snack('语音输入不可用：$message');
-    } finally {
-      if (mounted) {
-        _wave.stop();
-        setState(() => _recording = false);
-      }
-    }
-  }
-
-  bool _isMicrophonePermissionError(PlatformException error, String message) {
-    return error.code == 'PERMISSION_DENIED' ||
-        message.contains('麦克风权限') ||
-        message.contains('缺少麦克风权限');
-  }
-
-  Future<void> _showSpeechEngineDialog(String message) async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('语音引擎需要授权'),
-        content: Text(
-          '$message\n\n这是系统语音识别服务的授权，不是织境的麦克风权限。完成授权后再点击麦克风即可继续使用。',
-        ),
-        actions: [
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('知道了'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showMicrophonePermissionDialog(String message) async {
-    final openSettings = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('需要麦克风权限'),
-        content: Text('$message\n\n请在系统权限中允许麦克风后，再返回织境使用语音输入。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('去授权'),
-          ),
-        ],
-      ),
-    );
-    if (!mounted) return;
-    if (openSettings != true) return;
-    try {
-      await _nativeSpeech.invokeMethod<void>('openAppSettings');
-    } on PlatformException catch (error) {
-      final detail = error.message?.trim().isNotEmpty == true
-          ? error.message!
-          : error.code;
-      if (mounted) _snack('无法打开权限设置：$detail');
-    }
-  }
-
-  void _applyRecognizedSpeech(String recognizedWords) {
-    final words = recognizedWords.trim();
-    if (words.isEmpty) return;
-    final prefix = _recordingPrefix.trim();
-    _input.text = [if (prefix.isNotEmpty) prefix, words].join(' ');
-    _input.selection = TextSelection.collapsed(offset: _input.text.length);
-  }
-
   Future<void> _pickAvatar(bool userAvatar) async {
     final file = await _imagePicker.pickImage(
       source: ImageSource.gallery,
@@ -865,8 +642,6 @@ class _WeaviewHomeState extends State<WeaviewHome>
                     state: state,
                     inputController: _input,
                     inputFocusNode: _inputFocus,
-                    wave: _wave,
-                    recording: _recording,
                     webSearchEnabled: _webSearchEnabled,
                     imageGenerationMode: _imageGenerationMode,
                     dockExpanded: _dockExpanded,
@@ -876,7 +651,6 @@ class _WeaviewHomeState extends State<WeaviewHome>
                     onToggleWebSearch: _toggleWebSearch,
                     onOpenSkillPicker: _openSkillPicker,
                     onSubmit: _submit,
-                    onToggleRecording: _toggleRecording,
                     onPickChatImages: _pickChatImages,
                     onPickChatFiles: _pickChatFiles,
                     onRemoveAttachment: _removePendingAttachment,

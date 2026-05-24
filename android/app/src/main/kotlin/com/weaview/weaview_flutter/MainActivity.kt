@@ -1,13 +1,12 @@
 package com.weaview.weaview_flutter
 
 import android.Manifest
-import android.app.Activity
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.ContentValues
 import android.content.ActivityNotFoundException
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -18,13 +17,8 @@ import android.media.MediaScannerConnection
 import android.media.AudioTrack
 import android.net.Uri
 import android.os.Build
-import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
-import android.provider.Settings
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity
@@ -35,13 +29,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
-    private val speechRequestCode = 42017
-    private val speechPermissionRequestCode = 42018
     private val notificationPermissionRequestCode = 42019
-    private var pendingSpeechResult: MethodChannel.Result? = null
-    private var pendingSpeechLocale: String = "zh-CN"
-    private var speechRecognizer: SpeechRecognizer? = null
-    private var lastPartialSpeech = ""
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var mediaPlayer: MediaPlayer? = null
@@ -51,21 +39,6 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(
-            flutterEngine.dartExecutor.binaryMessenger,
-            "weaview/native_speech"
-        ).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "listen" -> startNativeSpeech(call.argument<String>("locale") ?: "zh-CN", result)
-                "hasRecordAudioPermission" -> result.success(hasRecordAudioPermission())
-                "openAppSettings" -> openAppPermissionSettings(result)
-                "cancel" -> {
-                    cancelNativeSpeech()
-                    result.success(null)
-                }
-                else -> result.notImplemented()
-            }
-        }
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "weaview/native_tts"
@@ -151,212 +124,6 @@ class MainActivity : FlutterActivity() {
             notificationPermissionRequestCode
         )
         result.success(false)
-    }
-
-    private fun startNativeSpeech(locale: String, result: MethodChannel.Result) {
-        if (pendingSpeechResult != null) {
-            result.error("BUSY", "语音识别正在进行中", null)
-            return
-        }
-        pendingSpeechResult = result
-        pendingSpeechLocale = locale
-        lastPartialSpeech = ""
-
-        if (!hasRecordAudioPermission()) {
-            requestPermissions(
-                arrayOf(Manifest.permission.RECORD_AUDIO),
-                speechPermissionRequestCode
-            )
-            return
-        }
-
-        startInlineSpeech(locale)
-    }
-
-    private fun startInlineSpeech(locale: String) {
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            finishSpeechError(
-                "NO_RECOGNIZER",
-                "系统没有可用的后台语音识别服务，请先启用或授权系统语音引擎"
-            )
-            return
-        }
-        destroySpeechRecognizer()
-        try {
-            val recognizer = SpeechRecognizer.createSpeechRecognizer(this)
-            speechRecognizer = recognizer
-            recognizer.setRecognitionListener(object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) = Unit
-                override fun onBeginningOfSpeech() = Unit
-                override fun onRmsChanged(rmsdB: Float) = Unit
-                override fun onBufferReceived(buffer: ByteArray?) = Unit
-                override fun onEndOfSpeech() = Unit
-                override fun onEvent(eventType: Int, params: Bundle?) = Unit
-
-                override fun onPartialResults(partialResults: Bundle?) {
-                    val partial = speechTextFromBundle(partialResults).trim()
-                    if (partial.isNotEmpty()) lastPartialSpeech = partial
-                }
-
-                override fun onResults(results: Bundle?) {
-                    val text = speechTextFromBundle(results).ifBlank { lastPartialSpeech }
-                    finishSpeechSuccess(text)
-                }
-
-                override fun onError(error: Int) {
-                    if (lastPartialSpeech.isNotBlank()) {
-                        finishSpeechSuccess(lastPartialSpeech)
-                        return
-                    }
-                    if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
-                        val appHasPermission = hasRecordAudioPermission()
-                        finishSpeechError(
-                            if (appHasPermission) "SPEECH_ENGINE_AUTH_REQUIRED" else "PERMISSION_DENIED",
-                            if (appHasPermission) {
-                                "系统语音引擎需要授权，请在系统语音服务或小爱语音中完成授权后重试"
-                            } else {
-                                "缺少麦克风权限，请在系统权限中允许麦克风后重试"
-                            }
-                        )
-                        return
-                    }
-                    finishSpeechError("RECOGNITION_ERROR", speechErrorMessage(error))
-                }
-            })
-            recognizer.startListening(speechIntent(locale, partialResults = true))
-        } catch (error: Exception) {
-            destroySpeechRecognizer()
-            finishSpeechError("RECOGNIZER_START_FAILED", error.message ?: "语音识别启动失败")
-        }
-    }
-
-    private fun startSpeechIntent(locale: String) {
-        try {
-            startActivityForResult(
-                speechIntent(locale, partialResults = false).apply {
-                    putExtra(RecognizerIntent.EXTRA_PROMPT, "请开始说话")
-                },
-                speechRequestCode
-            )
-        } catch (error: ActivityNotFoundException) {
-            finishSpeechError("NO_RECOGNIZER", "系统没有可用的语音识别服务")
-        } catch (error: Exception) {
-            finishSpeechError("RECOGNIZER_START_FAILED", error.message ?: "语音识别启动失败")
-        }
-    }
-
-    private fun speechIntent(locale: String, partialResults: Boolean): Intent {
-        return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(
-                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-            )
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, locale)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, locale)
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, partialResults)
-            putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
-        }
-    }
-
-    private fun speechTextFromBundle(bundle: Bundle?): String {
-        val matches = bundle?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-        return matches?.firstOrNull().orEmpty()
-    }
-
-    private fun finishSpeechSuccess(text: String) {
-        val result = pendingSpeechResult ?: return
-        pendingSpeechResult = null
-        val cleaned = text.trim()
-        destroySpeechRecognizer()
-        if (cleaned.isEmpty()) {
-            result.error("NO_MATCH", "没有识别到语音内容", null)
-        } else {
-            result.success(cleaned)
-        }
-    }
-
-    private fun finishSpeechError(code: String, message: String) {
-        val result = pendingSpeechResult ?: return
-        pendingSpeechResult = null
-        destroySpeechRecognizer()
-        result.error(code, message, null)
-    }
-
-    private fun cancelNativeSpeech() {
-        val result = pendingSpeechResult
-        pendingSpeechResult = null
-        try {
-            speechRecognizer?.cancel()
-        } catch (_: Exception) {
-        }
-        destroySpeechRecognizer()
-        result?.error("CANCELLED", "语音识别已取消", null)
-    }
-
-    private fun destroySpeechRecognizer() {
-        try {
-            speechRecognizer?.destroy()
-        } catch (_: Exception) {
-        }
-        speechRecognizer = null
-    }
-
-    private fun speechErrorMessage(error: Int): String {
-        return when (error) {
-            SpeechRecognizer.ERROR_AUDIO -> "录音失败，请检查麦克风权限或系统录音状态"
-            SpeechRecognizer.ERROR_CLIENT -> "系统语音引擎异常或未授权，请确认语音服务可用后重试"
-            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "缺少麦克风权限"
-            SpeechRecognizer.ERROR_NETWORK -> "语音识别网络连接失败"
-            SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "语音识别网络超时"
-            SpeechRecognizer.ERROR_NO_MATCH -> "没有识别到语音内容"
-            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "语音识别服务正忙，请稍后再试"
-            SpeechRecognizer.ERROR_SERVER -> "语音识别服务异常"
-            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "没有检测到说话声音"
-            else -> "语音识别失败，错误码：$error"
-        }
-    }
-
-    private fun hasRecordAudioPermission(): Boolean {
-        return Build.VERSION.SDK_INT < Build.VERSION_CODES.M ||
-            checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun openAppPermissionSettings(result: MethodChannel.Result) {
-        try {
-            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.parse("package:$packageName")
-                addCategory(Intent.CATEGORY_DEFAULT)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            startActivity(intent)
-            result.success(null)
-        } catch (error: Exception) {
-            result.error("OPEN_SETTINGS_FAILED", error.message ?: "无法打开系统权限设置", null)
-        }
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != speechPermissionRequestCode) return
-        val granted = grantResults.isNotEmpty() &&
-            grantResults[0] == PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            startInlineSpeech(pendingSpeechLocale)
-        } else {
-            val message = if (
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-                !shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO)
-            ) {
-                "麦克风权限已被拒绝，请在系统设置中允许后重试"
-            } else {
-                "需要麦克风权限才能使用语音输入"
-            }
-            finishSpeechError("PERMISSION_DENIED", message)
-        }
     }
 
     private fun speakText(text: String, locale: String, result: MethodChannel.Result) {
@@ -759,22 +526,7 @@ class MainActivity : FlutterActivity() {
         return candidate
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != speechRequestCode) return
-        if (pendingSpeechResult == null) return
-        if (resultCode != Activity.RESULT_OK) {
-            finishSpeechError("CANCELLED", "语音识别已取消或未识别到内容")
-            return
-        }
-        val matches = data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-        val text = matches?.firstOrNull().orEmpty()
-        finishSpeechSuccess(text)
-    }
-
     override fun onDestroy() {
-        destroySpeechRecognizer()
         tts?.stop()
         tts?.shutdown()
         tts = null

@@ -12,8 +12,9 @@ class ProviderConfigService {
   void load(WeaviewPreferences prefs) {
     final savedProviders = prefs.loadProviders();
     if (savedProviders.isNotEmpty) {
-      final savedNames =
-          savedProviders.map((p) => p.name.toLowerCase()).toSet();
+      final savedNames = savedProviders
+          .map((p) => p.name.toLowerCase())
+          .toSet();
       providers = [
         ...savedProviders,
         for (final preset in AiProvider.defaults())
@@ -36,17 +37,23 @@ class ProviderConfigService {
       }
       return normalized;
     }).toList();
-    if (!providers.any((p) => p.current) && providers.isNotEmpty) {
-      final preferred = providers.indexWhere((p) => p.apiKey.isNotEmpty);
+    if (!providers.any((p) => p.enabled && p.current) &&
+        providers.any((p) => p.enabled)) {
+      final preferred = providers.indexWhere(
+        (p) => p.enabled && p.apiKey.isNotEmpty,
+      );
+      final fallback = preferred >= 0 ? preferred : -1;
       providers = [
         for (var i = 0; i < providers.length; i++)
           providers[i].copyWith(
-            current: preferred >= 0 && i == preferred,
-            status: preferred >= 0 && i == preferred
+            current: i == fallback,
+            status: !providers[i].enabled
+                ? '已禁用'
+                : i == fallback
                 ? '使用中'
                 : providers[i].apiKey.isEmpty
-                    ? '未配置'
-                    : '已连接',
+                ? '未配置'
+                : '已连接',
           ),
       ];
     }
@@ -80,17 +87,12 @@ class ProviderConfigService {
   }
 
   void saveProviders(List<AiProvider> next, WeaviewPreferences? prefs) {
-    providers = next
-        .map((p) => p.copyWith(models: p.models))
-        .toList();
+    providers = next.map((p) => p.copyWith(models: p.models)).toList();
+    _normalizeCurrentProvider();
     _persistProviders(prefs);
   }
 
-  void reorderProvider(
-    int oldIndex,
-    int newIndex,
-    WeaviewPreferences? prefs,
-  ) {
+  void reorderProvider(int oldIndex, int newIndex, WeaviewPreferences? prefs) {
     if (oldIndex < 0 || oldIndex >= providers.length) return;
     var targetIndex = newIndex;
     if (targetIndex > oldIndex) targetIndex -= 1;
@@ -110,11 +112,15 @@ class ProviderConfigService {
     final index = next.indexWhere((p) => p.name == provider.name);
     var updated = provider;
     if (makeCurrent) {
-      updated = provider.copyWith(current: true, status: '使用中');
+      updated = provider.copyWith(enabled: true, current: true, status: '使用中');
       for (var i = 0; i < next.length; i++) {
         next[i] = next[i].copyWith(
           current: false,
-          status: next[i].apiKey.isEmpty ? '未配置' : '已连接',
+          status: !next[i].enabled
+              ? '已禁用'
+              : next[i].apiKey.isEmpty
+              ? '未配置'
+              : '已连接',
         );
       }
     }
@@ -126,11 +132,36 @@ class ProviderConfigService {
     saveProviders(next, prefs);
   }
 
+  void setProviderEnabled(
+    String name,
+    bool enabled,
+    WeaviewPreferences? prefs,
+  ) {
+    providers = [
+      for (final provider in providers)
+        if (provider.name == name)
+          provider.copyWith(
+            enabled: enabled,
+            current: enabled ? provider.current : false,
+            status: !enabled
+                ? '已禁用'
+                : provider.current
+                ? '使用中'
+                : provider.apiKey.isEmpty
+                ? '未配置'
+                : '已连接',
+          )
+        else
+          provider,
+    ];
+    _normalizeCurrentProvider();
+    if (!enabled) _clearAssignmentsForProvider(name, prefs);
+    _persistProviders(prefs);
+  }
+
   void deleteProvider(String name, WeaviewPreferences? prefs) {
     final next = providers.where((p) => p.name != name).toList();
-    if (!next.any((p) => p.current) && next.isNotEmpty) {
-      next[0] = next[0].copyWith(current: true, status: '使用中');
-    }
+    _clearAssignmentsForProvider(name, prefs);
     saveProviders(next, prefs);
   }
 
@@ -164,16 +195,20 @@ class ProviderConfigService {
     final chatAssignment = modelAssignments['chat'];
     if (chatAssignment != null) {
       final provider = providers.firstWhereOrNull(
-        (p) => p.name == chatAssignment.provider,
+        (p) => p.enabled && p.name == chatAssignment.provider,
       );
       if (provider != null) return provider;
     }
-    return providers.firstWhereOrNull((p) => p.apiKey.isNotEmpty) ??
+    return providers.firstWhereOrNull((p) => p.enabled && p.current) ??
+        providers.firstWhereOrNull((p) => p.enabled && p.apiKey.isNotEmpty) ??
+        providers.firstWhereOrNull((p) => p.enabled) ??
         providers.first;
   }
 
   List<AiProvider> get enabledModelProviders => providers
-      .where((p) => p.apiKey.trim().isNotEmpty && p.models.isNotEmpty)
+      .where(
+        (p) => p.enabled && p.apiKey.trim().isNotEmpty && p.models.isNotEmpty,
+      )
       .toList();
 
   bool get hasActiveSearchKey =>
@@ -188,12 +223,45 @@ class ProviderConfigService {
     prefs?.saveProviders(providers);
   }
 
+  void _normalizeCurrentProvider() {
+    final enabledCurrentIndex = providers.indexWhere(
+      (provider) => provider.enabled && provider.current,
+    );
+    final nextCurrentIndex = enabledCurrentIndex >= 0
+        ? enabledCurrentIndex
+        : providers.indexWhere(
+            (provider) => provider.enabled && provider.apiKey.isNotEmpty,
+          );
+    final fallbackIndex = nextCurrentIndex;
+    providers = [
+      for (var i = 0; i < providers.length; i++)
+        providers[i].copyWith(
+          current: fallbackIndex >= 0 && i == fallbackIndex,
+          status: !providers[i].enabled
+              ? '已禁用'
+              : fallbackIndex >= 0 && i == fallbackIndex
+              ? '使用中'
+              : providers[i].apiKey.isEmpty
+              ? '未配置'
+              : '已连接',
+        ),
+    ];
+  }
+
+  void _clearAssignmentsForProvider(String name, WeaviewPreferences? prefs) {
+    var changed = false;
+    modelAssignments = modelAssignments.map((role, assignment) {
+      if (assignment.provider != name) return MapEntry(role, assignment);
+      changed = true;
+      return MapEntry(role, assignment.copyWith(provider: '', model: ''));
+    });
+    if (changed) prefs?.saveModelAssignments(modelAssignments);
+  }
+
   List<TtsProviderConfig> _mergeTtsProviders(List<TtsProviderConfig> saved) {
     final defaults = TtsProviderConfig.defaults();
     if (saved.isEmpty) return defaults;
-    final defaultsById = {
-      for (final p in defaults) p.id: p,
-    };
+    final defaultsById = {for (final p in defaults) p.id: p};
     final merged = saved.map((provider) {
       final preset = defaultsById[provider.id];
       if (preset == null) return provider;
@@ -212,10 +280,7 @@ class ProviderConfigService {
     return merged;
   }
 
-  String _safeActiveTtsId(
-    String activeId,
-    List<TtsProviderConfig> providers,
-  ) {
+  String _safeActiveTtsId(String activeId, List<TtsProviderConfig> providers) {
     final trimmed = activeId.trim();
     if (trimmed.isEmpty) return '';
     if (trimmed == 'system') return 'system';

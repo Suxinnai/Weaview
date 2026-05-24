@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:weaview_flutter/src/app/app_constants.dart';
+import 'package:weaview_flutter/src/app/app_version.dart';
 import 'package:weaview_flutter/src/app/weaview_app.dart';
 import 'package:weaview_flutter/src/app/weaview_state.dart';
 import 'package:weaview_flutter/src/core/app_utils.dart';
@@ -17,9 +17,14 @@ import 'package:weaview_flutter/src/features/chat/sections/chat_model_dropdown.d
 import 'package:weaview_flutter/src/features/settings/settings_sheet.dart';
 
 void main() {
-  test('exposes the current stable version in app constants', () {
-    expect(appVersionTag, 'v1.0.26');
-    expect(appVersionDisplay, contains('v1.0.26'));
+  test('derives the current stable version from pubspec text', () {
+    final version = parseAppVersionInfo(
+      'name: weaview_flutter\nversion: 1.0.30+32',
+    );
+
+    expect(version?.tag, 'v1.0.30');
+    expect(version?.display, 'Weaview v1.0.30');
+    expect(version?.full, '1.0.30+32');
   });
 
   testWidgets('renders the Weaview chat shell', (WidgetTester tester) async {
@@ -572,6 +577,123 @@ $$E = mc^2$$
     },
   );
 
+  test(
+    'disabled providers stay out of model selection and clear assignments',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final state = WeaviewState();
+
+      await state.load();
+      state.saveProviders([
+        AiProvider.defaults().first.copyWith(
+          apiKey: 'key',
+          status: '使用中',
+          current: true,
+          models: const [
+            AiModel(id: 'gpt-test', name: 'gpt-test', capabilities: ['chat']),
+          ],
+        ),
+        AiProvider.defaults()[2].copyWith(
+          apiKey: 'deep-key',
+          status: '已连接',
+          models: const [
+            AiModel(
+              id: 'deepseek-test',
+              name: 'deepseek-test',
+              capabilities: ['chat'],
+            ),
+          ],
+        ),
+      ]);
+      state.saveModelAssignment(
+        'chat',
+        const ModelAssignment(
+          provider: 'OpenAI',
+          model: 'gpt-test',
+          prompt: '',
+        ),
+      );
+
+      state.setProviderEnabled('OpenAI', false);
+
+      final openai = state.providers.firstWhere((p) => p.name == 'OpenAI');
+      expect(openai.enabled, isFalse);
+      expect(openai.current, isFalse);
+      expect(openai.status, '已禁用');
+      expect(state.modelAssignments['chat']?.provider, isEmpty);
+      expect(
+        state.enabledModelProviders.map((p) => p.name),
+        isNot(contains('OpenAI')),
+      );
+      state.dispose();
+    },
+  );
+
+  test(
+    'imports backups by merging data and preserving masked secrets',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final state = WeaviewState();
+
+      await state.load();
+      state.saveProviders([
+        AiProvider.defaults().first.copyWith(
+          apiKey: 'local-secret',
+          status: '已连接',
+        ),
+      ]);
+
+      final result = await state.importBackupJson(
+        jsonEncode({
+          'ai_memories': ['偏好简洁回复'],
+          'ai_providers': [
+            {
+              'name': 'OpenAI',
+              'status': '已连接',
+              'current': true,
+              'enabled': true,
+              'colorHex': '#10B981',
+              'apiKey': '***',
+              'baseUrl': 'https://api.openai.com/v1',
+              'models': [
+                {
+                  'id': 'gpt-test',
+                  'name': 'gpt-test',
+                  'capabilities': ['chat'],
+                },
+              ],
+            },
+          ],
+          'skills': [
+            {
+              'id': 'x-tweet-fetcher',
+              'name': 'X Tweet Fetcher',
+              'description': 'Fetch tweets',
+              'sourceUrl': 'https://github.com/ythx-101/x-tweet-fetcher',
+              'enabled': true,
+              'triggers': ['tweet'],
+              'systemPrompt': 'Use tweet context only.',
+              'createdAt': 1,
+              'updatedAt': 2,
+            },
+          ],
+          'active_skill_id': 'x-tweet-fetcher',
+        }),
+      );
+
+      final openai = state.providers.firstWhere((p) => p.name == 'OpenAI');
+      expect(result.memories, 1);
+      expect(result.providers, 1);
+      expect(result.skills, 1);
+      expect(state.memories, contains('偏好简洁回复'));
+      expect(openai.apiKey, 'local-secret');
+      expect(openai.models.map((m) => m.id), contains('gpt-test'));
+      expect(state.activeSkillId, 'x-tweet-fetcher');
+      expect(state.skills.single.systemPrompt, contains('tweet context'));
+      state.dispose();
+    },
+  );
+
   testWidgets('chat model picker displays saved model capabilities', (
     WidgetTester tester,
   ) async {
@@ -642,8 +764,6 @@ $$E = mc^2$$
             state: state,
             inputController: controller,
             inputFocusNode: focusNode,
-            wave: const AlwaysStoppedAnimation<double>(0),
-            recording: false,
             webSearchEnabled: false,
             imageGenerationMode: false,
             dockExpanded: false,
@@ -652,7 +772,6 @@ $$E = mc^2$$
             onToggleWebSearch: () {},
             onOpenSkillPicker: () {},
             onSubmit: () async {},
-            onToggleRecording: () async {},
             onPickChatImages: () async {},
             onPickChatFiles: () async {},
             onRemoveAttachment: (_) {},
@@ -665,6 +784,7 @@ $$E = mc^2$$
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.public_rounded), findsNothing);
+    expect(find.byIcon(Icons.mic_none_rounded), findsNothing);
     expect(find.byIcon(Icons.open_in_full_rounded), findsOneWidget);
 
     focusNode.dispose();
@@ -777,8 +897,14 @@ $$E = mc^2$$
     await tester.tap(find.text('扩展服务'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Skills 技能'), findsOneWidget);
+    expect(find.text('Skills 技能'), findsWidgets);
+    expect(find.text('已导入 1 个技能'), findsOneWidget);
+    await tester.tap(find.text('Skills 技能').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('下载 / 导入'), findsOneWidget);
     expect(find.text('X Tweet Fetcher'), findsOneWidget);
+    expect(find.text('Skill Runner'), findsOneWidget);
     expect(find.textContaining('tweet'), findsWidgets);
     state.dispose();
   });
@@ -804,41 +930,40 @@ $$E = mc^2$$
     state.dispose();
   });
 
-  testWidgets('auto matched skill asks for confirmation without executing', (
-    WidgetTester tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({
-      'skill_runner_base_url': 'http://127.0.0.1:8765',
-      'skills':
-          '[{"id":"x-tweet-fetcher","name":"X Tweet Fetcher","description":"Fetch tweets","sourceUrl":"https://github.com/ythx-101/x-tweet-fetcher","enabled":true,"triggers":["tweet"],"createdAt":1,"updatedAt":1}]',
-    });
-    final state = WeaviewState();
+  testWidgets(
+    'auto matched skill submits context without confirmation or runner execution',
+    (WidgetTester tester) async {
+      SharedPreferences.setMockInitialValues({
+        'skill_runner_base_url': 'http://127.0.0.1:8765',
+        'skills':
+            '[{"id":"x-tweet-fetcher","name":"X Tweet Fetcher","description":"Fetch tweets","sourceUrl":"https://github.com/ythx-101/x-tweet-fetcher","enabled":true,"triggers":["tweet"],"createdAt":1,"updatedAt":1}]',
+      });
+      final state = WeaviewState();
 
-    await state.load();
-    await tester.pumpWidget(MaterialApp(home: WeaviewHome(state: state)));
-    await tester.enterText(
-      find
-          .descendant(
-            of: find.byType(ChatInputDock),
-            matching: find.byType(TextField),
-          )
-          .first,
-      'tweet https://x.com/example/status/123',
-    );
-    await tester.pump();
-    await tester.tap(find.text('编织'));
-    await tester.pump(const Duration(milliseconds: 400));
+      await state.load();
+      await tester.pumpWidget(MaterialApp(home: WeaviewHome(state: state)));
+      await tester.enterText(
+        find
+            .descendant(
+              of: find.byType(ChatInputDock),
+              matching: find.byType(TextField),
+            )
+            .first,
+        'tweet https://x.com/example/status/123',
+      );
+      await tester.pump();
+      await tester.tap(find.text('编织'));
+      await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.textContaining('执行技能'), findsOneWidget);
-    expect(state.messages, isEmpty);
-
-    await tester.tap(find.text('取消'));
-    await tester.pump(const Duration(milliseconds: 250));
-
-    expect(state.messages, isEmpty);
-    await tester.pump(const Duration(seconds: 1));
-    state.dispose();
-  });
+      expect(find.textContaining('使用技能'), findsNothing);
+      expect(state.messages.length, 2);
+      expect(state.messages.first.content, contains('https://x.com/example'));
+      expect(state.messages.last.content, contains('主对话模型'));
+      expect(state.messages.last.content, isNot(contains('技能执行失败')));
+      await tester.pump(const Duration(milliseconds: 500));
+      state.dispose();
+    },
+  );
 
   test('creates conversation branch from selected message', () async {
     SharedPreferences.setMockInitialValues({});

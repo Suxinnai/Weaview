@@ -14,8 +14,6 @@ class ChatInputDock extends StatelessWidget {
     required this.state,
     required this.inputController,
     required this.inputFocusNode,
-    required this.wave,
-    required this.recording,
     required this.webSearchEnabled,
     required this.imageGenerationMode,
     required this.dockExpanded,
@@ -24,7 +22,6 @@ class ChatInputDock extends StatelessWidget {
     required this.onToggleWebSearch,
     required this.onOpenSkillPicker,
     required this.onSubmit,
-    required this.onToggleRecording,
     required this.onPickChatImages,
     required this.onPickChatFiles,
     required this.onRemoveAttachment,
@@ -35,8 +32,6 @@ class ChatInputDock extends StatelessWidget {
   final WeaviewState state;
   final TextEditingController inputController;
   final FocusNode inputFocusNode;
-  final Animation<double> wave;
-  final bool recording;
   final bool webSearchEnabled;
   final bool imageGenerationMode;
   final bool dockExpanded;
@@ -45,7 +40,6 @@ class ChatInputDock extends StatelessWidget {
   final VoidCallback onToggleWebSearch;
   final VoidCallback onOpenSkillPicker;
   final Future<void> Function() onSubmit;
-  final Future<void> Function() onToggleRecording;
   final Future<void> Function() onPickChatImages;
   final Future<void> Function() onPickChatFiles;
   final ValueChanged<MessageAttachment> onRemoveAttachment;
@@ -68,9 +62,6 @@ class ChatInputDock extends StatelessWidget {
     );
     final needsExpandedEditor = estimatedLineCount > 3;
     final showInlineWebSearch = !needsExpandedEditor;
-    final showMicButton =
-        (inputController.text.trim().isEmpty || recording) &&
-        !state.isStreaming;
     final canSubmit = imageGenerationMode
         ? hasText
         : hasText || pendingAttachments.isNotEmpty;
@@ -106,13 +97,6 @@ class ChatInputDock extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          AnimatedSize(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            child: recording
-                ? _RecordingStrip(state: state, wave: wave)
-                : const SizedBox.shrink(),
-          ),
           AnimatedSize(
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
@@ -216,23 +200,11 @@ class ChatInputDock extends StatelessWidget {
                     opacity: 0.62,
                     size: 38,
                   ),
-                if (showMicButton)
-                  IconCircleButton(
-                    icon: Icons.mic_none_rounded,
-                    onTap: onToggleRecording,
-                    color: recording ? sendGreen : state.text(context),
-                    background: recording
-                        ? sendGreen.withValues(alpha: 0.18)
-                        : Colors.transparent,
-                    opacity: recording ? 1 : 0.42,
-                    size: 38,
-                  ),
                 const SizedBox(width: 3),
                 SendButton(
                   streaming: state.isStreaming,
                   enabled:
-                      state.isStreaming ||
-                      (canSubmit && !state.isStreaming && !recording),
+                      state.isStreaming || (canSubmit && !state.isStreaming),
                   onTap: onSubmit,
                   state: state,
                 ),
@@ -419,56 +391,5 @@ class ChatInputDock extends StatelessWidget {
     } finally {
       editor.dispose();
     }
-  }
-}
-
-class _RecordingStrip extends StatelessWidget {
-  const _RecordingStrip({required this.state, required this.wave});
-
-  final WeaviewState state;
-  final Animation<double> wave;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 42,
-      decoration: BoxDecoration(
-        color: sendGreen.withValues(alpha: 0.1),
-        border: Border(
-          bottom: BorderSide(
-            color: state.text(context).withValues(alpha: 0.06),
-          ),
-        ),
-      ),
-      child: AnimatedBuilder(
-        animation: wave,
-        builder: (context, _) {
-          return Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              for (var i = 0; i < 7; i++)
-                Container(
-                  width: 5,
-                  height:
-                      10 +
-                      (math.sin((wave.value * math.pi * 2) + i * 0.75) + 1) * 8,
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                  decoration: BoxDecoration(
-                    color: sendGreen,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              const SizedBox(width: 10),
-              Text(
-                '聆听中...',
-                style: state
-                    .textStyle(context, size: 12, weight: FontWeight.w600)
-                    .copyWith(color: sendGreen, letterSpacing: 1.5),
-              ),
-            ],
-          );
-        },
-      ),
-    );
   }
 }

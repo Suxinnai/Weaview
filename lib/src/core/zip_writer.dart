@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 class ZipEntryData {
@@ -73,6 +74,40 @@ Uint8List buildStoredZip(List<ZipEntryData> entries) {
   return output.toBytes();
 }
 
+String? readZipUtf8Entry(Uint8List bytes, String entryName) {
+  var offset = 0;
+  while (offset + 30 <= bytes.length) {
+    if (_readU32(bytes, offset) != 0x04034B50) break;
+    final flags = _readU16(bytes, offset + 6);
+    final method = _readU16(bytes, offset + 8);
+    final compressedSize = _readU32(bytes, offset + 18);
+    final nameLength = _readU16(bytes, offset + 26);
+    final extraLength = _readU16(bytes, offset + 28);
+    final nameStart = offset + 30;
+    final dataStart = nameStart + nameLength + extraLength;
+    final dataEnd = dataStart + compressedSize;
+    if (dataStart > bytes.length || dataEnd > bytes.length) break;
+
+    final nameBytes = bytes.sublist(nameStart, nameStart + nameLength);
+    final name = (flags & 0x0800) != 0
+        ? utf8.decode(nameBytes, allowMalformed: true)
+        : latin1.decode(nameBytes, allowInvalid: true);
+    final normalized = name.replaceAll('\\', '/');
+    final data = bytes.sublist(dataStart, dataEnd);
+    if (normalized == entryName || normalized.endsWith('/$entryName')) {
+      final decoded = switch (method) {
+        0 => data,
+        8 => ZLibDecoder(raw: true).convert(data),
+        _ => throw FormatException('Unsupported zip compression: $method'),
+      };
+      return utf8.decode(decoded, allowMalformed: true);
+    }
+
+    offset = dataEnd;
+  }
+  return null;
+}
+
 List<int> _u16(int value) => [value & 0xFF, (value >> 8) & 0xFF];
 
 List<int> _u32(int value) => [
@@ -92,4 +127,15 @@ int _crc32(List<int> bytes) {
     }
   }
   return (crc ^ 0xFFFFFFFF) & 0xFFFFFFFF;
+}
+
+int _readU16(Uint8List bytes, int offset) {
+  return bytes[offset] | (bytes[offset + 1] << 8);
+}
+
+int _readU32(Uint8List bytes, int offset) {
+  return bytes[offset] |
+      (bytes[offset + 1] << 8) |
+      (bytes[offset + 2] << 16) |
+      (bytes[offset + 3] << 24);
 }

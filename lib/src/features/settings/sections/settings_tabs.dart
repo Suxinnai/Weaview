@@ -1,6 +1,7 @@
 // ignore_for_file: use_key_in_widget_constructors
 
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../../../app/app_constants.dart';
+import '../../../app/app_version.dart';
 import '../../../app/weaview_state.dart';
 import '../../../core/app_utils.dart';
 import '../../../domain/models.dart';
@@ -239,11 +241,13 @@ extension SettingsTabs on SettingsSheetState {
                     builder: (context) {
                       final provider = state.providers[index];
                       final isCurrent =
-                          provider.current || provider.status == '使用中';
+                          provider.enabled &&
+                          (provider.current || provider.status == '使用中');
                       final assigned = assignedProviderNames.contains(
                         provider.name,
                       );
-                      final active = isCurrent || assigned;
+                      final active =
+                          provider.enabled && (isCurrent || assigned);
                       final activeLabel = isCurrent
                           ? '当前'
                           : assigned
@@ -407,114 +411,23 @@ extension SettingsTabs on SettingsSheetState {
           children: [
             SettingsRow(
               state: state,
-              title: 'Skill Runner',
-              subtitle: state.skillRunnerBaseUrl,
-              trailing: SizedBox(
-                width: 150,
-                child: TextFormField(
-                  controller: skillRunnerController
-                    ..text = state.skillRunnerBaseUrl,
-                  onFieldSubmitted: state.saveSkillRunnerBaseUrl,
-                  textAlign: TextAlign.right,
-                  style: state.textStyle(context, size: 13),
-                  decoration: inputDecoration(
-                    state,
-                    hint: 'http://127.0.0.1:8765',
-                  ),
-                ),
-              ),
+              title: 'Skills 技能',
+              subtitle: state.skills.isEmpty
+                  ? '查看、下载或从 GitHub 导入技能'
+                  : '已导入 ${state.skills.length} 个技能',
+              leading: Icon(Icons.extension_outlined, color: state.accents[0]),
+              showChevron: true,
+              onTap: () => updateSheet(() => subView = 'skills_list'),
             ),
-            DividerLine(state: state),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: skillInstallController,
-                      style: state.textStyle(context, size: 13),
-                      decoration: inputDecoration(
-                        state,
-                        hint: 'GitHub Skill URL',
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _installSkillFromUrl,
-                    child: const Text('安装'),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
-              child: Row(
-                children: [
-                  TextButton.icon(
-                    onPressed: _testSkillRunner,
-                    icon: const Icon(Icons.lan_outlined, size: 17),
-                    label: const Text('测试 Runner'),
-                  ),
-                  const Spacer(),
-                  Text(
-                    state.activeSkill == null
-                        ? '未固定技能'
-                        : '已固定：${state.activeSkill!.name}',
-                    style: state.textStyle(context, size: 12, opacity: 0.58),
-                  ),
-                ],
-              ),
-            ),
-            for (final skill in state.skills) ...[
-              DividerLine(state: state),
-              SettingsRow(
-                state: state,
-                title: skill.name,
-                subtitle: [
-                  if (!skill.enabled) '已停用',
-                  if (state.activeSkillId == skill.id) '已固定',
-                  if (skill.triggers.isNotEmpty)
-                    '触发：${skill.triggers.take(4).join('、')}',
-                  if (skill.triggers.isEmpty) skill.description,
-                ].where((item) => item.trim().isNotEmpty).join(' · '),
-                showChevron: true,
-                onTap: () => _openSkillConfig(skill),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TinyIcon(
-                      icon: state.activeSkillId == skill.id
-                          ? Icons.push_pin
-                          : Icons.push_pin_outlined,
-                      color: state.accents[0],
-                      onTap: () => state.setActiveSkill(skill.id),
-                    ),
-                    WeaveSwitch(
-                      state: state,
-                      value: skill.enabled,
-                      onChanged: (value) =>
-                          state.updateSkillEnabled(skill.id, value),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            if (state.skills.isEmpty) ...[
-              DividerLine(state: state),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
-                child: Text(
-                  '安装 GitHub Skill 会直接读取仓库中的 SKILL.md；只有执行本地脚本类技能时才需要 Runner，且执行前始终需要确认。',
-                  style: state.textStyle(context, size: 12, opacity: 0.58),
-                ),
-              ),
-            ],
           ],
         ),
       ),
       const SizedBox(height: 28),
-      SectionLabel(state: state, label: '语音服务 (TTS)', icon: Icons.mic_none),
+      SectionLabel(
+        state: state,
+        label: '语音服务 (TTS)',
+        icon: Icons.volume_up_outlined,
+      ),
       CardShell(
         state: state,
         child: Column(
@@ -586,6 +499,162 @@ extension SettingsTabs on SettingsSheetState {
     ]);
   }
 
+  Widget skillsListView() {
+    final state = widget.state;
+    skillRunnerController.text = state.skillRunnerBaseUrl;
+    return scrollContent([
+      SectionLabel(
+        state: state,
+        label: '下载 / 导入',
+        icon: Icons.download_for_offline_outlined,
+      ),
+      CardShell(
+        state: state,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 16, 18, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextFormField(
+                      controller: skillInstallController,
+                      style: state.textStyle(context, size: 13),
+                      decoration: inputDecoration(
+                        state,
+                        hint: 'GitHub Skill URL',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: _installSkillFromUrl,
+                    icon: const Icon(Icons.download_rounded, size: 17),
+                    label: const Text('导入'),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+              child: Text(
+                '支持 GitHub 仓库根目录、/tree/branch 或子目录路径。导入后会读取仓库中的 SKILL.md，默认作为聊天上下文使用，不执行本地脚本。',
+                style: state.textStyle(
+                  context,
+                  size: 12,
+                  opacity: 0.58,
+                  height: 1.45,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 22),
+      SectionLabel(
+        state: state,
+        label: '已导入技能',
+        icon: Icons.extension_outlined,
+      ),
+      CardShell(
+        state: state,
+        child: Column(
+          children: [
+            if (state.skills.isEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                child: Text(
+                  '还没有导入技能。点击上方导入 GitHub Skill 后，这里会显示技能列表、启用状态、触发词和固定状态。',
+                  style: state.textStyle(
+                    context,
+                    size: 12,
+                    opacity: 0.58,
+                    height: 1.5,
+                  ),
+                ),
+              )
+            else
+              for (final (index, skill) in state.skills.indexed) ...[
+                if (index > 0) DividerLine(state: state),
+                SettingsRow(
+                  state: state,
+                  title: skill.name,
+                  subtitle: [
+                    if (!skill.enabled) '已停用',
+                    if (state.activeSkillId == skill.id) '已固定',
+                    if (skill.triggers.isNotEmpty)
+                      '触发：${skill.triggers.take(4).join('、')}',
+                    if (skill.triggers.isEmpty) skill.description,
+                  ].where((item) => item.trim().isNotEmpty).join(' · '),
+                  leading: Icon(
+                    Icons.extension_outlined,
+                    color: state.activeSkillId == skill.id
+                        ? state.accents[0]
+                        : state.text(context).withValues(alpha: 0.52),
+                  ),
+                  showChevron: true,
+                  onTap: () => _openSkillConfig(skill),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TinyIcon(
+                        icon: state.activeSkillId == skill.id
+                            ? Icons.push_pin
+                            : Icons.push_pin_outlined,
+                        color: state.accents[0],
+                        onTap: () => state.setActiveSkill(skill.id),
+                      ),
+                      WeaveSwitch(
+                        state: state,
+                        value: skill.enabled,
+                        onChanged: (value) =>
+                            state.updateSkillEnabled(skill.id, value),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+          ],
+        ),
+      ),
+      const SizedBox(height: 22),
+      SectionLabel(state: state, label: '高级', icon: Icons.tune_rounded),
+      CardShell(
+        state: state,
+        child: Column(
+          children: [
+            SettingsRow(
+              state: state,
+              title: 'Skill Runner',
+              subtitle: '仅外部脚本类技能需要；聊天默认不会调用',
+              trailing: SizedBox(
+                width: 150,
+                child: TextFormField(
+                  controller: skillRunnerController,
+                  onFieldSubmitted: state.saveSkillRunnerBaseUrl,
+                  textAlign: TextAlign.right,
+                  style: state.textStyle(context, size: 13),
+                  decoration: inputDecoration(
+                    state,
+                    hint: 'http://127.0.0.1:8765',
+                  ),
+                ),
+              ),
+            ),
+            DividerLine(state: state),
+            SettingsRow(
+              state: state,
+              title: '测试 Runner',
+              subtitle: state.skillRunnerBaseUrl,
+              leading: Icon(Icons.lan_outlined, color: state.accents[0]),
+              onTap: _testSkillRunner,
+            ),
+          ],
+        ),
+      ),
+    ]);
+  }
+
   Widget skillConfigView() {
     final state = widget.state;
     final skill = state.skills.firstWhereOrNull(
@@ -615,7 +684,7 @@ extension SettingsTabs on SettingsSheetState {
               state: state,
               title: '固定技能',
               subtitle: state.activeSkillId == skill.id
-                  ? '发送消息时优先推荐该技能'
+                  ? '发送消息时优先使用该技能上下文'
                   : '不固定时按触发词自动推荐',
               trailing: WeaveSwitch(
                 state: state,
@@ -640,7 +709,7 @@ extension SettingsTabs on SettingsSheetState {
         minLines: 4,
         maxLines: 8,
         style: state.textStyle(context, size: 14),
-        decoration: inputDecoration(state, hint: '可选：技能执行前提示词'),
+        decoration: inputDecoration(state, hint: 'SKILL.md 指令 / 技能上下文'),
       ),
       const SizedBox(height: 16),
       Row(
@@ -885,28 +954,43 @@ extension SettingsTabs on SettingsSheetState {
               ),
             ),
             const SizedBox(height: 14),
-            SoftButton(
-              state: state,
-              label: '导出备份',
-              icon: Icons.backup_outlined,
-              accent: true,
-              onTap: () async {
-                final fileName =
-                    'weaview_backup_${DateTime.now().millisecondsSinceEpoch}.zip';
-                final path = await FilePicker.saveFile(
-                  dialogTitle: '导出 Weaview 备份',
-                  fileName: fileName,
-                  bytes: state.exportZipBytes(),
-                );
-                if (path != null) {
-                  widget.showSnack('备份已导出。');
-                } else {
-                  await Clipboard.setData(
-                    ClipboardData(text: state.exportJson()),
-                  );
-                  widget.showSnack('未选择保存位置，已复制脱敏 JSON 到剪贴板。');
-                }
-              },
+            Row(
+              children: [
+                Expanded(
+                  child: SoftButton(
+                    state: state,
+                    label: '导出备份',
+                    icon: Icons.backup_outlined,
+                    accent: true,
+                    onTap: () async {
+                      final fileName =
+                          'weaview_backup_${DateTime.now().millisecondsSinceEpoch}.zip';
+                      final path = await FilePicker.saveFile(
+                        dialogTitle: '导出 Weaview 备份',
+                        fileName: fileName,
+                        bytes: state.exportZipBytes(),
+                      );
+                      if (path != null) {
+                        widget.showSnack('备份已导出。');
+                      } else {
+                        await Clipboard.setData(
+                          ClipboardData(text: state.exportJson()),
+                        );
+                        widget.showSnack('未选择保存位置，已复制脱敏 JSON 到剪贴板。');
+                      }
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SoftButton(
+                    state: state,
+                    label: '导入备份',
+                    icon: Icons.upload_file_outlined,
+                    onTap: _importBackup,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -943,6 +1027,35 @@ extension SettingsTabs on SettingsSheetState {
     ]);
   }
 
+  Future<void> _importBackup() async {
+    try {
+      final result = await FilePicker.pickFiles(
+        dialogTitle: '导入 Weaview 备份',
+        type: FileType.custom,
+        allowedExtensions: const ['json', 'zip'],
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.single;
+      final bytes =
+          file.bytes ??
+          (file.path == null ? null : await File(file.path!).readAsBytes());
+      if (bytes == null || bytes.isEmpty) {
+        widget.showSnack('备份文件为空或无法读取。');
+        return;
+      }
+      final summary = await widget.state.importBackupBytes(
+        Uint8List.fromList(bytes),
+        fileName: file.name,
+      );
+      widget.showSnack(summary.summary);
+    } catch (error) {
+      widget.showSnack(
+        '导入失败：${error.toString().replaceFirst('Exception: ', '')}',
+      );
+    }
+  }
+
   Widget aboutTab() {
     final state = widget.state;
     return scrollContent([
@@ -977,9 +1090,15 @@ extension SettingsTabs on SettingsSheetState {
                   .copyWith(letterSpacing: 4),
             ),
             const SizedBox(height: 8),
-            Text(
-              appVersionDisplay,
-              style: state.textStyle(context, size: 13, opacity: 0.5),
+            FutureBuilder<AppVersionInfo>(
+              future: appVersionInfoFuture,
+              builder: (context, snapshot) {
+                final version = snapshot.data ?? fallbackAppVersionInfo;
+                return Text(
+                  version.display,
+                  style: state.textStyle(context, size: 13, opacity: 0.5),
+                );
+              },
             ),
             const SizedBox(height: 30),
             AboutButton(state: state, label: '检查更新', onTap: checkForUpdates),
@@ -1099,7 +1218,9 @@ class _ProviderGridCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final connected = provider.status == '已连接' || provider.status == '使用中';
+    final connected =
+        provider.enabled &&
+        (provider.status == '已连接' || provider.status == '使用中');
     final showWaveBorder = controlsVisible;
     final solidBorderColor = active
         ? state.accents[0].withValues(alpha: 0.48)
@@ -1192,7 +1313,7 @@ class _ProviderGridCard extends StatelessWidget {
                     const SizedBox(width: 7),
                     Expanded(
                       child: Text(
-                        provider.status,
+                        provider.enabled ? provider.status : '已禁用',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: state.textStyle(
