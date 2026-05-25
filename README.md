@@ -6,7 +6,7 @@
 
 织境提供一个可本地配置的多模型 Agent 工作入口。它不内置任何真实 API Key，所有模型服务、搜索服务、Skills Runner 和语音服务凭据都需要用户在 App 设置中显式配置。
 
-Latest stable / 最新正式版：`v1.0.30`
+Latest stable / 最新正式版：`v1.1.0`
 
 主要能力包括：
 
