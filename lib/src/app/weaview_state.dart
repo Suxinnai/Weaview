@@ -15,7 +15,6 @@ import 'model_config_resolver.dart';
 import 'services/personalization_service.dart';
 import 'services/provider_config_service.dart';
 import 'services/session_manager.dart';
-import 'services/skill_service.dart';
 import 'services/theme_service.dart';
 import 'weaview_preferences.dart';
 
@@ -38,16 +37,13 @@ class BackupImportResult {
     required this.sessions,
     required this.memories,
     required this.providers,
-    required this.skills,
   });
 
   final int sessions;
   final int memories;
   final int providers;
-  final int skills;
 
-  String get summary =>
-      '已合并 $sessions 个会话、$memories 条记忆、$providers 个提供商、$skills 个技能。';
+  String get summary => '已合并 $sessions 个会话、$memories 条记忆、$providers 个提供商。';
 }
 
 class WeaviewState extends ChangeNotifier {
@@ -67,7 +63,6 @@ class WeaviewState extends ChangeNotifier {
   final PersonalizationService _personal = PersonalizationService();
   final SessionManager _sessions = SessionManager();
   final ProviderConfigService _providers = ProviderConfigService();
-  final SkillService _skills = SkillService();
 
   // Streaming state
   bool isStreaming = false;
@@ -153,12 +148,6 @@ class WeaviewState extends ChangeNotifier {
   List<TtsProviderConfig> get ttsProviders => _providers.ttsProviders;
   set ttsProviders(List<TtsProviderConfig> v) => _providers.ttsProviders = v;
 
-  // Skills
-  List<SkillConfig> get skills => _skills.skills;
-  String get activeSkillId => _skills.activeSkillId;
-  SkillConfig? get activeSkill => _skills.activeSkill;
-  String get skillRunnerBaseUrl => _skills.runnerBaseUrl;
-
   // ── Derived getters ──────────────────────────────────────────────
 
   bool get hasActiveImageGeneration =>
@@ -200,7 +189,6 @@ class WeaviewState extends ChangeNotifier {
     _sessions.load(savedSessions);
 
     _providers.load(prefs);
-    _skills.load(prefs);
 
     loaded = true;
     notifyListeners();
@@ -474,69 +462,12 @@ class WeaviewState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Skills ──────────────────────────────────────────────────────
-
-  void saveSkillRunnerBaseUrl(String value) {
-    _skills.saveRunnerBaseUrl(value, _prefs);
-    notifyListeners();
-  }
-
-  void setActiveSkill(String skillId) {
-    _skills.setActiveSkill(skillId, _prefs);
-    notifyListeners();
-  }
-
-  void clearActiveSkill() {
-    _skills.clearActiveSkill(_prefs);
-    notifyListeners();
-  }
-
-  void updateSkillEnabled(String skillId, bool enabled) {
-    _skills.updateSkillEnabled(skillId, enabled, _prefs);
-    notifyListeners();
-  }
-
-  void updateSkillTriggers(String skillId, List<String> triggers) {
-    _skills.updateSkillTriggers(skillId, triggers, _prefs);
-    notifyListeners();
-  }
-
-  void updateSkillPrompt(String skillId, String prompt) {
-    _skills.updateSkillPrompt(skillId, prompt, _prefs);
-    notifyListeners();
-  }
-
-  void deleteSkill(String skillId) {
-    _skills.deleteSkill(skillId, _prefs);
-    notifyListeners();
-  }
-
-  SkillConfig? matchSkillForInput(String input) => _skills.matchSkill(input);
-
-  Future<bool> testSkillRunner() => _skills.testRunner();
-
-  Future<SkillConfig> installSkillFromUrl(String sourceUrl) async {
-    final skill = await _skills.installFromUrl(sourceUrl);
-    _skills.upsertSkill(skill, _prefs);
-    notifyListeners();
-    return skill;
-  }
-
   // ── Chat / streaming ─────────────────────────────────────────────
-
-  Future<void> submitSkillMessage(
-    String value, {
-    required SkillConfig skill,
-    List<MessageAttachment> attachments = const [],
-  }) async {
-    await submitMessage(value, attachments: attachments, skill: skill);
-  }
 
   Future<void> submitMessage(
     String value, {
     List<MessageAttachment> attachments = const [],
     bool useWebSearch = false,
-    SkillConfig? skill,
   }) async {
     final content = value.trim();
     if ((content.isEmpty && attachments.isEmpty) || isStreaming) return;
@@ -664,7 +595,6 @@ class WeaviewState extends ChangeNotifier {
     try {
       final prompt = await _expandedSystemPrompt(
         webQuery: useWebSearch ? content : null,
-        skill: skill,
       );
       await AiGateway.generateStream(
         messages: conversation,
@@ -1650,19 +1580,13 @@ $prompt
     notifyListeners();
   }
 
-  Future<String> _expandedSystemPrompt({
-    String? webQuery,
-    SkillConfig? skill,
-  }) async {
+  Future<String> _expandedSystemPrompt({String? webQuery}) async {
     var prompt = _personal.expandedSystemPrompt(
       webQuery: null,
       chatSessions: chatSessions,
       searchConfig: searchConfig,
       appearanceDirective: _theme.currentAppearanceDirective(),
     );
-    if (skill != null) {
-      prompt += _skillSystemPrompt(skill);
-    }
     if (webQuery != null && webQuery.trim().isNotEmpty) {
       try {
         final searchBlock = await AiGateway.searchWeb(
@@ -1679,36 +1603,6 @@ $prompt
       }
     }
     return prompt;
-  }
-
-  String _skillSystemPrompt(SkillConfig skill) {
-    final source = skill.sourceUrl.trim();
-    final description = skill.description.trim();
-    final body = skill.systemPrompt.trim();
-    final triggers = skill.triggers
-        .map((trigger) => trigger.trim())
-        .where((trigger) => trigger.isNotEmpty)
-        .join('、');
-    final entrypoints = skill.entrypoints
-        .map(
-          (entrypoint) => entrypoint.label.trim().isNotEmpty
-              ? entrypoint.label.trim()
-              : entrypoint.id.trim(),
-        )
-        .where((entrypoint) => entrypoint.isNotEmpty)
-        .join('、');
-    return '''
-
-[System directive: The user selected the local Skill "${skill.name}" for this turn. Load the Skill instructions below as context. Do not claim that a local script, runner, browser, API, or external command has been executed unless the conversation explicitly provides that result. If the Skill describes an external action that is unavailable, explain the limitation briefly and still help from the visible conversation context.]
-Skill name: ${skill.name}
-Source URL: ${source.isEmpty ? 'unknown' : source}
-Description: ${description.isEmpty ? 'none' : description}
-Triggers: ${triggers.isEmpty ? 'none' : triggers}
-Entrypoints: ${entrypoints.isEmpty ? 'none' : entrypoints}
-
-[Skill instructions from SKILL.md]
-${body.isEmpty ? 'No SKILL.md body was stored for this Skill.' : body}
-''';
   }
 
   Future<void> _refreshCurrentSessionTitle() async {
@@ -2032,8 +1926,6 @@ ${body.isEmpty ? 'No SKILL.md body was stored for this Skill.' : body}
       'ai_search_config': searchConfig.safeJson(),
       'ai_active_tts_id': activeTtsId,
       'ai_tts_providers': ttsProviders.map((p) => p.safeJson()).toList(),
-      'skills': skills.map((s) => s.toJson()).toList(),
-      'active_skill_id': activeSkillId,
       'user_name': userName,
       'assistant_name': assistantName,
       'user_profile': userProfile,
@@ -2096,22 +1988,15 @@ ${body.isEmpty ? 'No SKILL.md body was stored for this Skill.' : body}
       data['ai_providers'],
       AiProvider.fromJson,
     );
-    final importedSkills = _decodeImportList(
-      data['skills'],
-      SkillConfig.fromJson,
-    );
-
     final mergedSessions = _mergeSessions(chatSessions, importedSessions);
     final mergedMemories = _mergeStrings(memories, importedMemories);
     final mergedProviders = _mergeProviders(providers, importedProviders);
-    final mergedSkills = _mergeSkills(skills, importedSkills);
 
     _sessions.chatSessions
       ..clear()
       ..addAll(mergedSessions);
     memories = mergedMemories;
     _providers.saveProviders(mergedProviders, _prefs);
-    _skills.skills = mergedSkills;
 
     final importedAssignments = _decodeAssignments(
       data['ai_model_assignments'],
@@ -2145,19 +2030,11 @@ ${body.isEmpty ? 'No SKILL.md body was stored for this Skill.' : body}
       );
     }
 
-    final importedActiveSkill = data['active_skill_id']?.toString() ?? '';
-    if (importedActiveSkill.trim().isNotEmpty &&
-        mergedSkills.any((skill) => skill.id == importedActiveSkill)) {
-      _skills.activeSkillId = importedActiveSkill;
-      _prefs?.saveActiveSkillId(importedActiveSkill);
-    }
-
     _applyImportedPreferences(data);
     final prefs = _prefs;
     if (prefs != null) {
       prefs.saveChatSessions(chatSessions);
       prefs.saveMemories(memories);
-      prefs.saveSkills(skills);
     }
     notifyListeners();
 
@@ -2165,7 +2042,6 @@ ${body.isEmpty ? 'No SKILL.md body was stored for this Skill.' : body}
       sessions: importedSessions.length,
       memories: importedMemories.length,
       providers: importedProviders.length,
-      skills: importedSkills.length,
     );
   }
 
@@ -2190,9 +2066,6 @@ ${body.isEmpty ? 'No SKILL.md body was stored for this Skill.' : body}
     searchConfig = const SearchConfig(active: 'tavily', keys: {});
     activeTtsId = '';
     ttsProviders = TtsProviderConfig.defaults();
-    _skills.skills = [];
-    _skills.activeSkillId = '';
-    _skills.runnerBaseUrl = 'http://127.0.0.1:8765';
     themeMode = ThemeMode.system;
     backgroundOverride = null;
     textOverride = null;
@@ -2349,21 +2222,6 @@ ${body.isEmpty ? 'No SKILL.md body was stored for this Skill.' : body}
       );
     }
     return byId.values.toList();
-  }
-
-  List<SkillConfig> _mergeSkills(
-    List<SkillConfig> current,
-    List<SkillConfig> imported,
-  ) {
-    final byId = {for (final skill in current) skill.id: skill};
-    for (final skill in imported) {
-      final existing = byId[skill.id];
-      if (existing == null || skill.updatedAt >= existing.updatedAt) {
-        byId[skill.id] = skill;
-      }
-    }
-    return byId.values.toList()
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
   }
 
   Map<String, String> _mergeMaskedMap(

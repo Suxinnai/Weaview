@@ -664,32 +664,15 @@ $$E = mc^2$$
               ],
             },
           ],
-          'skills': [
-            {
-              'id': 'x-tweet-fetcher',
-              'name': 'X Tweet Fetcher',
-              'description': 'Fetch tweets',
-              'sourceUrl': 'https://github.com/ythx-101/x-tweet-fetcher',
-              'enabled': true,
-              'triggers': ['tweet'],
-              'systemPrompt': 'Use tweet context only.',
-              'createdAt': 1,
-              'updatedAt': 2,
-            },
-          ],
-          'active_skill_id': 'x-tweet-fetcher',
         }),
       );
 
       final openai = state.providers.firstWhere((p) => p.name == 'OpenAI');
       expect(result.memories, 1);
       expect(result.providers, 1);
-      expect(result.skills, 1);
       expect(state.memories, contains('偏好简洁回复'));
       expect(openai.apiKey, 'local-secret');
       expect(openai.models.map((m) => m.id), contains('gpt-test'));
-      expect(state.activeSkillId, 'x-tweet-fetcher');
-      expect(state.skills.single.systemPrompt, contains('tweet context'));
       state.dispose();
     },
   );
@@ -770,7 +753,6 @@ $$E = mc^2$$
             pendingAttachments: const [],
             onToggleExpanded: () {},
             onToggleWebSearch: () {},
-            onOpenSkillPicker: () {},
             onSubmit: () async {},
             onPickChatImages: () async {},
             onPickChatFiles: () async {},
@@ -870,100 +852,6 @@ $$E = mc^2$$
     expect(find.text('已选择'), findsOneWidget);
     state.dispose();
   });
-
-  testWidgets('settings displays installed skills and runner config', (
-    WidgetTester tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({
-      'skill_runner_base_url': 'http://127.0.0.1:8765',
-      'skills':
-          '[{"id":"x-tweet-fetcher","name":"X Tweet Fetcher","description":"Fetch tweets","sourceUrl":"https://github.com/ythx-101/x-tweet-fetcher","enabled":true,"triggers":["tweet","推文"],"entrypoints":[{"id":"fetch_tweet","label":"抓取推文"}],"createdAt":1,"updatedAt":1}]',
-    });
-    final state = WeaviewState();
-
-    await state.load();
-    await tester.pumpWidget(
-      MaterialApp(
-        home: SettingsSheet(
-          state: state,
-          open: true,
-          onClose: () {},
-          onPickAvatar: (_) async {},
-          showSnack: (_) {},
-        ),
-      ),
-    );
-
-    await tester.tap(find.text('扩展服务'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Skills 技能'), findsWidgets);
-    expect(find.text('已导入 1 个技能'), findsOneWidget);
-    await tester.tap(find.text('Skills 技能').last);
-    await tester.pumpAndSettle();
-
-    expect(find.text('下载 / 导入'), findsOneWidget);
-    expect(find.text('X Tweet Fetcher'), findsOneWidget);
-    expect(find.text('Skill Runner'), findsOneWidget);
-    expect(find.textContaining('tweet'), findsWidgets);
-    state.dispose();
-  });
-
-  testWidgets('chat dock opens manual skill picker', (
-    WidgetTester tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({
-      'skills':
-          '[{"id":"x-tweet-fetcher","name":"X Tweet Fetcher","description":"Fetch tweets","sourceUrl":"https://github.com/ythx-101/x-tweet-fetcher","enabled":true,"triggers":["tweet"],"createdAt":1,"updatedAt":1}]',
-    });
-    final state = WeaviewState();
-
-    await state.load();
-    await tester.pumpWidget(MaterialApp(home: WeaviewHome(state: state)));
-    await tester.tap(find.byIcon(Icons.add_rounded).first);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('技能'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('选择技能'), findsOneWidget);
-    expect(find.text('X Tweet Fetcher'), findsOneWidget);
-    state.dispose();
-  });
-
-  testWidgets(
-    'auto matched skill submits context without confirmation or runner execution',
-    (WidgetTester tester) async {
-      SharedPreferences.setMockInitialValues({
-        'skill_runner_base_url': 'http://127.0.0.1:8765',
-        'skills':
-            '[{"id":"x-tweet-fetcher","name":"X Tweet Fetcher","description":"Fetch tweets","sourceUrl":"https://github.com/ythx-101/x-tweet-fetcher","enabled":true,"triggers":["tweet"],"createdAt":1,"updatedAt":1}]',
-      });
-      final state = WeaviewState();
-
-      await state.load();
-      await tester.pumpWidget(MaterialApp(home: WeaviewHome(state: state)));
-      await tester.enterText(
-        find
-            .descendant(
-              of: find.byType(ChatInputDock),
-              matching: find.byType(TextField),
-            )
-            .first,
-        'tweet https://x.com/example/status/123',
-      );
-      await tester.pump();
-      await tester.tap(find.text('编织'));
-      await tester.pump(const Duration(milliseconds: 400));
-
-      expect(find.textContaining('使用技能'), findsNothing);
-      expect(state.messages.length, 2);
-      expect(state.messages.first.content, contains('https://x.com/example'));
-      expect(state.messages.last.content, contains('主对话模型'));
-      expect(state.messages.last.content, isNot(contains('技能执行失败')));
-      await tester.pump(const Duration(milliseconds: 500));
-      state.dispose();
-    },
-  );
 
   test('creates conversation branch from selected message', () async {
     SharedPreferences.setMockInitialValues({});

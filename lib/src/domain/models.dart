@@ -6,5 +6,4 @@ export 'message_attachment.dart';
 export 'model_capabilities.dart';
 export 'model_assignment.dart';
 export 'search_config.dart';
-export 'skill_config.dart';
 export 'tts_provider_config.dart';
