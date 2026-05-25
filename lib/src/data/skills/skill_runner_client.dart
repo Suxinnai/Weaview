@@ -63,7 +63,6 @@ class SkillRunnerClient {
         'enabled': true,
         'triggers': _defaultTriggersFor(decoded),
         'systemPrompt': decoded['systemPrompt']?.toString() ?? '',
-        'executionMode': 'runner',
         'createdAt': now,
         'updatedAt': now,
       });

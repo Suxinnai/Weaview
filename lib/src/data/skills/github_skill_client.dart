@@ -39,7 +39,6 @@ class GithubSkillClient {
         ),
         systemPrompt: parsed.body.trim(),
         entrypoints: _entrypointsFor('$id ${parsed.name} $description'),
-        executionMode: 'context',
         createdAt: now,
         updatedAt: now,
       );

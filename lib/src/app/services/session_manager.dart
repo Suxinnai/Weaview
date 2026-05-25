@@ -111,7 +111,7 @@ class SessionManager {
     );
     if (sessionIndex >= 0) {
       final base = sourceTitle == null || sourceTitle.isEmpty
-          ? '未命名任务'
+          ? '未命名梦境'
           : sourceTitle;
       chatSessions[sessionIndex] = chatSessions[sessionIndex].copyWith(
         title: '分支 · ${base.length > 14 ? base.substring(0, 14) : base}',
@@ -175,7 +175,7 @@ class SessionManager {
     final session = ChatSession(
       id: currentSessionId!,
       title: (title == null || title.isEmpty)
-          ? '未命名任务'
+          ? '未命名梦境'
           : (title.length > 20 ? title.substring(0, 20) : title),
       updatedAt: DateTime.now().millisecondsSinceEpoch,
       messages: messages.map((m) => m.copy()).toList(),

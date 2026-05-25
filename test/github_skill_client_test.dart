@@ -32,7 +32,6 @@ void main() {
       expect(skill.description, 'Fetch tweets');
       expect(skill.systemPrompt, 'Use this skill.');
       expect(skill.triggers, contains('x.com'));
-      expect(skill.executionMode, 'context');
     } finally {
       await serving.cancel();
       await server.close(force: true);

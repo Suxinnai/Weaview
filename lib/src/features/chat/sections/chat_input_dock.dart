@@ -173,7 +173,7 @@ class ChatInputDock extends StatelessWidget {
                     textInputAction: TextInputAction.newline,
                     style: state.textStyle(context, size: 15, height: 1.45),
                     decoration: InputDecoration(
-                      hintText: '交给织境 Agent 一个任务...',
+                      hintText: '今天想编织什么？',
                       hintStyle: state.textStyle(
                         context,
                         size: 15,
@@ -236,7 +236,7 @@ class ChatInputDock extends StatelessWidget {
                         ToolChip(
                           icon: Icons.extension_outlined,
                           label: state.activeSkill == null
-                              ? 'Skills'
+                              ? '技能'
                               : state.activeSkill!.name,
                           state: state,
                           onTap: onOpenSkillPicker,

@@ -100,7 +100,7 @@ class SidebarOverlay extends StatelessWidget {
                               ),
                               const SizedBox(width: 10),
                               Text(
-                                '织境 Agent',
+                                '织境',
                                 style: state
                                     .textStyle(
                                       context,
@@ -138,7 +138,7 @@ class SidebarOverlay extends StatelessWidget {
                               onClose();
                             },
                             icon: const Icon(Icons.add_rounded, size: 19),
-                            label: const Text('新任务'),
+                            label: const Text('新的织梦'),
                           ),
                         ),
                         Expanded(
@@ -151,7 +151,7 @@ class SidebarOverlay extends StatelessWidget {
                                   horizontal: 12,
                                 ),
                                 child: Text(
-                                  '任务记录',
+                                  '历史梦境',
                                   style: state
                                       .textStyle(
                                         context,
@@ -167,7 +167,7 @@ class SidebarOverlay extends StatelessWidget {
                                 Padding(
                                   padding: const EdgeInsets.all(18),
                                   child: Text(
-                                    '暂无任务记录',
+                                    '暂无历史记录',
                                     textAlign: TextAlign.center,
                                     style: state.textStyle(
                                       context,
@@ -231,7 +231,7 @@ class SidebarOverlay extends StatelessWidget {
                                         ),
                                       ),
                                       Text(
-                                        '本机 Agent 助手',
+                                        'Pro Plan',
                                         style: state.textStyle(
                                           context,
                                           size: 10,
@@ -309,7 +309,7 @@ class SidebarOverlay extends StatelessWidget {
           icon: session.pinned
               ? Icons.push_pin_outlined
               : Icons.push_pin_rounded,
-          label: session.pinned ? '取消置顶任务' : '置顶任务',
+          label: session.pinned ? '取消置顶梦境' : '置顶梦境',
         ),
         _historyMenuItem(
           context,
@@ -321,7 +321,7 @@ class SidebarOverlay extends StatelessWidget {
           context,
           value: 'delete',
           icon: Icons.delete_outline_rounded,
-          label: '删除任务',
+          label: '删除梦境',
           danger: true,
         ),
       ],
@@ -354,7 +354,7 @@ class SidebarOverlay extends StatelessWidget {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('删除任务'),
+          title: const Text('删除梦境'),
           content: Text('确定删除「${session.title}」吗？'),
           actions: [
             TextButton(

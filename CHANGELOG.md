@@ -2,26 +2,6 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
-## 1.1.0 - 2026-05-25
-
-### 中文
-
-- 将产品定位从 LLM 聊天客户端调整为手机端 Agent 助手，首页、侧栏、输入栏和基础文案改为任务导向体验。
-- 修复 Skills “看起来可用但实际只注入上下文”的问题：Runner 技能现在会通过配置的远程 Skill Runner 执行。
-- 保留“仅导入 SKILL.md 上下文”路径，并在设置页明确区分 Runner 执行技能与上下文技能。
-- 新增 Skill `executionMode` 数据字段，旧技能默认迁移为上下文技能，新 Runner 安装技能默认可执行。
-- 替换 App 图标和 Android launcher 图标为新的正式图标资源。
-- 更新 README、pubspec 描述、系统提示词和相关回归测试。
-
-### English
-
-- Repositioned Weaview from an LLM chat client to a mobile Agent assistant, with task-oriented home, sidebar, composer, and product copy.
-- Fixed Skills that appeared usable but only injected context: Runner Skills now execute through the configured remote Skill Runner.
-- Kept an explicit context-only `SKILL.md` import path and made the settings UI distinguish Runner Skills from context Skills.
-- Added a Skill `executionMode` field. Legacy Skills migrate to context mode, while Runner-installed Skills are executable by default.
-- Replaced the app icon and Android launcher density assets with the new production artwork.
-- Updated README, pubspec metadata, system prompt, and regression tests.
-
 ## 1.0.28 - 2026-05-21
 
 ### 中文

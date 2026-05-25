@@ -41,7 +41,6 @@ class SkillConfig {
     this.triggers = const [],
     this.systemPrompt = '',
     this.entrypoints = const [SkillEntrypoint(id: 'default', label: '默认入口')],
-    this.executionMode = 'runner',
     required this.createdAt,
     required this.updatedAt,
   });
@@ -74,7 +73,6 @@ class SkillConfig {
       entrypoints: entrypoints.isEmpty
           ? const [SkillEntrypoint(id: 'default', label: '默认入口')]
           : entrypoints,
-      executionMode: _normalizeExecutionMode(map['executionMode']),
       createdAt: createdAt,
       updatedAt: updatedAt,
     );
@@ -89,13 +87,11 @@ class SkillConfig {
   final List<String> triggers;
   final String systemPrompt;
   final List<SkillEntrypoint> entrypoints;
-  final String executionMode;
   final int createdAt;
   final int updatedAt;
 
   String get primaryEntrypoint =>
       entrypoints.isEmpty ? 'default' : entrypoints.first.id;
-  bool get runsOnRunner => executionMode == 'runner';
 
   SkillConfig copyWith({
     String? id,
@@ -107,7 +103,6 @@ class SkillConfig {
     List<String>? triggers,
     String? systemPrompt,
     List<SkillEntrypoint>? entrypoints,
-    String? executionMode,
     int? createdAt,
     int? updatedAt,
   }) {
@@ -121,7 +116,6 @@ class SkillConfig {
       triggers: triggers ?? this.triggers,
       systemPrompt: systemPrompt ?? this.systemPrompt,
       entrypoints: entrypoints ?? this.entrypoints,
-      executionMode: executionMode ?? this.executionMode,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -139,7 +133,6 @@ class SkillConfig {
     'entrypoints': entrypoints
         .map((entrypoint) => entrypoint.toJson())
         .toList(),
-    'executionMode': executionMode,
     'createdAt': createdAt,
     'updatedAt': updatedAt,
   };
@@ -151,10 +144,5 @@ class SkillConfig {
         .where((item) => item.isNotEmpty)
         .toSet()
         .toList();
-  }
-
-  static String _normalizeExecutionMode(dynamic value) {
-    final mode = value?.toString().trim().toLowerCase();
-    return mode == 'runner' ? 'runner' : 'context';
   }
 }

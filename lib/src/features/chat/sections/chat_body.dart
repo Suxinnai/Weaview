@@ -22,7 +22,6 @@ class ChatBody extends StatelessWidget {
     required this.onDeleteMessage,
     required this.onSpeakMessage,
     required this.onDownloadAttachment,
-    required this.onQuickPrompt,
   });
 
   final WeaviewState state;
@@ -39,7 +38,6 @@ class ChatBody extends StatelessWidget {
   final Future<void> Function(ChatMessage message) onSpeakMessage;
   final Future<void> Function(MessageAttachment attachment)
   onDownloadAttachment;
-  final ValueChanged<String> onQuickPrompt;
 
   @override
   Widget build(BuildContext context) {
@@ -86,74 +84,30 @@ class ChatBody extends StatelessWidget {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(
-                            width: 64,
-                            height: 64,
-                            decoration: BoxDecoration(
-                              color: state.accents[0].withValues(alpha: 0.16),
-                              borderRadius: BorderRadius.circular(22),
-                              border: Border.all(
-                                color: state
-                                    .text(context)
-                                    .withValues(alpha: 0.08),
-                              ),
-                            ),
-                            child: Icon(
-                              Icons.auto_awesome_rounded,
-                              color: state
-                                  .text(context)
-                                  .withValues(alpha: 0.68),
-                              size: 30,
-                            ),
-                          ),
-                          const SizedBox(height: 18),
                           Text(
-                            '织境 Agent 已就绪',
+                            '今天，你想编织什么梦境？',
                             textAlign: TextAlign.center,
                             style: state
                                 .textStyle(
                                   context,
-                                  size: 18,
-                                  weight: FontWeight.w700,
+                                  size: 17,
+                                  weight: FontWeight.w300,
                                   opacity: 0.82,
                                 )
-                                .copyWith(letterSpacing: 0.2),
+                                .copyWith(letterSpacing: 1.8),
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            '把任务、图片、文件或链接交给它处理',
+                            'What dream shall we weave today?',
                             textAlign: TextAlign.center,
                             style: state
                                 .textStyle(
                                   context,
-                                  size: 13,
+                                  size: 12,
                                   weight: FontWeight.w400,
-                                  opacity: 0.46,
+                                  opacity: 0.38,
                                 )
-                                .copyWith(letterSpacing: 0),
-                          ),
-                          const SizedBox(height: 18),
-                          Wrap(
-                            alignment: WrapAlignment.center,
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              _AgentHintChip(
-                                state: state,
-                                label: '总结网页',
-                                onTap: () => onQuickPrompt('总结这个链接的重点：'),
-                              ),
-                              _AgentHintChip(
-                                state: state,
-                                label: '分析图片',
-                                onTap: () => onQuickPrompt('分析这张图片并给出结论：'),
-                              ),
-                              _AgentHintChip(
-                                state: state,
-                                label: '运行 Skills',
-                                onTap: () => onQuickPrompt('用合适的 Skill 处理：'),
-                              ),
-                            ],
+                                .copyWith(letterSpacing: 0.7),
                           ),
                         ],
                       ),
@@ -185,51 +139,6 @@ class ChatBody extends StatelessWidget {
                     );
                   },
                 ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AgentHintChip extends StatelessWidget {
-  const _AgentHintChip({
-    required this.state,
-    required this.label,
-    required this.onTap,
-  });
-
-  final WeaviewState state;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: Ink(
-          height: 34,
-          padding: const EdgeInsets.symmetric(horizontal: 13),
-          decoration: BoxDecoration(
-            color: state.text(context).withValues(alpha: 0.055),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: state.text(context).withValues(alpha: 0.06),
-            ),
-          ),
-          child: Center(
-            child: Text(
-              label,
-              style: state.textStyle(
-                context,
-                size: 12,
-                weight: FontWeight.w600,
-                opacity: 0.62,
-              ),
-            ),
-          ),
         ),
       ),
     );

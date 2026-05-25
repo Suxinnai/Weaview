@@ -64,7 +64,6 @@ void main() {
       );
       expect(skill.id, 'x-tweet-fetcher');
       expect(skill.triggers, contains('x.com'));
-      expect(skill.executionMode, 'runner');
 
       final result = await client.run(
         baseUrl: baseUrl,

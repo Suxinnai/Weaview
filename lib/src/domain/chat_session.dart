@@ -13,7 +13,7 @@ class ChatSession {
     final map = json as Map<String, dynamic>;
     return ChatSession(
       id: map['id']?.toString() ?? DateTime.now().toString(),
-      title: map['title']?.toString() ?? '未命名任务',
+      title: map['title']?.toString() ?? '未命名梦境',
       updatedAt: (map['updatedAt'] as num?)?.toInt() ?? 0,
       messages: (map['messages'] as List? ?? [])
           .map(ChatMessage.fromJson)
