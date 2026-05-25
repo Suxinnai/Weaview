@@ -1,10 +1,10 @@
 # 织境 Weaview
 
-织境是一个以 Flutter 为核心的 AI 对话应用，面向希望自主管理模型提供商、对话记忆、联网搜索和移动端交互体验的用户与开发者。
+织境是一个以 Flutter 为核心的手机端 Agent 助手，面向希望自主管理模型提供商、Skills Runner、任务记忆、联网搜索和移动端交互体验的用户与开发者。
 
 ## 简介
 
-织境提供一个可本地配置的多模型聊天环境。它不内置任何真实 API Key，所有模型服务、搜索服务和语音服务凭据都需要用户在 App 设置中显式配置。
+织境提供一个可本地配置的多模型 Agent 工作入口。它不内置任何真实 API Key，所有模型服务、搜索服务、Skills Runner 和语音服务凭据都需要用户在 App 设置中显式配置。
 
 Latest stable / 最新正式版：`v1.0.30`
 
@@ -20,13 +20,13 @@ Latest stable / 最新正式版：`v1.0.30`
 - Tavily 联网搜索配置入口。
 - 手动启用的 TTS 服务配置，支持系统 TTS fallback 与远程 TTS provider。
 - Flutter 移动端 UI，保留 TTS 播报并移除语音输入入口。
-- 本地 Skills 技能系统：可从 GitHub 安装兼容技能，聊天时手动固定或按触发词自动注入 SKILL.md 上下文。
+- Skills 技能系统：可通过远程 Skill Runner 安装并执行兼容技能，也可仅导入 SKILL.md 作为上下文技能。
 
 English summary:
 
-- Weaview is a Flutter AI chat app with configurable providers, role-based model assignment, streaming chat, memory, search, translation, image generation, TTS, and mobile-first interaction design.
+- Weaview is a Flutter mobile Agent assistant with configurable providers, role-based model assignment, streaming interaction, memory, search, Skills Runner, image generation, TTS, and mobile-first interaction design.
 - API keys are never bundled. Configure AI, search, image, and TTS providers explicitly inside the app settings.
-- Skills are used as model context in chat; local scripts are not executed automatically.
+- Runner Skills execute through a configured remote Skill Runner; context-only Skills inject SKILL.md instructions without running scripts.
 
 ## Features
 
@@ -41,7 +41,7 @@ English summary:
 - 支持人物画像、助手昵称、用户资料和工具模型辅助整理。
 - 支持 Markdown、代码块、公式块、思考链、翻译块等富文本消息渲染。
 - 支持 SharedPreferences 本地持久化，不要求后端服务。
-- 支持本地 Skills：外部脚本不在 App 内直接执行，聊天默认只注入技能上下文。
+- 支持 Skills Runner：Runner 技能通过远程执行服务运行；上下文技能仅注入 SKILL.md 指令。
 - 支持 Flutter 单元测试与 widget 测试。
 
 ## 技术栈

@@ -612,6 +612,14 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
                     onDeleteMessage: _deleteMessage,
                     onSpeakMessage: _speakMessage,
                     onDownloadAttachment: _downloadAttachment,
+                    onQuickPrompt: (prompt) {
+                      _input.text = prompt;
+                      _input.selection = TextSelection.collapsed(
+                        offset: _input.text.length,
+                      );
+                      _inputFocus.requestFocus();
+                      setState(() {});
+                    },
                   ),
                   ChatHeader(
                     state: state,

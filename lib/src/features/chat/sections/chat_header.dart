@@ -70,8 +70,8 @@ class ChatHeader extends StatelessWidget {
                                           (s) => s.id == state.currentSessionId,
                                         )
                                         ?.title ??
-                                    '未命名梦境'
-                              : '新梦境',
+                                    '未命名任务'
+                              : '织境 Agent',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.center,

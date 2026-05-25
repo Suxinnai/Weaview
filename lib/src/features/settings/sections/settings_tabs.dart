@@ -522,23 +522,34 @@ extension SettingsTabs on SettingsSheetState {
                       style: state.textStyle(context, size: 13),
                       decoration: inputDecoration(
                         state,
-                        hint: 'GitHub Skill URL',
+                        hint: 'Skill GitHub URL',
                       ),
                     ),
                   ),
                   const SizedBox(width: 8),
                   FilledButton.icon(
                     onPressed: _installSkillFromUrl,
-                    icon: const Icon(Icons.download_rounded, size: 17),
-                    label: const Text('导入'),
+                    icon: const Icon(Icons.bolt_rounded, size: 17),
+                    label: const Text('安装'),
                   ),
                 ],
               ),
             ),
             Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 8),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _installContextSkillFromUrl,
+                  icon: const Icon(Icons.article_outlined, size: 16),
+                  label: const Text('仅导入 SKILL.md 上下文'),
+                ),
+              ),
+            ),
+            Padding(
               padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
               child: Text(
-                '支持 GitHub 仓库根目录、/tree/branch 或子目录路径。导入后会读取仓库中的 SKILL.md，默认作为聊天上下文使用，不执行本地脚本。',
+                '安装会请求远程 Skill Runner 拉取并执行技能。仅导入上下文时只读取仓库中的 SKILL.md，不会运行脚本。',
                 style: state.textStyle(
                   context,
                   size: 12,
@@ -580,6 +591,7 @@ extension SettingsTabs on SettingsSheetState {
                   state: state,
                   title: skill.name,
                   subtitle: [
+                    skill.runsOnRunner ? 'Runner 执行' : '上下文技能',
                     if (!skill.enabled) '已停用',
                     if (state.activeSkillId == skill.id) '已固定',
                     if (skill.triggers.isNotEmpty)
@@ -626,7 +638,7 @@ extension SettingsTabs on SettingsSheetState {
             SettingsRow(
               state: state,
               title: 'Skill Runner',
-              subtitle: '仅外部脚本类技能需要；聊天默认不会调用',
+              subtitle: 'Runner 技能会通过该地址执行',
               trailing: SizedBox(
                 width: 150,
                 child: TextFormField(
@@ -684,7 +696,9 @@ extension SettingsTabs on SettingsSheetState {
               state: state,
               title: '固定技能',
               subtitle: state.activeSkillId == skill.id
-                  ? '发送消息时优先使用该技能上下文'
+                  ? (skill.runsOnRunner
+                        ? '发送消息时优先调用该 Runner 技能'
+                        : '发送消息时优先使用该技能上下文')
                   : '不固定时按触发词自动推荐',
               trailing: WeaveSwitch(
                 state: state,
@@ -766,9 +780,26 @@ extension SettingsTabs on SettingsSheetState {
       return;
     }
     try {
+      widget.state.saveSkillRunnerBaseUrl(skillRunnerController.text);
       final skill = await widget.state.installSkillFromUrl(url);
       skillInstallController.clear();
-      widget.showSnack('已安装技能：${skill.name}');
+      widget.showSnack('已安装 Runner 技能：${skill.name}');
+      updateSheet(() {});
+    } catch (error) {
+      widget.showSnack(error.toString().replaceFirst('Exception: ', ''));
+    }
+  }
+
+  Future<void> _installContextSkillFromUrl() async {
+    final url = skillInstallController.text.trim();
+    if (url.isEmpty) {
+      widget.showSnack('请输入 GitHub Skill URL。');
+      return;
+    }
+    try {
+      final skill = await widget.state.installContextSkillFromUrl(url);
+      skillInstallController.clear();
+      widget.showSnack('已导入上下文技能：${skill.name}');
       updateSheet(() {});
     } catch (error) {
       widget.showSnack(error.toString().replaceFirst('Exception: ', ''));
@@ -876,7 +907,7 @@ extension SettingsTabs on SettingsSheetState {
             StorageRow(
               state: state,
               label: '对话记录',
-              description: '历史梦境与消息内容',
+              description: '历史任务与消息内容',
               color: Colors.blue,
               bytes: sessionBytes,
               ratio: total == 0 ? 0 : sessionBytes / total,
@@ -918,7 +949,7 @@ extension SettingsTabs on SettingsSheetState {
             _DataInfoLine(
               state: state,
               icon: Icons.chat_bubble_outline_rounded,
-              title: '对话与历史梦境',
+              title: '对话与历史任务',
               body: '保存本机历史会话、消息分支、附件引用和置顶状态。',
             ),
             _DataInfoLine(

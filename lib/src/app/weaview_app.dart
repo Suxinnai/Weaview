@@ -32,7 +32,7 @@ class _WeaviewAppState extends State<WeaviewApp> {
       animation: state,
       builder: (context, _) {
         return MaterialApp(
-          title: 'Weaview',
+          title: '织境 Agent',
           debugShowCheckedModeBanner: false,
           themeMode: state.effectiveThemeMode,
           theme: ThemeData(

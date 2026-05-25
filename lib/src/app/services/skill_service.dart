@@ -158,7 +158,7 @@ class SkillService {
     );
   }
 
-  Future<SkillConfig> installFromUrl(String sourceUrl) async {
+  Future<SkillConfig> installContextFromUrl(String sourceUrl) async {
     final normalized = _normalizeGithubUrl(sourceUrl);
     final skill = await _githubClient.install(
       sourceUrl: normalized,
@@ -167,7 +167,7 @@ class SkillService {
     return skill;
   }
 
-  Future<SkillConfig> installFromRunner(String sourceUrl) async {
+  Future<SkillConfig> installRunnerSkill(String sourceUrl) async {
     return _client.install(
       baseUrl: runnerBaseUrl,
       sourceUrl: sourceUrl,

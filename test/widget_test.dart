@@ -33,9 +33,9 @@ void main() {
     await tester.pumpWidget(const WeaviewApp());
     await tester.pump(const Duration(seconds: 1));
 
-    expect(find.text('今天，你想编织什么梦境？'), findsOneWidget);
-    expect(find.text('新梦境'), findsOneWidget);
-    expect(find.text('编织'), findsOneWidget);
+    expect(find.text('织境 Agent 已就绪'), findsOneWidget);
+    expect(find.text('织境 Agent'), findsWidgets);
+    expect(find.text('总结网页'), findsOneWidget);
   });
 
   testWidgets('renders rich AI markdown code, formula, and table blocks', (
@@ -922,7 +922,7 @@ $$E = mc^2$$
     await tester.pumpWidget(MaterialApp(home: WeaviewHome(state: state)));
     await tester.tap(find.byIcon(Icons.add_rounded).first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('技能'));
+    await tester.tap(find.text('Skills'));
     await tester.pumpAndSettle();
 
     expect(find.text('选择技能'), findsOneWidget);

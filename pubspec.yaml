@@ -1,5 +1,5 @@
 name: weaview_flutter
-description: "Weaview is a Flutter AI chat app with configurable providers, memory, search, translation, image generation, and TTS."
+description: "Weaview is a mobile Agent assistant with configurable models, Skills Runner, memory, search, image generation, and TTS."
 repository: https://github.com/Suxinnai/Weaview
 issue_tracker: https://github.com/Suxinnai/Weaview/issues
 # The following line prevents the package from being accidentally published to

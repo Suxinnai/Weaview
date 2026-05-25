@@ -516,7 +516,14 @@ class WeaviewState extends ChangeNotifier {
   Future<bool> testSkillRunner() => _skills.testRunner();
 
   Future<SkillConfig> installSkillFromUrl(String sourceUrl) async {
-    final skill = await _skills.installFromUrl(sourceUrl);
+    final skill = await _skills.installRunnerSkill(sourceUrl);
+    _skills.upsertSkill(skill, _prefs);
+    notifyListeners();
+    return skill;
+  }
+
+  Future<SkillConfig> installContextSkillFromUrl(String sourceUrl) async {
+    final skill = await _skills.installContextFromUrl(sourceUrl);
     _skills.upsertSkill(skill, _prefs);
     notifyListeners();
     return skill;
@@ -525,6 +532,90 @@ class WeaviewState extends ChangeNotifier {
   // ── Chat / streaming ─────────────────────────────────────────────
 
   Future<void> submitSkillMessage(
+    String value, {
+    required SkillConfig skill,
+    List<MessageAttachment> attachments = const [],
+  }) async {
+    if (!skill.runsOnRunner) {
+      await submitMessage(value, attachments: attachments, skill: skill);
+      return;
+    }
+    final content = value.trim();
+    if ((content.isEmpty && attachments.isEmpty) || isStreaming) return;
+    _applyPromptAppearanceIntent(content);
+
+    final input = content.isNotEmpty
+        ? content
+        : attachments.map((attachment) => attachment.name).join('\n');
+    final conversation = [
+      ...messages,
+      ChatMessage.user(content, attachments: attachments),
+    ];
+    suggestions = [];
+    messages
+      ..clear()
+      ..addAll(conversation)
+      ..add(
+        ChatMessage.model(
+          '正在运行 ${skill.name}...',
+          isThinking: true,
+          activity: 'skill',
+        ),
+      );
+    isStreaming = true;
+    _cancelStreamRequested = false;
+    final runId = ++_streamRunId;
+    _persistCurrentSession();
+    final taskSessionId = currentSessionId;
+    final responseIndex = messages.length - 1;
+    notifyListeners();
+
+    try {
+      final result = await _skills.runSkill(
+        skill: skill,
+        input: input,
+        messages: conversation,
+      );
+      if (runId != _streamRunId || _cancelStreamRequested) {
+        _mutateModelMessageInSession(
+          sessionId: taskSessionId,
+          targetIndex: responseIndex,
+          persist: true,
+          mutate: (current) {
+            current.isThinking = false;
+          },
+        );
+        return;
+      }
+      final text = result.ok
+          ? result.text.trim()
+          : '技能运行失败：${result.error.trim().isEmpty ? 'Runner 未返回错误详情。' : result.error.trim()}\n\n请检查 Skill Runner 地址、技能入口和网络连接后重试。';
+      _mutateModelMessageInSession(
+        sessionId: taskSessionId,
+        targetIndex: responseIndex,
+        persist: true,
+        mutate: (current) {
+          current
+            ..content = text.isEmpty ? '${skill.name} 已完成，但没有返回文本结果。' : text
+            ..isThinking = false
+            ..activity = 'skill';
+        },
+      );
+      if (taskSessionId == currentSessionId) {
+        await _refreshCurrentSessionTitle();
+      }
+    } finally {
+      if (runId == _streamRunId) {
+        if (isStreaming) isStreaming = false;
+        _cancelStreamRequested = false;
+        _persistSessionMessages(taskSessionId);
+        notifyListeners();
+      }
+    }
+    return;
+  }
+
+  Future<void> submitContextSkillMessage(
     String value, {
     required SkillConfig skill,
     List<MessageAttachment> attachments = const [],
