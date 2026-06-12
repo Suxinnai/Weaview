@@ -2,6 +2,20 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.31 - 2026-06-12
+
+### 中文
+
+- 更新应用启动图标为新的透明背景图标，并重新生成 Android 各密度 launcher 资源。
+- 移除移动端 Skills 功能入口、GitHub Skill 安装、Skill Runner 配置和自动技能上下文注入，避免手机端误导为可执行桌面端本地技能。
+- 保留聊天、联网搜索、图片、文件、TTS 和本地数据管理等核心移动端能力。
+
+### English
+
+- Updated the launcher artwork to the new transparent-background icon and regenerated Android density assets.
+- Removed the mobile Skills surface, GitHub Skill installation, Skill Runner settings, and automatic Skill context injection so the phone app no longer implies desktop-style local skill execution.
+- Kept the core mobile chat, web search, image, file, TTS, and local data management flows intact.
+
 ## 1.0.28 - 2026-05-21
 
 ### 中文

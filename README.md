@@ -6,7 +6,7 @@
 
 织境提供一个可本地配置的多模型聊天环境。它不内置任何真实 API Key，所有模型服务、搜索服务和语音服务凭据都需要用户在 App 设置中显式配置。
 
-Latest stable / 最新正式版：`v1.0.30`
+Latest stable / 最新正式版：`v1.0.31`
 
 主要能力包括：
 
@@ -20,13 +20,11 @@ Latest stable / 最新正式版：`v1.0.30`
 - Tavily 联网搜索配置入口。
 - 手动启用的 TTS 服务配置，支持系统 TTS fallback 与远程 TTS provider。
 - Flutter 移动端 UI，保留 TTS 播报并移除语音输入入口。
-- 本地 Skills 技能系统：可从 GitHub 安装兼容技能，聊天时手动固定或按触发词自动注入 SKILL.md 上下文。
 
 English summary:
 
 - Weaview is a Flutter AI chat app with configurable providers, role-based model assignment, streaming chat, memory, search, translation, image generation, TTS, and mobile-first interaction design.
 - API keys are never bundled. Configure AI, search, image, and TTS providers explicitly inside the app settings.
-- Skills are used as model context in chat; local scripts are not executed automatically.
 
 ## Features
 
@@ -41,7 +39,6 @@ English summary:
 - 支持人物画像、助手昵称、用户资料和工具模型辅助整理。
 - 支持 Markdown、代码块、公式块、思考链、翻译块等富文本消息渲染。
 - 支持 SharedPreferences 本地持久化，不要求后端服务。
-- 支持本地 Skills：外部脚本不在 App 内直接执行，聊天默认只注入技能上下文。
 - 支持 Flutter 单元测试与 widget 测试。
 
 ## 技术栈
