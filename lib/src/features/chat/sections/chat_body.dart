@@ -19,6 +19,7 @@ class ChatBody extends StatelessWidget {
     required this.onEditMessage,
     required this.onTranslateMessage,
     required this.onBranchMessage,
+    required this.onSaveCardMessage,
     required this.onDeleteMessage,
     required this.onSpeakMessage,
     required this.onDownloadAttachment,
@@ -34,6 +35,7 @@ class ChatBody extends StatelessWidget {
   final Future<void> Function(int index) onEditMessage;
   final Future<void> Function(int index) onTranslateMessage;
   final void Function(int index) onBranchMessage;
+  final void Function(int index) onSaveCardMessage;
   final Future<void> Function(int index) onDeleteMessage;
   final Future<void> Function(ChatMessage message) onSpeakMessage;
   final Future<void> Function(MessageAttachment attachment)
@@ -133,6 +135,7 @@ class ChatBody extends StatelessWidget {
                       onEdit: () => onEditMessage(index),
                       onTranslate: () => onTranslateMessage(index),
                       onBranch: () => onBranchMessage(index),
+                      onSaveCard: () => onSaveCardMessage(index),
                       onDelete: () => onDeleteMessage(index),
                       onSpeak: () => onSpeakMessage(message),
                       onDownloadAttachment: onDownloadAttachment,

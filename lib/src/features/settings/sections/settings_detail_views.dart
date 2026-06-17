@@ -113,6 +113,43 @@ extension SettingsDetailViews on SettingsSheetState {
 
   Widget memoryView() {
     final state = widget.state;
+    final memories = state.memoryItems;
+
+    Widget memoryChip(
+      String label,
+      IconData icon, {
+      Color? color,
+      bool filled = false,
+    }) {
+      final chipColor = color ?? state.text(context).withValues(alpha: 0.52);
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: filled
+              ? chipColor.withValues(alpha: 0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: chipColor.withValues(alpha: 0.16)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: chipColor),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: state.textStyle(
+                context,
+                size: 11.5,
+                weight: FontWeight.w600,
+                opacity: color == null ? 0.52 : 1,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return scrollContent([
       Text(
         'AI将会记住关于您的重要信息，以便提供更个性化的回应。',
@@ -161,7 +198,7 @@ extension SettingsDetailViews on SettingsSheetState {
           ),
         ],
       ),
-      if (state.memories.isEmpty)
+      if (memories.isEmpty)
         CardShell(
           state: state,
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 28),
@@ -173,41 +210,128 @@ extension SettingsDetailViews on SettingsSheetState {
           ),
         )
       else
-        for (var i = 0; i < state.memories.length; i++)
+        for (final item in memories)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: CardShell(
               state: state,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: state.accents[0].withValues(alpha: 0.16),
-                      shape: BoxShape.circle,
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+              child: Opacity(
+                opacity: item.enabled ? 1 : 0.48,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: state.accents[0].withValues(alpha: 0.14),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        item.pinned
+                            ? Icons.push_pin_rounded
+                            : Icons.auto_awesome_rounded,
+                        size: 16,
+                        color: state.text(context).withValues(alpha: 0.58),
+                      ),
                     ),
-                    child: Icon(
-                      Icons.auto_awesome_rounded,
-                      size: 15,
-                      color: state.text(context).withValues(alpha: 0.56),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.content,
+                            maxLines: 4,
+                            overflow: TextOverflow.ellipsis,
+                            style: state.textStyle(
+                              context,
+                              size: 14,
+                              height: 1.45,
+                              weight: item.pinned
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              memoryChip(
+                                item.enabled ? '参与上下文' : '已停用',
+                                item.enabled
+                                    ? Icons.visibility_rounded
+                                    : Icons.visibility_off_outlined,
+                                color: item.enabled
+                                    ? sendGreen
+                                    : state
+                                          .text(context)
+                                          .withValues(alpha: 0.42),
+                                filled: item.enabled,
+                              ),
+                              memoryChip(
+                                item.source,
+                                Icons.sell_outlined,
+                                color: state
+                                    .text(context)
+                                    .withValues(alpha: 0.58),
+                              ),
+                              if (item.pinned)
+                                memoryChip(
+                                  '置顶',
+                                  Icons.push_pin_rounded,
+                                  color: state.accents[0],
+                                  filled: true,
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Text(
+                                item.enabled ? '启用中' : '已停用',
+                                style: state.textStyle(
+                                  context,
+                                  size: 11.5,
+                                  opacity: 0.45,
+                                ),
+                              ),
+                              const Spacer(),
+                              WeaveSwitch(
+                                state: state,
+                                value: item.enabled,
+                                onChanged: (value) =>
+                                    state.setMemoryEnabled(item.id, value),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      state.memories[i],
-                      style: state.textStyle(context, size: 14, height: 1.45),
+                    const SizedBox(width: 8),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TinyIcon(
+                          icon: item.pinned
+                              ? Icons.push_pin_rounded
+                              : Icons.push_pin_outlined,
+                          color: item.pinned
+                              ? state.accents[0]
+                              : state.text(context),
+                          onTap: () => state.toggleMemoryPinned(item.id),
+                        ),
+                        TinyIcon(
+                          icon: Icons.delete_outline_rounded,
+                          color: Colors.red,
+                          onTap: () => state.deleteMemoryById(item.id),
+                        ),
+                      ],
                     ),
-                  ),
-                  TinyIcon(
-                    icon: Icons.delete_outline_rounded,
-                    color: Colors.red,
-                    onTap: () => state.deleteMemory(i),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -289,11 +413,10 @@ extension SettingsDetailViews on SettingsSheetState {
                 width: 220,
                 child: TextField(
                   textAlign: TextAlign.center,
-                  controller: TextEditingController(text: providerName)
-                    ..selection = TextSelection.collapsed(
-                      offset: providerName.length,
-                    ),
-                  onChanged: (value) => providerName = value,
+                  controller: providerNameController,
+                  onChanged: (value) => updateSheet(() {
+                    providerName = value;
+                  }),
                   style: state.textStyle(
                     context,
                     size: 20,
@@ -337,8 +460,7 @@ extension SettingsDetailViews on SettingsSheetState {
         ),
         const SizedBox(height: 8),
         TextField(
-          controller: TextEditingController(text: providerKey)
-            ..selection = TextSelection.collapsed(offset: providerKey.length),
+          controller: providerKeyController,
           obscureText: true,
           onChanged: (value) => providerKey = value,
           style: state.textStyle(context, size: 14),
@@ -356,10 +478,7 @@ extension SettingsDetailViews on SettingsSheetState {
         ),
         const SizedBox(height: 8),
         TextField(
-          controller: TextEditingController(text: providerBaseUrl)
-            ..selection = TextSelection.collapsed(
-              offset: providerBaseUrl.length,
-            ),
+          controller: providerBaseUrlController,
           onChanged: (value) => providerBaseUrl = value,
           style: state.textStyle(context, size: 14),
           decoration: inputDecoration(

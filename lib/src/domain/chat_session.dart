@@ -7,6 +7,8 @@ class ChatSession {
     required this.updatedAt,
     required this.messages,
     this.pinned = false,
+    this.parentId = '',
+    this.branchedAtIndex = -1,
   });
 
   factory ChatSession.fromJson(dynamic json) {
@@ -19,6 +21,8 @@ class ChatSession {
           .map(ChatMessage.fromJson)
           .toList(),
       pinned: map['pinned'] == true,
+      parentId: map['parentId']?.toString() ?? '',
+      branchedAtIndex: (map['branchedAtIndex'] as num?)?.toInt() ?? -1,
     );
   }
 
@@ -27,6 +31,8 @@ class ChatSession {
   final int updatedAt;
   final List<ChatMessage> messages;
   final bool pinned;
+  final String parentId;
+  final int branchedAtIndex;
 
   ChatSession copyWith({
     String? id,
@@ -34,6 +40,8 @@ class ChatSession {
     int? updatedAt,
     List<ChatMessage>? messages,
     bool? pinned,
+    String? parentId,
+    int? branchedAtIndex,
   }) {
     return ChatSession(
       id: id ?? this.id,
@@ -41,6 +49,8 @@ class ChatSession {
       updatedAt: updatedAt ?? this.updatedAt,
       messages: messages ?? this.messages,
       pinned: pinned ?? this.pinned,
+      parentId: parentId ?? this.parentId,
+      branchedAtIndex: branchedAtIndex ?? this.branchedAtIndex,
     );
   }
 
@@ -50,5 +60,7 @@ class ChatSession {
     'updatedAt': updatedAt,
     'messages': messages.map((m) => m.toJson()).toList(),
     'pinned': pinned,
+    'parentId': parentId,
+    'branchedAtIndex': branchedAtIndex,
   };
 }

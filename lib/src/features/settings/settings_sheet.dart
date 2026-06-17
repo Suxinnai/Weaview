@@ -61,6 +61,10 @@ class SettingsSheetState extends State<SettingsSheet> {
   final TextEditingController feedbackStepsController = TextEditingController();
   final TextEditingController feedbackContactController =
       TextEditingController();
+  final TextEditingController providerNameController = TextEditingController();
+  final TextEditingController providerKeyController = TextEditingController();
+  final TextEditingController providerBaseUrlController =
+      TextEditingController();
   late final Future<AppVersionInfo> appVersionInfoFuture;
   late ModelAssignment roleDraft;
   final Set<String> deletingProviders = {};
@@ -119,6 +123,9 @@ class SettingsSheetState extends State<SettingsSheet> {
     feedbackDetailController.dispose();
     feedbackStepsController.dispose();
     feedbackContactController.dispose();
+    providerNameController.dispose();
+    providerKeyController.dispose();
+    providerBaseUrlController.dispose();
     super.dispose();
   }
 
@@ -372,9 +379,9 @@ class SettingsSheetState extends State<SettingsSheet> {
     );
   }
 
-  void closeSheet() {
+  void closeSheet({bool persistProviderDraft = true}) {
     FocusManager.instance.primaryFocus?.unfocus();
-    if (subView == 'provider_config') {
+    if (persistProviderDraft && subView == 'provider_config') {
       saveProvider(false, pop: false);
     }
     widget.onClose();
@@ -389,9 +396,9 @@ class SettingsSheetState extends State<SettingsSheet> {
     });
   }
 
-  void goBack() {
+  void goBack({bool persistProviderDraft = true}) {
     FocusManager.instance.primaryFocus?.unfocus();
-    if (subView == 'provider_config') {
+    if (persistProviderDraft && subView == 'provider_config') {
       saveProvider(false, pop: false);
     }
     setState(() {
@@ -448,10 +455,19 @@ class SettingsSheetState extends State<SettingsSheet> {
           ? ''
           : AiGateway.normalizeBaseUrl(provider.baseUrl);
       providerModels = [...provider?.models ?? const <AiModel>[]];
+      providerNameController.text = providerName;
+      providerKeyController.text = providerKey;
+      providerBaseUrlController.text = providerBaseUrl;
       providerTab = 'config';
       statusText = '';
       subView = 'provider_config';
     });
+  }
+
+  void _syncProviderDraftFromControllers() {
+    providerName = providerNameController.text;
+    providerKey = providerKeyController.text;
+    providerBaseUrl = providerBaseUrlController.text;
   }
 
   void saveProvider(
@@ -459,6 +475,7 @@ class SettingsSheetState extends State<SettingsSheet> {
     bool pop = true,
     bool? enabledOverride,
   }) {
+    _syncProviderDraftFromControllers();
     final name = (editingProvider?.name ?? providerName).trim();
     if (name.isEmpty) {
       if (pop) widget.showSnack('请输入提供商名称。');
@@ -474,22 +491,32 @@ class SettingsSheetState extends State<SettingsSheet> {
         : providerKey.trim().isEmpty
         ? '未配置'
         : '已连接';
-    widget.state.upsertProvider(
-      AiProvider(
-        name: name,
-        status: status,
-        current: keepCurrent,
-        enabled: enabled,
-        color: editingProvider?.color ?? providerFallbackColor(name),
-        apiKey: providerKey.trim(),
-        baseUrl: providerBaseUrl.trim().isEmpty
-            ? ''
-            : AiGateway.normalizeBaseUrl(providerBaseUrl),
-        models: providerModels,
-      ),
-      makeCurrent: makeCurrent,
+    final provider = AiProvider(
+      name: name,
+      status: status,
+      current: keepCurrent,
+      enabled: enabled,
+      color: editingProvider?.color ?? providerFallbackColor(name),
+      apiKey: providerKey.trim(),
+      baseUrl: providerBaseUrl.trim().isEmpty
+          ? ''
+          : AiGateway.normalizeBaseUrl(providerBaseUrl),
+      models: providerModels,
     );
-    if (pop) goBack();
+    widget.state.upsertProvider(provider, makeCurrent: makeCurrent);
+    editingProvider = widget.state.providers.firstWhereOrNull(
+      (item) => item.name == name,
+    );
+    if (pop) {
+      widget.showSnack(
+        makeCurrent
+            ? '已设为当前提供商。'
+            : enabled
+            ? '提供商配置已保存。'
+            : '提供商已禁用。',
+      );
+      goBack(persistProviderDraft: false);
+    }
   }
 
   Future<void> pullModels() async {

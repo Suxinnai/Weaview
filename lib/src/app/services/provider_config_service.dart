@@ -129,6 +129,9 @@ class ProviderConfigService {
     } else {
       next.add(updated);
     }
+    if (!updated.enabled) {
+      _clearAssignmentsForProvider(updated.name, prefs);
+    }
     saveProviders(next, prefs);
   }
 

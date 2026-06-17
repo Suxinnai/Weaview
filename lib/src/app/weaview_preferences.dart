@@ -95,15 +95,35 @@ class WeaviewPreferences {
   }
 
   List<String> loadMemories() {
-    final savedMemories = _prefs.getString(_PrefsKey.aiMemories);
+    return loadMemoryItems().map((item) => item.content).toList();
+  }
+
+  List<MemoryItem> loadMemoryItems() {
+    final savedMemories = _prefs.get(_PrefsKey.aiMemories);
     if (savedMemories == null) return [];
     try {
-      return (jsonDecode(savedMemories) as List)
-          .map((item) => item.toString())
+      final decoded = savedMemories is String
+          ? jsonDecode(savedMemories)
+          : savedMemories;
+      if (decoded is! List) return [];
+      return decoded
+          .map(MemoryItem.fromJson)
+          .where((item) => item.content.trim().isNotEmpty)
           .toList();
     } catch (_) {
       return [];
     }
+  }
+
+  List<WorkCard> loadWorkCards() {
+    return decodeList(_prefs.getString(_PrefsKey.workCards), WorkCard.fromJson);
+  }
+
+  List<TokenUsageRecord> loadTokenUsageRecords() {
+    return decodeList(
+      _prefs.getString(_PrefsKey.tokenUsageRecords),
+      TokenUsageRecord.fromJson,
+    );
   }
 
   SearchConfig? loadSearchConfig() {
@@ -260,6 +280,27 @@ class WeaviewPreferences {
     _prefs.setString(_PrefsKey.aiMemories, jsonEncode(memories));
   }
 
+  void saveMemoryItems(List<MemoryItem> memories) {
+    _prefs.setString(
+      _PrefsKey.aiMemories,
+      jsonEncode(memories.map((item) => item.toJson()).toList()),
+    );
+  }
+
+  void saveWorkCards(List<WorkCard> cards) {
+    _prefs.setString(
+      _PrefsKey.workCards,
+      jsonEncode(cards.map((item) => item.toJson()).toList()),
+    );
+  }
+
+  void saveTokenUsageRecords(List<TokenUsageRecord> records) {
+    _prefs.setString(
+      _PrefsKey.tokenUsageRecords,
+      jsonEncode(records.map((item) => item.toJson()).toList()),
+    );
+  }
+
   void saveChatSessions(List<ChatSession> sessions) {
     _prefs.setString(
       _PrefsKey.chatSessions,
@@ -325,6 +366,8 @@ abstract final class _PrefsKey {
   static const aiProviders = 'ai_providers';
   static const aiModelAssignments = 'ai_model_assignments';
   static const aiMemories = 'ai_memories';
+  static const workCards = 'work_cards';
+  static const tokenUsageRecords = 'token_usage_records';
   static const aiSearchConfig = 'ai_search_config';
   static const aiActiveTtsId = 'ai_active_tts_id';
   static const aiTtsProviders = 'ai_tts_providers';

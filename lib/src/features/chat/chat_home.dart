@@ -14,6 +14,7 @@ import '../../shared/widgets/shared_widgets.dart';
 import '../history/sidebar_overlay.dart';
 import '../settings/settings_sheet.dart';
 import 'chat_home_sections.dart';
+import 'workspace_overlays.dart';
 
 class WeaviewHome extends StatefulWidget {
   const WeaviewHome({super.key, required this.state});
@@ -36,6 +37,10 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
   bool _modelDropdownOpen = false;
   bool _webSearchEnabled = false;
   bool _imageGenerationMode = false;
+  bool _comparisonMode = false;
+  bool _workBoardOpen = false;
+  bool _branchGraphOpen = false;
+  bool _usageStatsOpen = false;
   int? _editingUserMessageIndex;
   bool _editingImageGenerationMessage = false;
   int _seenMessageCount = 0;
@@ -195,6 +200,15 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
       await widget.state.submitImageGeneration(text, attachments: attachments);
       return;
     }
+    if (_comparisonMode) {
+      _input.clear();
+      setState(() {
+        _pendingAttachments = [];
+        _dockExpanded = false;
+      });
+      await widget.state.submitModelComparison(text, attachments: attachments);
+      return;
+    }
     final useWebSearch = _webSearchEnabled;
     _input.clear();
     setState(() => _pendingAttachments = []);
@@ -211,6 +225,16 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
       return;
     }
     setState(() => _webSearchEnabled = !_webSearchEnabled);
+  }
+
+  void _toggleComparison() {
+    setState(() {
+      _comparisonMode = !_comparisonMode;
+      if (_comparisonMode) {
+        _imageGenerationMode = false;
+        _webSearchEnabled = false;
+      }
+    });
   }
 
   Future<void> _retryMessage(int index) async {
@@ -236,6 +260,7 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
             (next?.attachments.any((attachment) => attachment.isImage) ??
                 false);
         _imageGenerationMode = _editingImageGenerationMessage;
+        if (_imageGenerationMode) _comparisonMode = false;
         _pendingAttachments = message.attachments
             .map((attachment) => attachment.copy())
             .toList();
@@ -283,6 +308,10 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
   Future<void> _copyMessage(ChatMessage message) async {
     final text = [
       if (message.content.trim().isNotEmpty) message.content.trim(),
+      if (message.comparisonResults.isNotEmpty)
+        for (final result in message.comparisonResults)
+          if (result.content.trim().isNotEmpty)
+            '\n\n[${result.provider}/${result.model}]\n${result.content.trim()}',
       if (message.translation.trim().isNotEmpty)
         '\n\n翻译：${message.translation.trim()}',
     ].join();
@@ -349,6 +378,11 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
     } catch (error) {
       _snack('语音播报不可用：${error.toString().replaceFirst('Exception: ', '')}');
     }
+  }
+
+  void _saveCardMessage(int index) {
+    widget.state.createWorkCardFromMessage(index);
+    _snack('已存入编织板。');
   }
 
   bool _isPcm16StreamingTts(TtsProviderConfig provider) {
@@ -457,15 +491,40 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
   Future<void> _openSettings() async {
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _dockExpanded = false);
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => SettingsSheet(
+      PageRouteBuilder<void>(
+        transitionDuration: reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 240),
+        reverseTransitionDuration: reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 180),
+        pageBuilder: (_, _, _) => SettingsSheet(
           state: widget.state,
           open: true,
           onClose: () => Navigator.of(context).maybePop(),
           onPickAvatar: _pickAvatar,
           showSnack: _snack,
         ),
+        transitionsBuilder: (_, animation, _, child) {
+          if (reduceMotion) return child;
+          final curved = CurvedAnimation(
+            parent: animation,
+            curve: Curves.easeOutCubic,
+            reverseCurve: Curves.easeInCubic,
+          );
+          return FadeTransition(
+            opacity: curved,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.025),
+                end: Offset.zero,
+              ).animate(curved),
+              child: child,
+            ),
+          );
+        },
       ),
     );
     FocusManager.instance.primaryFocus?.unfocus();
@@ -490,18 +549,34 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
             systemNavigationBarContrastEnforced: false,
           ),
           child: PopScope(
-            canPop: !_sidebarOpen && !_modelDropdownOpen && !_dockExpanded,
+            canPop: false,
             onPopInvokedWithResult: (didPop, _) {
               if (didPop) return;
-              setState(() {
-                if (_modelDropdownOpen) {
-                  _modelDropdownOpen = false;
-                } else if (_dockExpanded) {
-                  _dockExpanded = false;
-                } else if (_sidebarOpen) {
-                  _sidebarOpen = false;
-                }
-              });
+              if (_modelDropdownOpen ||
+                  _dockExpanded ||
+                  _sidebarOpen ||
+                  _workBoardOpen ||
+                  _branchGraphOpen ||
+                  _usageStatsOpen) {
+                setState(() {
+                  if (_modelDropdownOpen) {
+                    _modelDropdownOpen = false;
+                  } else if (_dockExpanded) {
+                    _dockExpanded = false;
+                  } else if (_sidebarOpen) {
+                    _sidebarOpen = false;
+                  } else if (_workBoardOpen) {
+                    _workBoardOpen = false;
+                  } else if (_branchGraphOpen) {
+                    _branchGraphOpen = false;
+                  } else if (_usageStatsOpen) {
+                    _usageStatsOpen = false;
+                  }
+                });
+                return;
+              }
+              FocusManager.instance.primaryFocus?.unfocus();
+              SystemNavigator.pop(animated: true);
             },
             child: Scaffold(
               resizeToAvoidBottomInset: false,
@@ -540,6 +615,7 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
                     onEditMessage: _editMessage,
                     onTranslateMessage: _translateMessage,
                     onBranchMessage: _branchMessage,
+                    onSaveCardMessage: _saveCardMessage,
                     onDeleteMessage: _deleteMessage,
                     onSpeakMessage: _speakMessage,
                     onDownloadAttachment: _downloadAttachment,
@@ -575,11 +651,13 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
                     inputFocusNode: _inputFocus,
                     webSearchEnabled: _webSearchEnabled,
                     imageGenerationMode: _imageGenerationMode,
+                    comparisonMode: _comparisonMode,
                     dockExpanded: _dockExpanded,
                     pendingAttachments: _pendingAttachments,
                     onToggleExpanded: () =>
                         setState(() => _dockExpanded = !_dockExpanded),
                     onToggleWebSearch: _toggleWebSearch,
+                    onToggleComparison: _toggleComparison,
                     onSubmit: _submit,
                     onPickChatImages: _pickChatImages,
                     onPickChatFiles: _pickChatFiles,
@@ -616,6 +694,7 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
                       );
                       setState(() {
                         _imageGenerationMode = item.supportsImageGeneration;
+                        if (_imageGenerationMode) _comparisonMode = false;
                         _modelDropdownOpen = false;
                         _modelSearch.clear();
                       });
@@ -629,6 +708,33 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
                       setState(() => _sidebarOpen = false);
                       _openSettings();
                     },
+                    onBranchGraph: () => setState(() {
+                      _sidebarOpen = false;
+                      _branchGraphOpen = true;
+                    }),
+                    onWorkBoard: () => setState(() {
+                      _sidebarOpen = false;
+                      _workBoardOpen = true;
+                    }),
+                    onUsageStats: () => setState(() {
+                      _sidebarOpen = false;
+                      _usageStatsOpen = true;
+                    }),
+                  ),
+                  BranchGraphOverlay(
+                    state: state,
+                    open: _branchGraphOpen,
+                    onClose: () => setState(() => _branchGraphOpen = false),
+                  ),
+                  WorkBoardOverlay(
+                    state: state,
+                    open: _workBoardOpen,
+                    onClose: () => setState(() => _workBoardOpen = false),
+                  ),
+                  UsageStatsOverlay(
+                    state: state,
+                    open: _usageStatsOpen,
+                    onClose: () => setState(() => _usageStatsOpen = false),
                   ),
                 ],
               ),

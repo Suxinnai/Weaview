@@ -16,10 +16,12 @@ class ChatInputDock extends StatelessWidget {
     required this.inputFocusNode,
     required this.webSearchEnabled,
     required this.imageGenerationMode,
+    required this.comparisonMode,
     required this.dockExpanded,
     required this.pendingAttachments,
     required this.onToggleExpanded,
     required this.onToggleWebSearch,
+    required this.onToggleComparison,
     required this.onSubmit,
     required this.onPickChatImages,
     required this.onPickChatFiles,
@@ -33,10 +35,12 @@ class ChatInputDock extends StatelessWidget {
   final FocusNode inputFocusNode;
   final bool webSearchEnabled;
   final bool imageGenerationMode;
+  final bool comparisonMode;
   final bool dockExpanded;
   final List<MessageAttachment> pendingAttachments;
   final VoidCallback onToggleExpanded;
   final VoidCallback onToggleWebSearch;
+  final VoidCallback onToggleComparison;
   final Future<void> Function() onSubmit;
   final Future<void> Function() onPickChatImages;
   final Future<void> Function() onPickChatFiles;
@@ -59,7 +63,25 @@ class ChatInputDock extends StatelessWidget {
       (rawInput.characters.length / 18).ceil(),
     );
     final needsExpandedEditor = estimatedLineCount > 3;
-    final showInlineWebSearch = !needsExpandedEditor;
+    final activeToolIcon = comparisonMode
+        ? Icons.view_column_rounded
+        : webSearchEnabled
+        ? Icons.travel_explore_rounded
+        : imageGenerationMode
+        ? Icons.image_outlined
+        : null;
+    final activeToolLabel = comparisonMode
+        ? '多模型对照'
+        : webSearchEnabled
+        ? '联网搜索'
+        : imageGenerationMode
+        ? '图像生成'
+        : '';
+    final activeToolTap = comparisonMode
+        ? onToggleComparison
+        : webSearchEnabled
+        ? onToggleWebSearch
+        : onToggleExpanded;
     final canSubmit = imageGenerationMode
         ? hasText
         : hasText || pendingAttachments.isNotEmpty;
@@ -138,30 +160,25 @@ class ChatInputDock extends StatelessWidget {
                   ),
                 ),
                 AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 160),
+                  duration: const Duration(milliseconds: 180),
                   switchInCurve: Curves.easeOutCubic,
                   switchOutCurve: Curves.easeOutCubic,
-                  child: showInlineWebSearch
-                      ? IconCircleButton(
-                          key: const ValueKey('inline_web_search'),
-                          icon: webSearchEnabled
-                              ? Icons.travel_explore_rounded
-                              : Icons.public_rounded,
-                          onTap: onToggleWebSearch,
-                          color: webSearchEnabled
-                              ? sendGreen
-                              : state.text(context),
-                          background: webSearchEnabled
-                              ? sendGreen.withValues(alpha: 0.14)
-                              : Colors.transparent,
-                          opacity: webSearchEnabled ? 1 : 0.42,
-                          size: 38,
+                  child: activeToolIcon == null || needsExpandedEditor
+                      ? const SizedBox(
+                          key: ValueKey('active_tool_hidden'),
+                          width: 2,
                         )
-                      : const SizedBox(
-                          key: ValueKey('inline_web_search_hidden'),
+                      : Padding(
+                          key: ValueKey('active_tool_$activeToolLabel'),
+                          padding: const EdgeInsets.only(left: 2, right: 2),
+                          child: _ActiveToolIndicator(
+                            state: state,
+                            icon: activeToolIcon,
+                            label: activeToolLabel,
+                            onTap: activeToolTap,
+                          ),
                         ),
                 ),
-                if (showInlineWebSearch) const SizedBox(width: 2),
                 Expanded(
                   child: TextField(
                     controller: inputController,
@@ -235,7 +252,15 @@ class ChatInputDock extends StatelessWidget {
                           icon: Icons.public_rounded,
                           label: webSearchEnabled ? '关闭联网' : '联网搜索',
                           state: state,
+                          selected: webSearchEnabled,
                           onTap: onToggleWebSearch,
+                        ),
+                        ToolChip(
+                          icon: Icons.view_column_rounded,
+                          label: comparisonMode ? '关闭对照' : '多模型对照',
+                          state: state,
+                          selected: comparisonMode,
+                          onTap: onToggleComparison,
                         ),
                       ],
                     ),
@@ -381,5 +406,39 @@ class ChatInputDock extends StatelessWidget {
     } finally {
       editor.dispose();
     }
+  }
+}
+
+class _ActiveToolIndicator extends StatelessWidget {
+  const _ActiveToolIndicator({
+    required this.state,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final WeaviewState state;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: label,
+      child: Material(
+        color: sendGreen.withValues(alpha: 0.14),
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            width: 38,
+            height: 38,
+            child: Icon(icon, size: 20, color: sendGreen),
+          ),
+        ),
+      ),
+    );
   }
 }

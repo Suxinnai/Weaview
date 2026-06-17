@@ -26,6 +26,7 @@ class MessageBubble extends StatefulWidget {
     required this.onEdit,
     required this.onTranslate,
     required this.onBranch,
+    required this.onSaveCard,
     required this.onDelete,
     required this.onSpeak,
     required this.onDownloadAttachment,
@@ -41,6 +42,7 @@ class MessageBubble extends StatefulWidget {
   final VoidCallback onEdit;
   final VoidCallback onTranslate;
   final VoidCallback onBranch;
+  final VoidCallback onSaveCard;
   final VoidCallback onDelete;
   final VoidCallback onSpeak;
   final ValueChanged<MessageAttachment> onDownloadAttachment;
@@ -106,6 +108,9 @@ class _MessageBubbleState extends State<MessageBubble> {
     final state = widget.state;
     final message = widget.message;
     final isUser = message.role == 'user';
+    final hasActionText =
+        message.content.trim().isNotEmpty ||
+        message.comparisonResults.any((result) => result.hasText);
     final width = MediaQuery.sizeOf(context).width;
     final maxWidth = isUser ? width * 0.82 : width - 58;
     final textAlign = _messageTextAlign(state);
@@ -162,12 +167,13 @@ class _MessageBubbleState extends State<MessageBubble> {
               child: MessageActionBar(
                 state: state,
                 isModel: false,
-                hasText: message.content.trim().isNotEmpty,
+                hasText: hasActionText,
                 onCopy: widget.onCopy,
                 onRetry: widget.onRetry,
                 onEdit: widget.onEdit,
                 onTranslate: widget.onTranslate,
                 onBranch: widget.onBranch,
+                onSaveCard: widget.onSaveCard,
                 onDelete: widget.onDelete,
                 onSpeak: widget.onSpeak,
               ),
@@ -238,7 +244,12 @@ class _MessageBubbleState extends State<MessageBubble> {
                         ),
                         const SizedBox(height: 10),
                       ],
-                      if (message.attachments.isNotEmpty ||
+                      if (message.comparisonResults.isNotEmpty)
+                        ModelComparisonPanel(
+                          state: state,
+                          results: message.comparisonResults,
+                        )
+                      else if (message.attachments.isNotEmpty ||
                           message.content.trim().isNotEmpty ||
                           !message.isThinking)
                         _StyledMessageSurface(
@@ -287,12 +298,13 @@ class _MessageBubbleState extends State<MessageBubble> {
             child: MessageActionBar(
               state: state,
               isModel: true,
-              hasText: message.content.trim().isNotEmpty,
+              hasText: hasActionText,
               onCopy: widget.onCopy,
               onRetry: widget.onRetry,
               onEdit: _startInlineEdit,
               onTranslate: widget.onTranslate,
               onBranch: widget.onBranch,
+              onSaveCard: widget.onSaveCard,
               onDelete: widget.onDelete,
               onSpeak: widget.onSpeak,
             ),
@@ -317,6 +329,181 @@ class _MessageBubbleState extends State<MessageBubble> {
           ),
           const SizedBox(height: 8),
           assistantContent,
+        ],
+      ),
+    );
+  }
+}
+
+class ModelComparisonPanel extends StatelessWidget {
+  const ModelComparisonPanel({
+    super.key,
+    required this.state,
+    required this.results,
+  });
+
+  final WeaviewState state;
+  final List<ModelComparisonResult> results;
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        constraints: BoxConstraints(maxWidth: width - 58),
+        decoration: BoxDecoration(
+          color: state
+              .layer(context)
+              .withValues(alpha: state.isDark(context) ? 0.76 : 0.92),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: state.text(context).withValues(alpha: 0.08),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.view_column_rounded,
+                    size: 18,
+                    color: state.accents[0],
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '多模型对照',
+                      style: state.textStyle(
+                        context,
+                        size: 13.5,
+                        weight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '${results.length} 个模型',
+                    style: state.textStyle(context, size: 11.5, opacity: 0.45),
+                  ),
+                ],
+              ),
+            ),
+            for (var i = 0; i < results.length; i++) ...[
+              if (i > 0)
+                Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: state.text(context).withValues(alpha: 0.06),
+                ),
+              _ComparisonResultTile(state: state, result: results[i]),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ComparisonResultTile extends StatelessWidget {
+  const _ComparisonResultTile({required this.state, required this.result});
+
+  final WeaviewState state;
+  final ModelComparisonResult result;
+
+  @override
+  Widget build(BuildContext context) {
+    final error = result.error.trim();
+    final content = result.content.trim();
+    final bodyColor = error.isNotEmpty
+        ? Colors.red
+        : state.text(context).withValues(alpha: 0.82);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 30,
+                height: 30,
+                decoration: BoxDecoration(
+                  color: state.accents[0].withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 15,
+                  color: state.text(context).withValues(alpha: 0.58),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${result.provider} · ${result.model}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: state.textStyle(
+                        context,
+                        size: 13.5,
+                        weight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      result.loading ? '正在生成...' : '${result.elapsedMs}ms',
+                      style: state.textStyle(
+                        context,
+                        size: 11.5,
+                        opacity: 0.46,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (result.loading)
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else if (error.isNotEmpty)
+                Icon(Icons.error_outline_rounded, color: Colors.red, size: 18)
+              else
+                Icon(
+                  Icons.check_circle_outline_rounded,
+                  color: sendGreen,
+                  size: 18,
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          if (content.isNotEmpty)
+            Text(
+              content,
+              style: state
+                  .textStyle(context, size: 13.6, height: 1.55)
+                  .copyWith(color: bodyColor),
+            )
+          else if (error.isNotEmpty)
+            Text(
+              error,
+              style: state
+                  .textStyle(context, size: 13.2, height: 1.5)
+                  .copyWith(color: Colors.red),
+            )
+          else
+            Text(
+              '暂无结果',
+              style: state.textStyle(context, size: 13.2, opacity: 0.46),
+            ),
         ],
       ),
     );
