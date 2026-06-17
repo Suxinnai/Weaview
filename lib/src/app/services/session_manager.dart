@@ -91,6 +91,7 @@ class SessionManager {
         .map((m) => m.copy())
         .toList();
     if (branchMessages.isEmpty) return;
+    final sourceSessionId = currentSessionId ?? '';
     final sourceTitle =
         chatSessions
             .firstWhereOrNull((s) => s.id == currentSessionId)
@@ -115,6 +116,8 @@ class SessionManager {
           : sourceTitle;
       chatSessions[sessionIndex] = chatSessions[sessionIndex].copyWith(
         title: '分支 · ${base.length > 14 ? base.substring(0, 14) : base}',
+        parentId: sourceSessionId,
+        branchedAtIndex: index,
       );
       prefs?.saveChatSessions(chatSessions);
     }
@@ -180,6 +183,8 @@ class SessionManager {
       updatedAt: DateTime.now().millisecondsSinceEpoch,
       messages: messages.map((m) => m.copy()).toList(),
       pinned: existing?.pinned ?? false,
+      parentId: existing?.parentId ?? '',
+      branchedAtIndex: existing?.branchedAtIndex ?? -1,
     );
     final index = chatSessions.indexWhere((s) => s.id == session.id);
     if (index >= 0) chatSessions.removeAt(index);

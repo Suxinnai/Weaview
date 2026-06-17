@@ -15,12 +15,18 @@ class SidebarOverlay extends StatelessWidget {
     required this.open,
     required this.onClose,
     required this.onSettings,
+    required this.onBranchGraph,
+    required this.onWorkBoard,
+    required this.onUsageStats,
   });
 
   final WeaviewState state;
   final bool open;
   final VoidCallback onClose;
   final VoidCallback onSettings;
+  final VoidCallback onBranchGraph;
+  final VoidCallback onWorkBoard;
+  final VoidCallback onUsageStats;
 
   @override
   Widget build(BuildContext context) {
@@ -139,6 +145,43 @@ class SidebarOverlay extends StatelessWidget {
                             },
                             icon: const Icon(Icons.add_rounded, size: 19),
                             label: const Text('新的织梦'),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _SidebarModeButton(
+                                      state: state,
+                                      icon: Icons.account_tree_outlined,
+                                      label: '分支图谱',
+                                      onTap: onBranchGraph,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: _SidebarModeButton(
+                                      state: state,
+                                      icon: Icons.dashboard_customize_outlined,
+                                      label: '编织板',
+                                      onTap: onWorkBoard,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
+                              _SidebarModeButton(
+                                state: state,
+                                icon: Icons.payments_outlined,
+                                label:
+                                    '用量统计 · ${_formatSidebarCost(state.totalEstimatedCostUsd)}',
+                                compact: true,
+                                onTap: onUsageStats,
+                              ),
+                            ],
                           ),
                         ),
                         Expanded(
@@ -401,4 +444,91 @@ class SidebarOverlay extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SidebarModeButton extends StatelessWidget {
+  const _SidebarModeButton({
+    required this.state,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.compact = false,
+  });
+
+  final WeaviewState state;
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: state.text(context).withValues(alpha: 0.055),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            child: compact
+                ? Row(
+                    children: [
+                      Icon(
+                        icon,
+                        size: 18,
+                        color: state.accents[0].withValues(alpha: 0.82),
+                      ),
+                      const SizedBox(width: 9),
+                      Expanded(
+                        child: Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: state.textStyle(
+                            context,
+                            size: 12,
+                            weight: FontWeight.w700,
+                            opacity: 0.78,
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        icon,
+                        size: 19,
+                        color: state.text(context).withValues(alpha: 0.66),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: state.textStyle(
+                          context,
+                          size: 11.5,
+                          weight: FontWeight.w600,
+                          opacity: 0.72,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _formatSidebarCost(double value) {
+  if (value <= 0) return r'$0';
+  if (value < 0.01) return '\$${value.toStringAsFixed(4)}';
+  if (value < 1) return '\$${value.toStringAsFixed(3)}';
+  return '\$${value.toStringAsFixed(2)}';
 }

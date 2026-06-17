@@ -484,7 +484,23 @@ extension SettingsTabs on SettingsSheetState {
     final providerBytes = utf8
         .encode(jsonEncode(state.providers.map((p) => p.safeJson()).toList()))
         .length;
-    final memoryBytes = utf8.encode(jsonEncode(state.memories)).length;
+    final memoryBytes = utf8
+        .encode(
+          jsonEncode(state.memoryItems.map((item) => item.toJson()).toList()),
+        )
+        .length;
+    final workCardBytes = utf8
+        .encode(
+          jsonEncode(state.workCards.map((item) => item.toJson()).toList()),
+        )
+        .length;
+    final tokenUsageBytes = utf8
+        .encode(
+          jsonEncode(
+            state.tokenUsageRecords.map((item) => item.toJson()).toList(),
+          ),
+        )
+        .length;
     final configBytes = utf8
         .encode(
           jsonEncode({
@@ -505,7 +521,13 @@ extension SettingsTabs on SettingsSheetState {
           }),
         )
         .length;
-    final total = sessionBytes + providerBytes + memoryBytes + configBytes;
+    final total =
+        sessionBytes +
+        providerBytes +
+        memoryBytes +
+        workCardBytes +
+        tokenUsageBytes +
+        configBytes;
     int segmentFlex(int bytes) {
       if (total <= 0) return 1;
       return math.max((bytes / total * 100).round(), 1);
@@ -556,6 +578,14 @@ extension SettingsTabs on SettingsSheetState {
                       child: Container(color: state.accents[0]),
                     ),
                     Expanded(
+                      flex: segmentFlex(workCardBytes),
+                      child: Container(color: Colors.teal),
+                    ),
+                    Expanded(
+                      flex: segmentFlex(tokenUsageBytes),
+                      child: Container(color: Colors.indigo),
+                    ),
+                    Expanded(
                       flex: segmentFlex(providerBytes),
                       child: Container(color: Colors.purple),
                     ),
@@ -583,6 +613,22 @@ extension SettingsTabs on SettingsSheetState {
               color: state.accents[0],
               bytes: memoryBytes,
               ratio: total == 0 ? 0 : memoryBytes / total,
+            ),
+            StorageRow(
+              state: state,
+              label: '作品卡与编织板',
+              description: '可复用作品片段、来源会话和置顶状态',
+              color: Colors.teal,
+              bytes: workCardBytes,
+              ratio: total == 0 ? 0 : workCardBytes / total,
+            ),
+            StorageRow(
+              state: state,
+              label: 'Token 用量统计',
+              description: '本地估算 token、调用来源和花费记录',
+              color: Colors.indigo,
+              bytes: tokenUsageBytes,
+              ratio: total == 0 ? 0 : tokenUsageBytes / total,
             ),
             StorageRow(
               state: state,
@@ -621,6 +667,18 @@ extension SettingsTabs on SettingsSheetState {
               icon: Icons.auto_awesome_rounded,
               title: '记忆与画像',
               body: '用于个性化回复的长期记忆、人物画像和相关开关状态。',
+            ),
+            _DataInfoLine(
+              state: state,
+              icon: Icons.dashboard_customize_outlined,
+              title: '作品卡与编织板',
+              body: '保存从对话沉淀的作品卡、来源会话、作品类型和置顶状态。',
+            ),
+            _DataInfoLine(
+              state: state,
+              icon: Icons.payments_outlined,
+              title: 'Token 用量统计',
+              body: '保存本地估算的输入/输出 token、调用来源、模型和美元花费。',
             ),
             _DataInfoLine(
               state: state,
@@ -700,7 +758,7 @@ extension SettingsTabs on SettingsSheetState {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '清空所有本地数据会删除对话记录、记忆数据、应用配置、提供商和模型分配。操作前请先导出备份。',
+              '清空所有本地数据会删除对话记录、记忆数据、作品卡、Token 用量统计、应用配置、提供商和模型分配。操作前请先导出备份。',
               style: state.textStyle(
                 context,
                 size: 13,

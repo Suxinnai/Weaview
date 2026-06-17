@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:weaview_flutter/src/app/app_version.dart';
+import 'package:weaview_flutter/src/app/services/personalization_service.dart';
 import 'package:weaview_flutter/src/app/weaview_app.dart';
 import 'package:weaview_flutter/src/app/weaview_state.dart';
 import 'package:weaview_flutter/src/core/app_utils.dart';
@@ -14,6 +15,7 @@ import 'package:weaview_flutter/src/domain/models.dart';
 import 'package:weaview_flutter/src/features/chat/chat_home.dart';
 import 'package:weaview_flutter/src/features/chat/sections/chat_input_dock.dart';
 import 'package:weaview_flutter/src/features/chat/sections/chat_model_dropdown.dart';
+import 'package:weaview_flutter/src/features/chat/workspace_overlays.dart';
 import 'package:weaview_flutter/src/features/settings/settings_sheet.dart';
 
 void main() {
@@ -208,6 +210,238 @@ $$E = mc^2$$
     await state.load();
 
     expect(state.memories, isEmpty);
+    state.dispose();
+  });
+
+  test('loads legacy string memories into structured memory items', () async {
+    SharedPreferences.setMockInitialValues({
+      'ai_memories': ['偏好简洁回复'],
+    });
+    final state = WeaviewState();
+
+    await state.load();
+
+    expect(state.memoryItems, hasLength(1));
+    final item = state.memoryItems.single;
+    expect(item.content, '偏好简洁回复');
+    expect(item.enabled, isTrue);
+    expect(item.source, '旧版记忆');
+    expect(state.memories, contains('偏好简洁回复'));
+    state.dispose();
+  });
+
+  test('exports structured memory cards with legacy compatibility', () async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+
+    await state.load();
+    state.addMemory('偏好简洁回复');
+    final id = state.memoryItems.single.id;
+    state.toggleMemoryPinned(id);
+    state.setMemoryEnabled(id, false);
+
+    final exported = jsonDecode(state.exportJson()) as Map<String, dynamic>;
+    final memoryItems = exported['ai_memory_items'] as List<dynamic>;
+    final legacyMemories = exported['ai_memories'] as List<dynamic>;
+
+    expect(legacyMemories, contains('偏好简洁回复'));
+    expect(memoryItems, hasLength(1));
+    final memory = memoryItems.single as Map<String, dynamic>;
+    expect(memory['content'], '偏好简洁回复');
+    expect(memory['pinned'], isTrue);
+    expect(memory['enabled'], isFalse);
+    expect(memory['source'], '手动添加');
+    state.dispose();
+  });
+
+  test('model comparison messages survive JSON roundtrip', () {
+    final message = ChatMessage.modelComparison(
+      results: const [
+        ModelComparisonResult(
+          id: 'comparison_openai',
+          provider: 'OpenAI',
+          model: 'gpt-test',
+          content: '第一版回答',
+          elapsedMs: 120,
+        ),
+        ModelComparisonResult(
+          id: 'comparison_deepseek',
+          provider: 'DeepSeek',
+          model: 'deepseek-test',
+          error: '模型不可用',
+          loading: false,
+          elapsedMs: 240,
+        ),
+      ],
+    );
+
+    final restored = ChatMessage.fromJson(message.toJson());
+
+    expect(restored.isModelComparison, isTrue);
+    expect(restored.comparisonResults, hasLength(2));
+    expect(restored.comparisonResults.first.provider, 'OpenAI');
+    expect(restored.comparisonResults.first.content, '第一版回答');
+    expect(restored.comparisonResults.last.error, '模型不可用');
+  });
+
+  test('saves comparison replies as exportable work cards', () async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+
+    await state.load();
+    state.currentSessionId = 'session_root';
+    state.messages
+      ..add(ChatMessage.user('写一个发布文案'))
+      ..add(
+        ChatMessage.modelComparison(
+          results: const [
+            ModelComparisonResult(
+              id: 'comparison_openai',
+              provider: 'OpenAI',
+              model: 'gpt-test',
+              content: '开放版文案',
+              elapsedMs: 100,
+            ),
+            ModelComparisonResult(
+              id: 'comparison_kimi',
+              provider: 'Kimi',
+              model: 'kimi-test',
+              content: '克制版文案',
+              elapsedMs: 150,
+            ),
+          ],
+        ),
+      );
+
+    state.createWorkCardFromMessage(1);
+
+    expect(state.workCards, hasLength(1));
+    expect(state.workCards.single.kind, 'comparison');
+    expect(state.workCards.single.sourceSessionTitle, '写一个发布文案');
+    expect(state.workCards.single.body, contains('[OpenAI/gpt-test]'));
+    expect(state.workCards.single.body, contains('克制版文案'));
+
+    final exported = jsonDecode(state.exportJson()) as Map<String, dynamic>;
+    final cards = exported['work_cards'] as List<dynamic>;
+    expect(cards, hasLength(1));
+    expect(cards.single, isA<Map<String, dynamic>>());
+    state.dispose();
+  });
+
+  test('exports and clears token usage records', () async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+
+    await state.load();
+    state.tokenUsageRecords = [
+      TokenUsageRecord.create(
+        provider: 'OpenAI',
+        model: 'gpt-test',
+        source: 'chat',
+        sessionId: 'session_usage',
+        promptTokens: 100,
+        completionTokens: 40,
+        estimatedCostUsd: 0.0009,
+      ),
+    ];
+
+    final exported = jsonDecode(state.exportJson()) as Map<String, dynamic>;
+    final usage = exported['token_usage_records'] as List<dynamic>;
+    expect(usage, hasLength(1));
+    expect(usage.single, isA<Map<String, dynamic>>());
+    expect(state.totalTokenUsage, 140);
+    expect(state.totalEstimatedCostUsd, closeTo(0.0009, 0.00001));
+
+    state.clearTokenUsageRecords();
+
+    expect(state.tokenUsageRecords, isEmpty);
+    state.dispose();
+  });
+
+  testWidgets('usage statistics overlay renders token and cost summary', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+
+    await state.load();
+    state.tokenUsageRecords = [
+      TokenUsageRecord.create(
+        provider: 'OpenAI',
+        model: 'gpt-test',
+        source: 'comparison',
+        sessionId: 'session_usage',
+        promptTokens: 1200,
+        completionTokens: 300,
+        estimatedCostUsd: 0.0042,
+      ),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Stack(
+            children: [
+              UsageStatsOverlay(state: state, open: true, onClose: () {}),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('用量统计'), findsOneWidget);
+    expect(find.text('累计 token'), findsOneWidget);
+    expect(find.text('多模型对照'), findsOneWidget);
+    expect(find.text('OpenAI · gpt-test'), findsWidgets);
+    state.dispose();
+  });
+
+  test('disabled memories stay out of the system prompt', () {
+    final service = PersonalizationService();
+    service.memories = ['保留偏好', '隐藏记忆'];
+    final hiddenId = service.memoryItems.last.id;
+    service.setMemoryEnabled(hiddenId, false, null);
+
+    final prompt = service.expandedSystemPrompt(
+      chatSessions: const [],
+      searchConfig: const SearchConfig(active: 'tavily', keys: {}),
+      appearanceDirective: '',
+    );
+
+    expect(prompt, contains('保留偏好'));
+    expect(prompt, isNot(contains('隐藏记忆')));
+  });
+
+  testWidgets('memory management shows structured memory metadata', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'ai_memories': ['偏好简洁回复'],
+    });
+    final state = WeaviewState();
+
+    await state.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsSheet(
+          state: state,
+          open: true,
+          onClose: () {},
+          onPickAvatar: (_) async {},
+          showSnack: (_) {},
+        ),
+      ),
+    );
+
+    final memoryEntry = find.text('记忆管理');
+    await tester.ensureVisible(memoryEntry);
+    await tester.pumpAndSettle();
+    await tester.tap(memoryEntry);
+    await tester.pumpAndSettle();
+
+    expect(find.text('偏好简洁回复'), findsOneWidget);
+    expect(find.text('旧版记忆'), findsOneWidget);
+    expect(find.text('参与上下文'), findsOneWidget);
     state.dispose();
   });
 
@@ -749,10 +983,12 @@ $$E = mc^2$$
             inputFocusNode: focusNode,
             webSearchEnabled: false,
             imageGenerationMode: false,
+            comparisonMode: false,
             dockExpanded: false,
             pendingAttachments: const [],
             onToggleExpanded: () {},
             onToggleWebSearch: () {},
+            onToggleComparison: () {},
             onSubmit: () async {},
             onPickChatImages: () async {},
             onPickChatFiles: () async {},
@@ -853,6 +1089,135 @@ $$E = mc^2$$
     state.dispose();
   });
 
+  testWidgets('setting a provider as current survives returning to list', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+
+    await state.load();
+    final defaults = AiProvider.defaults();
+    state.saveProviders([
+      defaults
+          .firstWhere((p) => p.name == 'OpenAI')
+          .copyWith(
+            apiKey: 'openai-key',
+            status: '已连接',
+            current: false,
+            models: const [
+              AiModel(id: 'gpt-test', name: 'gpt-test', capabilities: ['chat']),
+            ],
+          ),
+      defaults
+          .firstWhere((p) => p.name == 'DeepSeek')
+          .copyWith(
+            apiKey: 'deep-key',
+            status: '使用中',
+            current: true,
+            models: const [
+              AiModel(
+                id: 'deepseek-test',
+                name: 'deepseek-test',
+                capabilities: ['chat'],
+              ),
+            ],
+          ),
+    ]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsSheet(
+          state: state,
+          open: true,
+          onClose: () {},
+          onPickAvatar: (_) async {},
+          showSnack: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('提供商'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OpenAI').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('设为当前'));
+    await tester.pumpAndSettle();
+
+    final openai = state.providers.firstWhere((p) => p.name == 'OpenAI');
+    final deepSeek = state.providers.firstWhere((p) => p.name == 'DeepSeek');
+    expect(openai.enabled, isTrue);
+    expect(openai.current, isTrue);
+    expect(openai.status, '使用中');
+    expect(deepSeek.current, isFalse);
+    state.dispose();
+  });
+
+  testWidgets('disabling current provider from detail clears assignments', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+
+    await state.load();
+    final defaults = AiProvider.defaults();
+    state.saveProviders([
+      defaults
+          .firstWhere((p) => p.name == 'OpenAI')
+          .copyWith(
+            apiKey: 'openai-key',
+            status: '使用中',
+            current: true,
+            models: const [
+              AiModel(id: 'gpt-test', name: 'gpt-test', capabilities: ['chat']),
+            ],
+          ),
+      defaults
+          .firstWhere((p) => p.name == 'DeepSeek')
+          .copyWith(
+            apiKey: 'deep-key',
+            status: '已连接',
+            current: false,
+            models: const [
+              AiModel(
+                id: 'deepseek-test',
+                name: 'deepseek-test',
+                capabilities: ['chat'],
+              ),
+            ],
+          ),
+    ]);
+    state.saveModelAssignment(
+      'chat',
+      const ModelAssignment(provider: 'OpenAI', model: 'gpt-test', prompt: ''),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsSheet(
+          state: state,
+          open: true,
+          onClose: () {},
+          onPickAvatar: (_) async {},
+          showSnack: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('提供商'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OpenAI').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('禁用当前'));
+    await tester.pumpAndSettle();
+
+    final openai = state.providers.firstWhere((p) => p.name == 'OpenAI');
+    final deepSeek = state.providers.firstWhere((p) => p.name == 'DeepSeek');
+    expect(openai.enabled, isFalse);
+    expect(openai.current, isFalse);
+    expect(openai.status, '已禁用');
+    expect(deepSeek.current, isTrue);
+    expect(state.modelAssignments['chat']?.provider, isEmpty);
+    state.dispose();
+  });
+
   test('creates conversation branch from selected message', () async {
     SharedPreferences.setMockInitialValues({});
     final state = WeaviewState();
@@ -868,6 +1233,36 @@ $$E = mc^2$$
     expect(state.currentSessionId, startsWith('branch_'));
     expect(state.messages, hasLength(2));
     expect(state.chatSessions.first.title, startsWith('分支'));
+    state.dispose();
+  });
+
+  test('conversation branches keep parent graph metadata', () async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+
+    await state.load();
+    state.currentSessionId = 'session_root';
+    state.messages
+      ..add(ChatMessage.user('根问题'))
+      ..add(ChatMessage.model('根回答'))
+      ..add(ChatMessage.user('继续追问'));
+    state.chatSessions.add(
+      ChatSession(
+        id: 'session_root',
+        title: '根会话',
+        updatedAt: 1,
+        messages: state.messages.map((message) => message.copy()).toList(),
+      ),
+    );
+
+    state.createBranchAt(1);
+
+    final branch = state.chatSessions.firstWhere(
+      (session) => session.id == state.currentSessionId,
+    );
+    expect(branch.parentId, 'session_root');
+    expect(branch.branchedAtIndex, 1);
+    expect(branch.messages, hasLength(2));
     state.dispose();
   });
 

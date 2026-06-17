@@ -82,17 +82,21 @@ class ToolChip extends StatelessWidget {
     required this.label,
     required this.state,
     required this.onTap,
+    this.selected = false,
   });
 
   final IconData icon;
   final String label;
   final WeaviewState state;
   final VoidCallback onTap;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: state.text(context).withValues(alpha: 0.055),
+      color: selected
+          ? state.accents[0].withValues(alpha: 0.16)
+          : state.text(context).withValues(alpha: 0.055),
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -105,7 +109,9 @@ class ToolChip extends StatelessWidget {
               Icon(
                 icon,
                 size: 18,
-                color: state.text(context).withValues(alpha: 0.7),
+                color: selected
+                    ? state.accents[0]
+                    : state.text(context).withValues(alpha: 0.7),
               ),
               const SizedBox(width: 10),
               Text(
@@ -114,7 +120,7 @@ class ToolChip extends StatelessWidget {
                   context,
                   size: 13,
                   weight: FontWeight.w600,
-                  opacity: 0.82,
+                  opacity: selected ? 1 : 0.82,
                 ),
               ),
             ],

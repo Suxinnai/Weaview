@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/app_utils.dart';
 import '../core/zip_writer.dart';
 import '../data/ai/ai_gateway.dart';
 import '../data/ai/image_tool_call_parser.dart';
@@ -32,18 +33,43 @@ class _PreparedImageRequest {
   final String size;
 }
 
+class _ComparisonTarget {
+  const _ComparisonTarget({required this.provider, required this.assignment});
+
+  final AiProvider provider;
+  final ModelAssignment assignment;
+}
+
+class _TokenPricing {
+  const _TokenPricing({
+    required this.inputPerMillionUsd,
+    required this.outputPerMillionUsd,
+  });
+
+  final double inputPerMillionUsd;
+  final double outputPerMillionUsd;
+}
+
 class BackupImportResult {
   const BackupImportResult({
     required this.sessions,
     required this.memories,
     required this.providers,
+    this.workCards = 0,
+    this.tokenUsageRecords = 0,
   });
 
   final int sessions;
   final int memories;
   final int providers;
+  final int workCards;
+  final int tokenUsageRecords;
 
-  String get summary => '已合并 $sessions 个会话、$memories 条记忆、$providers 个提供商。';
+  String get summary {
+    final cardText = workCards > 0 ? '、$workCards 张作品卡' : '';
+    final usageText = tokenUsageRecords > 0 ? '、$tokenUsageRecords 条用量记录' : '';
+    return '已合并 $sessions 个会话、$memories 条记忆、$providers 个提供商$cardText$usageText。';
+  }
 }
 
 class WeaviewState extends ChangeNotifier {
@@ -75,6 +101,8 @@ class WeaviewState extends ChangeNotifier {
   // Chat state
   final List<ChatMessage> messages = [];
   List<String> suggestions = [];
+  List<WorkCard> workCards = [];
+  List<TokenUsageRecord> tokenUsageRecords = [];
 
   List<Color> accents = const [accentMint, accentGreen];
 
@@ -128,11 +156,39 @@ class WeaviewState extends ChangeNotifier {
   set userProfile(String v) => _personal.userProfile = v;
   List<String> get memories => _personal.memories;
   set memories(List<String> v) => _personal.memories = v;
+  List<MemoryItem> get memoryItems => _personal.sortedMemoryItems;
+  set memoryItems(List<MemoryItem> v) => _personal.memoryItems = v;
 
   // Sessions
   List<ChatSession> get chatSessions => _sessions.chatSessions;
   String? get currentSessionId => _sessions.currentSessionId;
   set currentSessionId(String? v) => _sessions.currentSessionId = v;
+  String get currentSessionTitle =>
+      chatSessions
+          .firstWhereOrNull((session) => session.id == currentSessionId)
+          ?.title ??
+      '';
+
+  List<WorkCard> get sortedWorkCards {
+    final cards = [...workCards];
+    cards.sort((a, b) {
+      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
+    return cards;
+  }
+
+  List<TokenUsageRecord> get sortedTokenUsageRecords {
+    final records = [...tokenUsageRecords];
+    records.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return records;
+  }
+
+  int get totalTokenUsage =>
+      tokenUsageRecords.fold(0, (sum, record) => sum + record.totalTokens);
+
+  double get totalEstimatedCostUsd =>
+      tokenUsageRecords.fold(0, (sum, record) => sum + record.estimatedCostUsd);
 
   // Providers / config
   List<AiProvider> get providers => _providers.providers;
@@ -187,6 +243,8 @@ class WeaviewState extends ChangeNotifier {
       prefs.loadChatSessions(),
     );
     _sessions.load(savedSessions);
+    workCards = prefs.loadWorkCards();
+    tokenUsageRecords = prefs.loadTokenUsageRecords();
 
     _providers.load(prefs);
 
@@ -310,9 +368,252 @@ class WeaviewState extends ChangeNotifier {
     notifyListeners();
   }
 
+  void deleteMemoryById(String id) {
+    _personal.deleteMemoryById(id, _prefs);
+    notifyListeners();
+  }
+
+  void setMemoryEnabled(String id, bool value) {
+    _personal.setMemoryEnabled(id, value, _prefs);
+    notifyListeners();
+  }
+
+  void toggleMemoryPinned(String id) {
+    _personal.toggleMemoryPinned(id, _prefs);
+    notifyListeners();
+  }
+
   void clearMemories() {
     _personal.clearMemories(_prefs);
     notifyListeners();
+  }
+
+  void saveWorkCard(WorkCard card) {
+    final key = card.id;
+    final existingIndex = workCards.indexWhere((item) => item.id == key);
+    if (existingIndex >= 0) {
+      workCards[existingIndex] = card.copyWith(touch: true);
+    } else {
+      workCards = [card, ...workCards];
+    }
+    _prefs?.saveWorkCards(workCards);
+    notifyListeners();
+  }
+
+  void toggleWorkCardPinned(String id) {
+    workCards = [
+      for (final card in workCards)
+        if (card.id == id)
+          card.copyWith(pinned: !card.pinned, touch: true)
+        else
+          card,
+    ];
+    _prefs?.saveWorkCards(workCards);
+    notifyListeners();
+  }
+
+  void deleteWorkCard(String id) {
+    workCards = [
+      for (final card in workCards)
+        if (card.id != id) card,
+    ];
+    _prefs?.saveWorkCards(workCards);
+    notifyListeners();
+  }
+
+  void createWorkCardFromMessage(int index) {
+    if (index < 0 || index >= messages.length) return;
+    final message = messages[index];
+    final body = [
+      if (message.content.trim().isNotEmpty) message.content.trim(),
+      if (message.comparisonResults.isNotEmpty)
+        for (final result in message.comparisonResults)
+          if (result.content.trim().isNotEmpty)
+            '[${result.provider}/${result.model}]\n${result.content.trim()}',
+    ].join('\n\n');
+    if (body.trim().isEmpty) return;
+    final sourceMessageIndex = messages
+        .take(index)
+        .toList()
+        .lastIndexWhere((item) => item.role == 'user');
+    final sourceTitle = sourceMessageIndex >= 0
+        ? messages[sourceMessageIndex].content.trim()
+        : currentSessionTitle;
+    final title = body.trim().split(RegExp(r'\r?\n')).first.trim();
+    saveWorkCard(
+      WorkCard.create(
+        title: title.isEmpty ? '未命名作品' : title,
+        body: body,
+        kind: message.isModelComparison ? 'comparison' : 'text',
+        sourceSessionId: currentSessionId ?? '',
+        sourceSessionTitle: sourceTitle,
+      ),
+    );
+  }
+
+  void clearTokenUsageRecords() {
+    tokenUsageRecords = [];
+    _prefs?.saveTokenUsageRecords(tokenUsageRecords);
+    notifyListeners();
+  }
+
+  void _recordTokenUsage({
+    required AiProvider provider,
+    required ModelAssignment assignment,
+    required List<ChatMessage> promptMessages,
+    required String systemInstruction,
+    required String outputText,
+    required String source,
+    String? sessionId,
+  }) {
+    final promptTokens = _estimateTokensForPrompt(
+      promptMessages,
+      systemInstruction,
+    );
+    final completionTokens = _estimateTokensForText(outputText);
+    if (promptTokens <= 0 && completionTokens <= 0) return;
+    final pricing = _pricingFor(provider.name, assignment.model);
+    final cost =
+        (promptTokens * pricing.inputPerMillionUsd +
+            completionTokens * pricing.outputPerMillionUsd) /
+        1000000;
+    final record = TokenUsageRecord.create(
+      provider: provider.name,
+      model: assignment.model.trim().isEmpty
+          ? provider.models.firstOrNull?.id ?? ''
+          : assignment.model,
+      source: source,
+      sessionId: sessionId ?? currentSessionId ?? '',
+      promptTokens: promptTokens,
+      completionTokens: completionTokens,
+      estimatedCostUsd: cost,
+    );
+    tokenUsageRecords = [record, ...tokenUsageRecords].take(1000).toList();
+    _prefs?.saveTokenUsageRecords(tokenUsageRecords);
+  }
+
+  int _estimateTokensForPrompt(
+    List<ChatMessage> promptMessages,
+    String systemInstruction,
+  ) {
+    var total = _estimateTokensForText(systemInstruction);
+    for (final message in promptMessages) {
+      total += 4;
+      total += _estimateTokensForText(message.content);
+      total += _estimateTokensForText(message.reasoning);
+      for (final attachment in message.attachments) {
+        total += attachment.isImage ? 85 : 24;
+        total += _estimateTokensForText(attachment.name);
+      }
+    }
+    return total;
+  }
+
+  int _estimateTokensForText(String value) {
+    final text = value.trim();
+    if (text.isEmpty) return 0;
+    var tokens = 0;
+    var asciiRun = 0;
+
+    void flushAscii() {
+      if (asciiRun <= 0) return;
+      tokens += (asciiRun / 4).ceil();
+      asciiRun = 0;
+    }
+
+    for (final rune in text.runes) {
+      if (_isWhitespaceRune(rune)) {
+        flushAscii();
+        continue;
+      }
+      if (_isAsciiRune(rune)) {
+        asciiRun++;
+        continue;
+      }
+      flushAscii();
+      tokens += _isCjkRune(rune) ? 1 : 2;
+    }
+    flushAscii();
+    return tokens;
+  }
+
+  bool _isWhitespaceRune(int rune) =>
+      rune == 0x20 || rune == 0x0A || rune == 0x0D || rune == 0x09;
+
+  bool _isAsciiRune(int rune) => rune >= 0x20 && rune <= 0x7E;
+
+  bool _isCjkRune(int rune) =>
+      (rune >= 0x3400 && rune <= 0x9FFF) ||
+      (rune >= 0xF900 && rune <= 0xFAFF) ||
+      (rune >= 0x20000 && rune <= 0x2A6DF);
+
+  _TokenPricing _pricingFor(String provider, String model) {
+    final providerKey = provider.toLowerCase();
+    final modelKey = model.toLowerCase();
+    if (providerKey.contains('deepseek') || modelKey.contains('deepseek')) {
+      return const _TokenPricing(
+        inputPerMillionUsd: 0.27,
+        outputPerMillionUsd: 1.10,
+      );
+    }
+    if (providerKey.contains('gemini') || modelKey.contains('gemini')) {
+      if (modelKey.contains('flash')) {
+        return const _TokenPricing(
+          inputPerMillionUsd: 0.10,
+          outputPerMillionUsd: 0.40,
+        );
+      }
+      return const _TokenPricing(
+        inputPerMillionUsd: 1.25,
+        outputPerMillionUsd: 5,
+      );
+    }
+    if (providerKey.contains('kimi') || modelKey.contains('moonshot')) {
+      return const _TokenPricing(
+        inputPerMillionUsd: 0.42,
+        outputPerMillionUsd: 0.42,
+      );
+    }
+    if (providerKey.contains('anthropic') || modelKey.contains('claude')) {
+      if (modelKey.contains('haiku')) {
+        return const _TokenPricing(
+          inputPerMillionUsd: 0.80,
+          outputPerMillionUsd: 4,
+        );
+      }
+      if (modelKey.contains('sonnet')) {
+        return const _TokenPricing(
+          inputPerMillionUsd: 3,
+          outputPerMillionUsd: 15,
+        );
+      }
+      return const _TokenPricing(
+        inputPerMillionUsd: 15,
+        outputPerMillionUsd: 75,
+      );
+    }
+    if (modelKey.contains('4o-mini')) {
+      return const _TokenPricing(
+        inputPerMillionUsd: 0.15,
+        outputPerMillionUsd: 0.60,
+      );
+    }
+    if (modelKey.contains('4o') || modelKey.contains('4.1')) {
+      return const _TokenPricing(
+        inputPerMillionUsd: 2.50,
+        outputPerMillionUsd: 10,
+      );
+    }
+    if (modelKey.startsWith('o3') || modelKey.startsWith('o4')) {
+      return const _TokenPricing(
+        inputPerMillionUsd: 1.10,
+        outputPerMillionUsd: 4.40,
+      );
+    }
+    return const _TokenPricing(
+      inputPerMillionUsd: 0.50,
+      outputPerMillionUsd: 1.50,
+    );
   }
 
   Future<void> completeUserProfileWithToolModel() async {
@@ -625,6 +926,17 @@ class WeaviewState extends ChangeNotifier {
         flush(force: true);
         return;
       }
+      _recordTokenUsage(
+        provider: chatProvider,
+        assignment: chatAssignment,
+        promptMessages: conversation,
+        systemInstruction: prompt,
+        outputText: rawTargetContent.trim().isEmpty
+            ? '$targetReasoning\n$targetContent'
+            : rawTargetContent,
+        source: useWebSearch ? 'chat_web' : 'chat',
+        sessionId: taskSessionId,
+      );
       final imageToolCall = parseImageToolCall(rawTargetContent);
       if (imageToolCall != null) {
         _mutateModelMessageInSession(
@@ -708,6 +1020,141 @@ class WeaviewState extends ChangeNotifier {
         _cancelStreamRequested = false;
         _persistSessionMessages(taskSessionId);
         notifyListeners();
+      }
+    }
+  }
+
+  Future<void> submitModelComparison(
+    String value, {
+    List<MessageAttachment> attachments = const [],
+  }) async {
+    final content = value.trim();
+    if ((content.isEmpty && attachments.isEmpty) || isStreaming) return;
+    _applyPromptAppearanceIntent(content);
+
+    final targets = _comparisonTargets().take(3).toList();
+    if (targets.length < 2) {
+      messages
+        ..add(ChatMessage.user(content, attachments: attachments))
+        ..add(
+          ChatMessage.model(
+            '至少需要配置 2 个可用聊天模型，才能开启多模型对照。请在「设置 > 提供商」中启用模型并配置 API Key。',
+          ),
+        );
+      suggestions = [];
+      _persistCurrentSession();
+      notifyListeners();
+      return;
+    }
+
+    final conversation = [
+      ...messages,
+      ChatMessage.user(content, attachments: attachments),
+    ];
+    suggestions = [];
+    messages
+      ..clear()
+      ..addAll(conversation)
+      ..add(
+        ChatMessage.modelComparison(
+          results: [
+            for (final target in targets)
+              ModelComparisonResult.pending(
+                provider: target.provider.name,
+                model: target.assignment.model,
+              ),
+          ],
+        ),
+      );
+    isStreaming = true;
+    _cancelStreamRequested = false;
+    final runId = ++_streamRunId;
+    _persistCurrentSession();
+    final taskSessionId = currentSessionId;
+    final responseIndex = messages.length - 1;
+    notifyListeners();
+
+    final prompt = await _expandedSystemPrompt();
+    await Future.wait([
+      for (var i = 0; i < targets.length; i++)
+        () async {
+          final target = targets[i];
+          final started = DateTime.now();
+          try {
+            final raw = await AiGateway.generate(
+              messages: conversation,
+              systemInstruction: prompt,
+              provider: target.provider,
+              assignment: target.assignment,
+              onThemeUpdate: (_) {},
+            );
+            if (runId != _streamRunId || _cancelStreamRequested) return;
+            final content = stripImageToolCalls(raw).trim();
+            _recordTokenUsage(
+              provider: target.provider,
+              assignment: target.assignment,
+              promptMessages: conversation,
+              systemInstruction: prompt,
+              outputText: content,
+              source: 'comparison',
+              sessionId: taskSessionId,
+            );
+            _replaceComparisonResult(
+              sessionId: taskSessionId,
+              targetIndex: responseIndex,
+              resultIndex: i,
+              result: ModelComparisonResult(
+                id: ModelComparisonResult.pending(
+                  provider: target.provider.name,
+                  model: target.assignment.model,
+                ).id,
+                provider: target.provider.name,
+                model: target.assignment.model,
+                content: content,
+                elapsedMs: DateTime.now().difference(started).inMilliseconds,
+              ),
+            );
+          } catch (error) {
+            if (runId != _streamRunId || _cancelStreamRequested) return;
+            _replaceComparisonResult(
+              sessionId: taskSessionId,
+              targetIndex: responseIndex,
+              resultIndex: i,
+              result: ModelComparisonResult(
+                id: ModelComparisonResult.pending(
+                  provider: target.provider.name,
+                  model: target.assignment.model,
+                ).id,
+                provider: target.provider.name,
+                model: target.assignment.model,
+                error: error.toString().replaceFirst('Exception: ', ''),
+                elapsedMs: DateTime.now().difference(started).inMilliseconds,
+              ),
+            );
+          }
+        }(),
+    ]);
+
+    if (runId == _streamRunId) {
+      _mutateModelMessageInSession(
+        sessionId: taskSessionId,
+        targetIndex: responseIndex,
+        persist: true,
+        mutate: (current) {
+          current.isThinking = false;
+          current.comparisonResults = [
+            for (final result in current.comparisonResults)
+              result.copyWith(loading: false),
+          ];
+        },
+      );
+      isStreaming = false;
+      _cancelStreamRequested = false;
+      notifyListeners();
+      if (taskSessionId == currentSessionId) {
+        await _refreshCurrentSessionTitle();
+        await _refreshSuggestions();
+        unawaited(_refreshPersonalizationFromConversation());
       }
     }
   }
@@ -1522,6 +1969,88 @@ $prompt
     return true;
   }
 
+  void _replaceComparisonResult({
+    required String? sessionId,
+    required int? targetIndex,
+    required int resultIndex,
+    required ModelComparisonResult result,
+  }) {
+    _mutateModelMessageInSession(
+      sessionId: sessionId,
+      targetIndex: targetIndex,
+      persist: true,
+      mutate: (current) {
+        if (resultIndex < 0 ||
+            resultIndex >= current.comparisonResults.length) {
+          return;
+        }
+        final next = [...current.comparisonResults];
+        next[resultIndex] = result;
+        current.comparisonResults = next;
+        current.isThinking = next.any((item) => item.loading);
+      },
+    );
+  }
+
+  List<_ComparisonTarget> _comparisonTargets() {
+    final targets = <_ComparisonTarget>[];
+    final seen = <String>{};
+    final chatAssignment = modelAssignments['chat'];
+
+    void addTarget(AiProvider provider, AiModel model, {String? prompt}) {
+      if (!provider.enabled || provider.apiKey.trim().isEmpty) return;
+      if (_looksLikeImageModel(model)) return;
+      final modelId = model.id.trim().isEmpty ? model.name : model.id;
+      if (modelId.trim().isEmpty) return;
+      final key = '${provider.name.toLowerCase()}|${modelId.toLowerCase()}';
+      if (!seen.add(key)) return;
+      targets.add(
+        _ComparisonTarget(
+          provider: provider,
+          assignment: ModelAssignment(
+            provider: provider.name,
+            model: modelId,
+            prompt: prompt ?? chatAssignment?.prompt ?? '',
+          ),
+        ),
+      );
+    }
+
+    if (chatAssignment != null &&
+        chatAssignment.provider.trim().isNotEmpty &&
+        chatAssignment.model.trim().isNotEmpty) {
+      final provider = _providerForAssignment(chatAssignment);
+      final model = provider?.models.firstWhereOrNull(
+        (item) =>
+            item.id == chatAssignment.model ||
+            item.name == chatAssignment.model,
+      );
+      if (provider != null && model != null) {
+        addTarget(provider, model, prompt: chatAssignment.prompt);
+      }
+    }
+
+    final orderedProviders = [
+      ...providers.where((provider) => provider.current),
+      ...providers.where((provider) => !provider.current),
+    ];
+    for (final provider in orderedProviders) {
+      for (final model in provider.models) {
+        addTarget(provider, model);
+        if (targets.length >= 3) return targets;
+      }
+    }
+    return targets;
+  }
+
+  bool _looksLikeImageModel(AiModel model) {
+    return looksLikeImageGenerationModel(
+      id: model.id,
+      name: model.name,
+      capabilities: model.capabilities,
+    );
+  }
+
   void _persistSessionMessages(String? sessionId) {
     if (sessionId == null || sessionId == currentSessionId) {
       _persistCurrentSession();
@@ -1570,8 +2099,15 @@ $prompt
     if (messages.isNotEmpty && messages.last.role == 'model') {
       final current = messages.last;
       current.isThinking = false;
-      current.activity = '';
-      if (current.content.trim().isEmpty) {
+      if (current.isModelComparison) {
+        current.comparisonResults = [
+          for (final result in current.comparisonResults)
+            result.copyWith(loading: false),
+        ];
+      } else {
+        current.activity = '';
+      }
+      if (current.content.trim().isEmpty && !current.isModelComparison) {
         current.content = '已停止本次回复。';
       }
     }
@@ -1632,12 +2168,21 @@ $prompt
       return;
     }
     try {
+      final input =
+          '基于下面这段对话，给出3个用户可能继续追问的简短中文问题。每行一个，不要编号。\n\n${_compactConversation(messages)}';
       final raw = await AiGateway.generateRoleText(
         provider: provider!,
         assignment: assignment,
-        input:
-            '基于下面这段对话，给出3个用户可能继续追问的简短中文问题。每行一个，不要编号。\n\n${_compactConversation(messages)}',
+        input: input,
       ).timeout(roleRequestTimeout);
+      _recordTokenUsage(
+        provider: provider,
+        assignment: assignment,
+        promptMessages: [ChatMessage.user(input)],
+        systemInstruction: assignment.prompt,
+        outputText: raw,
+        source: 'suggest',
+      );
       suggestions = raw
           .split(RegExp(r'[\n\r]+'))
           .map(
@@ -1903,11 +2448,20 @@ $prompt
       roleLabel: '翻译模型',
     );
     if (configIssue != null) throw Exception(configIssue);
+    final input = '请将下面文本翻译成流畅自然的中文；如果原文已经是中文，则翻译成英文。\n\n$source';
     final translated = await AiGateway.generateRoleText(
       provider: provider!,
       assignment: assignment!,
-      input: '请将下面文本翻译成流畅自然的中文；如果原文已经是中文，则翻译成英文。\n\n$source',
+      input: input,
     ).timeout(roleRequestTimeout);
+    _recordTokenUsage(
+      provider: provider,
+      assignment: assignment,
+      promptMessages: [ChatMessage.user(input)],
+      systemInstruction: assignment.prompt,
+      outputText: translated,
+      source: 'translate',
+    );
     messages[index].translation = translated.trim();
     _persistCurrentSession();
     notifyListeners();
@@ -1923,6 +2477,11 @@ $prompt
         (key, value) => MapEntry(key, value.toJson()),
       ),
       'ai_memories': memories,
+      'ai_memory_items': memoryItems.map((item) => item.toJson()).toList(),
+      'work_cards': workCards.map((item) => item.toJson()).toList(),
+      'token_usage_records': tokenUsageRecords
+          .map((item) => item.toJson())
+          .toList(),
       'ai_search_config': searchConfig.safeJson(),
       'ai_active_tts_id': activeTtsId,
       'ai_tts_providers': ttsProviders.map((p) => p.safeJson()).toList(),
@@ -1983,19 +2542,40 @@ $prompt
       data['chat_sessions'],
       ChatSession.fromJson,
     );
-    final importedMemories = _decodeStringList(data['ai_memories']);
+    final importedMemoryItems = _decodeMemoryItems(
+      data['ai_memory_items'],
+      legacy: data['ai_memories'],
+    );
     final importedProviders = _decodeImportList(
       data['ai_providers'],
       AiProvider.fromJson,
     );
+    final importedWorkCards = _decodeImportList(
+      data['work_cards'],
+      WorkCard.fromJson,
+    );
+    final importedTokenUsageRecords = _decodeImportList(
+      data['token_usage_records'],
+      TokenUsageRecord.fromJson,
+    );
     final mergedSessions = _mergeSessions(chatSessions, importedSessions);
-    final mergedMemories = _mergeStrings(memories, importedMemories);
+    final mergedMemoryItems = _mergeMemoryItems(
+      memoryItems,
+      importedMemoryItems,
+    );
     final mergedProviders = _mergeProviders(providers, importedProviders);
+    final mergedWorkCards = _mergeWorkCards(workCards, importedWorkCards);
+    final mergedTokenUsageRecords = _mergeTokenUsageRecords(
+      tokenUsageRecords,
+      importedTokenUsageRecords,
+    );
 
     _sessions.chatSessions
       ..clear()
       ..addAll(mergedSessions);
-    memories = mergedMemories;
+    memoryItems = mergedMemoryItems;
+    workCards = mergedWorkCards;
+    tokenUsageRecords = mergedTokenUsageRecords;
     _providers.saveProviders(mergedProviders, _prefs);
 
     final importedAssignments = _decodeAssignments(
@@ -2034,14 +2614,18 @@ $prompt
     final prefs = _prefs;
     if (prefs != null) {
       prefs.saveChatSessions(chatSessions);
-      prefs.saveMemories(memories);
+      prefs.saveMemoryItems(memoryItems);
+      prefs.saveWorkCards(workCards);
+      prefs.saveTokenUsageRecords(tokenUsageRecords);
     }
     notifyListeners();
 
     return BackupImportResult(
       sessions: importedSessions.length,
-      memories: importedMemories.length,
+      memories: importedMemoryItems.length,
       providers: importedProviders.length,
+      workCards: importedWorkCards.length,
+      tokenUsageRecords: importedTokenUsageRecords.length,
     );
   }
 
@@ -2062,7 +2646,9 @@ $prompt
     userProfile = '';
     providers = AiProvider.defaults();
     modelAssignments = ModelAssignment.defaults();
-    memories = [];
+    memoryItems = [];
+    workCards = [];
+    tokenUsageRecords = [];
     searchConfig = const SearchConfig(active: 'tavily', keys: {});
     activeTtsId = '';
     ttsProviders = TtsProviderConfig.defaults();
@@ -2094,12 +2680,22 @@ $prompt
     return items;
   }
 
-  List<String> _decodeStringList(dynamic value) {
-    if (value is! List) return const [];
-    return value
-        .map((item) => item.toString().trim())
-        .where((item) => item.isNotEmpty)
-        .toList();
+  List<MemoryItem> _decodeMemoryItems(dynamic value, {dynamic legacy}) {
+    final source = value is List ? value : legacy;
+    if (source is! List) return const [];
+    final items = <MemoryItem>[];
+    for (final item in source) {
+      try {
+        final decoded = MemoryItem.fromJson(item);
+        if (decoded.content.trim().isNotEmpty) items.add(decoded);
+      } catch (_) {
+        final text = item.toString().trim();
+        if (text.isNotEmpty) {
+          items.add(MemoryItem.fromText(text, source: '导入记忆'));
+        }
+      }
+    }
+    return items;
   }
 
   Map<String, ModelAssignment> _decodeAssignments(dynamic value) {
@@ -2143,13 +2739,64 @@ $prompt
     return sessions;
   }
 
-  List<String> _mergeStrings(List<String> current, List<String> imported) {
-    final seen = <String>{};
-    return [
-      for (final item in [...current, ...imported])
-        if (seen.add(item.trim().toLowerCase()) && item.trim().isNotEmpty)
-          item.trim(),
-    ];
+  List<MemoryItem> _mergeMemoryItems(
+    List<MemoryItem> current,
+    List<MemoryItem> imported,
+  ) {
+    final byContent = {
+      for (final item in current) item.content.trim().toLowerCase(): item,
+    };
+    for (final item in imported) {
+      final key = item.content.trim().toLowerCase();
+      if (key.isEmpty) continue;
+      final existing = byContent[key];
+      if (existing == null || item.updatedAt >= existing.updatedAt) {
+        byContent[key] = item;
+      }
+    }
+    final items = byContent.values.toList()
+      ..sort((a, b) {
+        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+        return b.updatedAt.compareTo(a.updatedAt);
+      });
+    return items;
+  }
+
+  List<WorkCard> _mergeWorkCards(
+    List<WorkCard> current,
+    List<WorkCard> imported,
+  ) {
+    final byId = {for (final item in current) item.id: item};
+    for (final item in imported) {
+      if (item.body.trim().isEmpty) continue;
+      final existing = byId[item.id];
+      if (existing == null || item.updatedAt >= existing.updatedAt) {
+        byId[item.id] = item;
+      }
+    }
+    final items = byId.values.toList()
+      ..sort((a, b) {
+        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+        return b.updatedAt.compareTo(a.updatedAt);
+      });
+    return items;
+  }
+
+  List<TokenUsageRecord> _mergeTokenUsageRecords(
+    List<TokenUsageRecord> current,
+    List<TokenUsageRecord> imported,
+  ) {
+    final byId = {for (final item in current) item.id: item};
+    for (final item in imported) {
+      if (item.totalTokens <= 0) continue;
+      final existing = byId[item.id];
+      if (existing == null || item.createdAt >= existing.createdAt) {
+        byId[item.id] = item;
+      }
+    }
+    final items = byId.values.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return items.take(1000).toList();
   }
 
   List<AiProvider> _mergeProviders(

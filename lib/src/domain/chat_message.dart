@@ -1,4 +1,5 @@
 import 'message_attachment.dart';
+import 'model_comparison_result.dart';
 
 class ChatMessage {
   ChatMessage({
@@ -9,6 +10,7 @@ class ChatMessage {
     this.translation = '',
     this.isThinking = false,
     this.activity = '',
+    this.comparisonResults = const [],
   });
 
   factory ChatMessage.user(
@@ -29,6 +31,17 @@ class ChatMessage {
     activity: activity,
   );
 
+  factory ChatMessage.modelComparison({
+    required List<ModelComparisonResult> results,
+    bool isThinking = true,
+  }) => ChatMessage(
+    role: 'model',
+    content: '',
+    isThinking: isThinking,
+    activity: 'modelComparison',
+    comparisonResults: results,
+  );
+
   factory ChatMessage.fromJson(dynamic json) {
     final map = json as Map<String, dynamic>;
     return ChatMessage(
@@ -37,6 +50,9 @@ class ChatMessage {
       reasoning: map['reasoning']?.toString() ?? '',
       translation: map['translation']?.toString() ?? '',
       activity: map['activity']?.toString() ?? '',
+      comparisonResults: (map['comparisonResults'] as List? ?? [])
+          .map(ModelComparisonResult.fromJson)
+          .toList(),
       attachments: (map['attachments'] as List? ?? [])
           .map(MessageAttachment.fromJson)
           .toList(),
@@ -50,8 +66,10 @@ class ChatMessage {
   bool isThinking;
   String activity;
   List<MessageAttachment> attachments;
+  List<ModelComparisonResult> comparisonResults;
 
   bool get isImageGenerating => isThinking && activity == 'imageGeneration';
+  bool get isModelComparison => activity == 'modelComparison';
 
   ChatMessage copy() => ChatMessage(
     role: role,
@@ -60,6 +78,7 @@ class ChatMessage {
     translation: translation,
     isThinking: isThinking,
     activity: activity,
+    comparisonResults: comparisonResults,
     attachments: attachments.map((a) => a.copy()).toList(),
   );
 
@@ -69,6 +88,9 @@ class ChatMessage {
     'reasoning': reasoning,
     'translation': translation,
     'activity': activity,
+    'comparisonResults': comparisonResults
+        .map((item) => item.toJson())
+        .toList(),
     'attachments': attachments.map((a) => a.toJson()).toList(),
   };
 }

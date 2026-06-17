@@ -17,11 +17,31 @@ class PersonalizationService {
   String userName = '织梦者';
   String assistantName = '织境';
   String userProfile = '';
-  List<String> memories = [];
+  List<MemoryItem> memoryItems = [];
   bool profileRefreshInFlight = false;
   int lastProfileRefreshMessageCount = 0;
 
   bool get hasProfileDetails => _hasProfileDetails();
+
+  List<String> get memories => memoryItems.map((item) => item.content).toList();
+  set memories(List<String> values) {
+    memoryItems = _memoryItemsFromStrings(values, source: '导入记忆');
+  }
+
+  List<MemoryItem> get sortedMemoryItems {
+    final items = [...memoryItems];
+    items.sort((a, b) {
+      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
+      return b.updatedAt.compareTo(a.updatedAt);
+    });
+    return items;
+  }
+
+  List<MemoryItem> get activeMemoryItems =>
+      sortedMemoryItems.where((item) => item.enabled).toList();
+
+  List<String> get activeMemories =>
+      activeMemoryItems.map((item) => item.content).toList();
 
   void load(WeaviewPreferences prefs) {
     systemPrompt = prefs.systemPrompt;
@@ -33,7 +53,7 @@ class PersonalizationService {
     userName = prefs.userName;
     assistantName = prefs.assistantName;
     userProfile = prefs.userProfile;
-    memories = prefs.loadMemories();
+    memoryItems = prefs.loadMemoryItems();
   }
 
   void updateSystemPrompt(String value, WeaviewPreferences? prefs) {
@@ -108,21 +128,62 @@ class PersonalizationService {
   void addMemory(String value, WeaviewPreferences? prefs) {
     final trimmed = value.trim();
     if (trimmed.isEmpty) return;
-    memories = [trimmed, ...memories];
-    prefs?.saveMemories(memories);
+    final key = trimmed.toLowerCase();
+    final existingIndex = memoryItems.indexWhere(
+      (item) => item.content.trim().toLowerCase() == key,
+    );
+    final nextItem = existingIndex >= 0
+        ? memoryItems[existingIndex].copyWith(
+            content: trimmed,
+            enabled: true,
+            source: '手动添加',
+            touch: true,
+          )
+        : MemoryItem.manual(trimmed);
+    memoryItems = [
+      nextItem,
+      for (final item in memoryItems)
+        if (item.content.trim().toLowerCase() != key) item,
+    ];
+    prefs?.saveMemoryItems(memoryItems);
   }
 
   void deleteMemory(int index, WeaviewPreferences? prefs) {
-    memories = [
-      for (var i = 0; i < memories.length; i++)
-        if (i != index) memories[i],
+    final items = sortedMemoryItems;
+    if (index < 0 || index >= items.length) return;
+    deleteMemoryById(items[index].id, prefs);
+  }
+
+  void deleteMemoryById(String id, WeaviewPreferences? prefs) {
+    memoryItems = [
+      for (final item in memoryItems)
+        if (item.id != id) item,
     ];
-    prefs?.saveMemories(memories);
+    prefs?.saveMemoryItems(memoryItems);
+  }
+
+  void setMemoryEnabled(String id, bool value, WeaviewPreferences? prefs) {
+    memoryItems = [
+      for (final item in memoryItems)
+        if (item.id == id) item.copyWith(enabled: value, touch: true) else item,
+    ];
+    prefs?.saveMemoryItems(memoryItems);
+  }
+
+  void toggleMemoryPinned(String id, WeaviewPreferences? prefs) {
+    memoryItems = [
+      for (final item in memoryItems)
+        if (item.id == id)
+          item.copyWith(pinned: !item.pinned, touch: true)
+        else
+          item,
+    ];
+    prefs?.saveMemoryItems(memoryItems);
   }
 
   void clearMemories(WeaviewPreferences? prefs) {
-    memories = [];
-    prefs?.saveMemories(memories);
+    memoryItems = [];
+    prefs?.saveMemoryItems(memoryItems);
   }
 
   Future<void> completeUserProfileWithToolModel({
@@ -156,7 +217,7 @@ ${userProfile.trim().isEmpty ? '无' : userProfile.trim()}
 ${userName.trim().isEmpty ? '未明确' : userName.trim()}
 
 长期记忆：
-${memories.isEmpty ? '无' : memories.map((m) => '- $m').join('\n')}
+${_memoryLines(activeMemories)}
 
 最近对话：
 ${_compactConversation(messages.isNotEmpty ? messages : chatSessions.expand((s) => s.messages).take(20).toList())}
@@ -198,7 +259,7 @@ ${_compactConversation(messages.isNotEmpty ? messages : chatSessions.expand((s) 
 ${userProfile.trim().isEmpty ? '无' : userProfile.trim()}
 
 已有记忆：
-${memories.isEmpty ? '无' : memories.map((m) => '- $m').join('\n')}
+${_memoryLines(activeMemories)}
 
 最近对话：
 ${_compactConversation(messages.isNotEmpty ? messages : chatSessions.expand((s) => s.messages).take(20).toList())}
@@ -208,8 +269,8 @@ ${_compactConversation(messages.isNotEmpty ? messages : chatSessions.expand((s) 
       assignment: assignment!,
       input: input,
     ).timeout(roleRequestTimeout);
-    memories = _decodeMemoryList(raw);
-    prefs?.saveMemories(memories);
+    _replaceActiveMemories(_decodeMemoryList(raw), source: 'AI 整理');
+    prefs?.saveMemoryItems(memoryItems);
   }
 
   Future<void> refreshMemoryFromConversation({
@@ -241,7 +302,7 @@ ${_compactConversation(messages.isNotEmpty ? messages : chatSessions.expand((s) 
 - 不要输出 Markdown，不要解释。
 
 已有记忆：
-${memories.isEmpty ? '无' : memories.map((m) => '- $m').join('\n')}
+${_memoryLines(activeMemories)}
 
 最新对话：
 ${_compactConversation(messages)}
@@ -254,8 +315,8 @@ ${_compactConversation(messages)}
       ).timeout(roleRequestTimeout);
       final next = _decodeMemoryList(raw);
       if (next.isEmpty) return;
-      memories = next;
-      prefs?.saveMemories(memories);
+      _replaceActiveMemories(next, source: '对话整理');
+      prefs?.saveMemoryItems(memoryItems);
     } catch (_) {}
   }
 
@@ -310,7 +371,7 @@ ${userName.trim().isEmpty ? '未明确' : userName.trim()}
 ${userProfile.trim().isEmpty ? '无' : userProfile.trim()}
 
 长期记忆：
-${memories.isEmpty ? '无' : memories.map((m) => '- $m').join('\n')}
+${_memoryLines(activeMemories)}
 
 最新对话：
 ${_compactConversation(source)}
@@ -371,9 +432,9 @@ ${_compactConversation(source)}
           '\n\n[System directive: Emotion and poetry mode is ENABLED. Your responses should be highly emotional, vivid, and deeply artistic. Do not just output plain facts.]';
     }
     prompt += appearanceDirective;
-    if (globalMemoryEnabled && memories.isNotEmpty) {
+    if (globalMemoryEnabled && activeMemories.isNotEmpty) {
       prompt +=
-          '\n\n[System directive: You have the following memories about the user:\n${memories.map((m) => '- $m').join('\n')}\nPlease take them into account when responding.]';
+          '\n\n[System directive: You have the following memories about the user:\n${activeMemories.map((m) => '- $m').join('\n')}\nPlease take them into account when responding.]';
     }
     final displayName = userName.trim();
     if (displayName.isNotEmpty && displayName != '织梦者') {
@@ -390,6 +451,48 @@ ${_compactConversation(source)}
           '\n\n[System directive: Recent conversation titles: $recentTitles.]';
     }
     return prompt;
+  }
+
+  List<MemoryItem> _memoryItemsFromStrings(
+    Iterable<String> values, {
+    required String source,
+  }) {
+    final seen = <String>{};
+    return [
+      for (final value in values)
+        if (value.trim().isNotEmpty && seen.add(value.trim().toLowerCase()))
+          MemoryItem.fromText(value, source: source),
+    ];
+  }
+
+  void _replaceActiveMemories(List<String> values, {required String source}) {
+    final existingByContent = {
+      for (final item in memoryItems) item.content.trim().toLowerCase(): item,
+    };
+    final seen = <String>{};
+    final nextActive = <MemoryItem>[];
+    for (final value in values) {
+      final trimmed = value.trim();
+      final key = trimmed.toLowerCase();
+      if (trimmed.isEmpty || !seen.add(key)) continue;
+      final existing = existingByContent[key];
+      nextActive.add(
+        (existing ?? MemoryItem.fromText(trimmed, source: source)).copyWith(
+          content: trimmed,
+          source: existing?.source ?? source,
+          updatedAt: DateTime.now().millisecondsSinceEpoch,
+        ),
+      );
+    }
+    final disabled = memoryItems.where(
+      (item) => !item.enabled && !seen.contains(item.content.toLowerCase()),
+    );
+    memoryItems = [...nextActive.take(12), ...disabled];
+  }
+
+  String _memoryLines(List<String> values) {
+    if (values.isEmpty) return '无';
+    return values.map((m) => '- $m').join('\n');
   }
 
   List<String> _decodeMemoryList(String raw) {
