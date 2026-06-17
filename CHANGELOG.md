@@ -2,6 +2,24 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## 1.0.32 - 2026-06-18
+
+### 中文
+
+- 新增结构化记忆卡片，支持来源、参与上下文开关、置顶和设置页管理，增强长期记忆的可控性与可信度。
+- 新增多模型对照模式，可将多个已配置聊天模型的回复并列展示，并可保存为作品卡。
+- 新增分支图谱和编织板，将会话分支与高价值回复沉淀为更接近创作工作台的体验。
+- 新增 Token 用量统计，按本地估算记录输入/输出 token、调用来源、模型汇总和美元花费。
+- 优化新工作台面板、输入框工具入口、提供商当前/禁用状态和设置页交互反馈。
+
+### English
+
+- Added structured memory cards with source metadata, context participation toggles, pinning, and settings management.
+- Added multi-model comparison so configured chat models can be compared side by side and saved as work cards.
+- Added the branch graph and weaving board to turn conversation forks and useful replies into a creative workspace.
+- Added local token usage tracking with estimated input/output tokens, source categories, model summaries, and USD cost.
+- Polished the new workspace panels, composer tool entry, provider current/disabled states, and settings transitions.
+
 ## 1.0.31 - 2026-06-12
 
 ### 中文
