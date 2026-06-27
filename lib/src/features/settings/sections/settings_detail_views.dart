@@ -558,14 +558,6 @@ extension SettingsDetailViews on SettingsSheetState {
                     onTap: () => saveProvider(false),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: SoftButton(
-                    state: state,
-                    label: '设为当前',
-                    onTap: () => saveProvider(true),
-                  ),
-                ),
                 if (editingProvider != null) ...[
                   const SizedBox(width: 10),
                   Expanded(

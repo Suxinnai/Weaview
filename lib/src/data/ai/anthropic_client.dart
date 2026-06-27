@@ -65,7 +65,7 @@ class AnthropicClient {
     required String systemInstruction,
     required ValueChanged<Map<String, dynamic>> onThemeUpdate,
     required void Function(String content, String reasoning, bool thinking)
-        onSnapshot,
+    onSnapshot,
     required Duration timeout,
     bool Function()? shouldCancel,
   }) async {
@@ -95,9 +95,10 @@ class AnthropicClient {
         throw Exception('HTTP ${response.statusCode}: $body');
       }
 
-      await for (final line in response.stream
-          .transform(utf8.decoder)
-          .transform(const LineSplitter())) {
+      await for (final line
+          in response.stream
+              .transform(utf8.decoder)
+              .transform(const LineSplitter())) {
         if (shouldCancel?.call() == true) break;
         final trimmed = line.trim();
         if (trimmed.isEmpty || !trimmed.startsWith('data:')) continue;
@@ -145,8 +146,15 @@ class AnthropicClient {
     List<ChatMessage> messages,
   ) async {
     final result = <Map<String, dynamic>>[];
-    for (final message in messages) {
-      final content = await _anthropicMessageContent(message);
+    final latestUserIndex = messages.lastIndexWhere(
+      (message) => message.role != 'model',
+    );
+    for (var index = 0; index < messages.length; index++) {
+      final message = messages[index];
+      final content = await _anthropicMessageContent(
+        message,
+        requireAvailableAttachments: index == latestUserIndex,
+      );
       result.add({
         'role': message.role == 'model' ? 'assistant' : 'user',
         'content': content,
@@ -155,16 +163,25 @@ class AnthropicClient {
     return result;
   }
 
-  Future<Object> _anthropicMessageContent(ChatMessage message) async {
+  Future<Object> _anthropicMessageContent(
+    ChatMessage message, {
+    required bool requireAvailableAttachments,
+  }) async {
     final imageAttachments = message.role == 'user'
         ? message.attachments.where((a) => a.isImage).toList()
         : const <MessageAttachment>[];
     if (imageAttachments.isEmpty) {
-      return messageTextWithAttachments(message);
+      return messageTextWithAttachments(
+        message,
+        requireAvailableAttachments: requireAvailableAttachments,
+      );
     }
 
     final parts = <Map<String, dynamic>>[];
-    final text = messageTextWithAttachments(message);
+    final text = await messageTextWithAttachments(
+      message,
+      requireAvailableAttachments: requireAvailableAttachments,
+    );
     if (text.trim().isNotEmpty) {
       parts.add({'type': 'text', 'text': text});
     }
@@ -182,7 +199,7 @@ class AnthropicClient {
         },
       });
     }
-    return parts.isEmpty ? messageTextWithAttachments(message) : parts;
+    return parts.isEmpty ? text : parts;
   }
 
   static String _trimSlash(String value) {

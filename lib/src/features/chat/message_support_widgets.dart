@@ -308,8 +308,12 @@ class _ImageGenerationPanelState extends State<ImageGenerationPanel>
     final state = widget.state;
     final dark = state.isDark(context);
     final text = state.text(context);
+    final panelWidth = math.min(
+      284.0,
+      math.max(0.0, MediaQuery.sizeOf(context).width - 92),
+    );
     return Container(
-      width: math.min(MediaQuery.sizeOf(context).width - 92, 284),
+      width: panelWidth,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: state.layer(context).withValues(alpha: dark ? 0.34 : 0.52),

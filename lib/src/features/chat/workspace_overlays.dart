@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../app/weaview_state.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets/shared_widgets.dart';
+import 'usage_stats_charts.dart';
 
 class WorkBoardOverlay extends StatelessWidget {
   const WorkBoardOverlay({
@@ -203,7 +204,35 @@ class UsageStatsOverlay extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          if (records.isEmpty)
+          if (!state.loaded)
+            KeyedSubtree(
+              key: const Key('usage-stats-loading'),
+              child: CardShell(
+                state: state,
+                padding: const EdgeInsets.symmetric(vertical: 34),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: state.accents[0],
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        '正在加载用量统计',
+                        style: state.textStyle(
+                          context,
+                          size: 12,
+                          opacity: 0.48,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else if (records.isEmpty)
             _PanelEmptyState(
               state: state,
               icon: Icons.query_stats_rounded,
@@ -211,6 +240,8 @@ class UsageStatsOverlay extends StatelessWidget {
               body: '完成一次普通聊天、联网聊天、翻译或多模型对照后，这里会显示估算 token 与花费。',
             )
           else ...[
+            UsageStatsCharts(state: state, records: records),
+            const SizedBox(height: 20),
             _SectionTitle(state: state, label: '按模型汇总'),
             const SizedBox(height: 10),
             for (final item in byModel.take(6)) ...[

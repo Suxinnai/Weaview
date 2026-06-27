@@ -3,14 +3,22 @@ import 'dart:io';
 
 import '../../core/app_utils.dart' as app_utils;
 import '../../domain/models.dart';
+import 'attachment_text_extractor.dart';
 
 Future<List<Map<String, dynamic>>> geminiContents(
   List<ChatMessage> messages,
 ) async {
   final contents = <Map<String, dynamic>>[];
-  for (final message in messages) {
+  final latestUserIndex = messages.lastIndexWhere(
+    (message) => message.role != 'model',
+  );
+  for (var index = 0; index < messages.length; index++) {
+    final message = messages[index];
     final parts = <Map<String, dynamic>>[];
-    final text = messageTextWithAttachments(message);
+    final text = await messageTextWithAttachments(
+      message,
+      requireAvailableAttachments: index == latestUserIndex,
+    );
     if (text.trim().isNotEmpty) {
       parts.add({'text': text});
     }
@@ -38,25 +46,34 @@ Future<List<Map<String, dynamic>>> geminiContents(
   return contents;
 }
 
-String messageTextWithAttachments(ChatMessage message) {
+Future<String> messageTextWithAttachments(
+  ChatMessage message, {
+  bool requireAvailableAttachments = true,
+}) async {
   if (message.attachments.isEmpty) return message.content;
   final buffer = StringBuffer(message.content);
   if (buffer.isNotEmpty) buffer.write('\n\n');
-  buffer.writeln('[用户上传的附件]');
+  buffer.writeln('[附件内容已由客户端读取]');
+  buffer.writeln('请直接基于下方内容回答，不要声称稍后读取文件。');
   for (final attachment in message.attachments) {
     buffer.writeln(
       '- ${attachment.name} (${attachment.mimeType}, ${app_utils.formatBytes(attachment.size ?? 0)})',
     );
-    if (!attachment.isImage) {
-      final file = File(attachment.path);
-      if (file.existsSync() && (attachment.size ?? 0) <= 128 * 1024) {
-        final text = tryReadTextFile(file);
-        if (text != null && text.trim().isNotEmpty) {
-          buffer.writeln('```');
-          buffer.writeln(text.length > 6000 ? text.substring(0, 6000) : text);
-          buffer.writeln('```');
+    try {
+      final extracted = await extractAttachmentText(attachment);
+      if (extracted != null) {
+        buffer.writeln(
+          '<attachment_content name="${_escapeAttribute(attachment.name)}" truncated="${extracted.truncated}">',
+        );
+        buffer.writeln(extracted.text);
+        buffer.writeln('</attachment_content>');
+        if (extracted.truncated) {
+          buffer.writeln('[说明：文件较长，已提供开头和结尾的可读节选。回答时应明确说明结论基于节选。]');
         }
       }
+    } on AttachmentPayloadException catch (error) {
+      if (requireAvailableAttachments) rethrow;
+      buffer.writeln('[历史附件当前不可读：${error.message}]');
     }
   }
   return buffer.toString();
@@ -66,24 +83,39 @@ Future<List<Map<String, dynamic>>> openAiMessagesWithAttachments({
   required String systemInstruction,
   required List<ChatMessage> messages,
 }) async {
-  return [
+  final result = <Map<String, dynamic>>[
     {'role': 'system', 'content': systemInstruction},
-    for (final message in messages)
-      {
-        'role': message.role == 'model' ? 'assistant' : 'user',
-        'content': await openAiMessageContent(message),
-      },
   ];
+  final latestUserIndex = messages.lastIndexWhere(
+    (message) => message.role != 'model',
+  );
+  for (var index = 0; index < messages.length; index++) {
+    final message = messages[index];
+    result.add({
+      'role': message.role == 'model' ? 'assistant' : 'user',
+      'content': await openAiMessageContent(
+        message,
+        requireAvailableAttachments: index == latestUserIndex,
+      ),
+    });
+  }
+  return result;
 }
 
-Future<Object> openAiMessageContent(ChatMessage message) async {
+Future<Object> openAiMessageContent(
+  ChatMessage message, {
+  bool requireAvailableAttachments = true,
+}) async {
   final imageAttachments = message.role == 'user'
       ? message.attachments.where((attachment) => attachment.isImage).toList()
       : const <MessageAttachment>[];
-  if (imageAttachments.isEmpty) return messageTextWithAttachments(message);
+  final text = await messageTextWithAttachments(
+    message,
+    requireAvailableAttachments: requireAvailableAttachments,
+  );
+  if (imageAttachments.isEmpty) return text;
 
   final parts = <Map<String, dynamic>>[];
-  final text = messageTextWithAttachments(message);
   if (text.trim().isNotEmpty) {
     parts.add({'type': 'text', 'text': text});
   }
@@ -97,13 +129,13 @@ Future<Object> openAiMessageContent(ChatMessage message) async {
       'image_url': {'url': 'data:$mimeType;base64,${base64Encode(bytes)}'},
     });
   }
-  return parts.isEmpty ? messageTextWithAttachments(message) : parts;
+  return parts.isEmpty ? text : parts;
 }
 
-String? tryReadTextFile(File file) {
-  try {
-    return file.readAsStringSync();
-  } catch (_) {
-    return null;
-  }
+String _escapeAttribute(String value) {
+  return value
+      .replaceAll('&', '&amp;')
+      .replaceAll('"', '&quot;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;');
 }

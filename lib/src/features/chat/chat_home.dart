@@ -13,7 +13,9 @@ import '../../domain/models.dart';
 import '../../shared/widgets/shared_widgets.dart';
 import '../history/sidebar_overlay.dart';
 import '../settings/settings_sheet.dart';
+import 'attachment_limits.dart';
 import 'chat_home_sections.dart';
+import 'comparison_model_picker.dart';
 import 'workspace_overlays.dart';
 
 class WeaviewHome extends StatefulWidget {
@@ -38,6 +40,7 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
   bool _webSearchEnabled = false;
   bool _imageGenerationMode = false;
   bool _comparisonMode = false;
+  List<ModelAssignment> _comparisonModels = [];
   bool _workBoardOpen = false;
   bool _branchGraphOpen = false;
   bool _usageStatsOpen = false;
@@ -206,7 +209,11 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
         _pendingAttachments = [];
         _dockExpanded = false;
       });
-      await widget.state.submitModelComparison(text, attachments: attachments);
+      await widget.state.submitModelComparison(
+        text,
+        attachments: attachments,
+        selectedModels: _comparisonModels,
+      );
       return;
     }
     final useWebSearch = _webSearchEnabled;
@@ -227,10 +234,51 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
     setState(() => _webSearchEnabled = !_webSearchEnabled);
   }
 
-  void _toggleComparison() {
+  Future<void> _toggleComparison() async {
+    if (_comparisonMode) {
+      setState(() => _comparisonMode = false);
+      return;
+    }
+    await _configureComparison(enableOnConfirm: true);
+  }
+
+  Future<void> _configureComparison({bool enableOnConfirm = false}) async {
+    final options = widget.state.comparisonModelOptions;
+    if (options.length < 2) {
+      _snack('至少需要配置 2 个可用聊天模型。请前往「设置 > 提供商」配置 API Key 和模型。');
+      return;
+    }
+    final optionKeys = {
+      for (final option in options) '${option.provider}\u0000${option.model}',
+    };
+    final currentSelection = _comparisonModels
+        .where(
+          (model) =>
+              optionKeys.contains('${model.provider}\u0000${model.model}'),
+        )
+        .toList();
+    final initialSelection = currentSelection.length >= 2
+        ? currentSelection
+        : options.take(3).toList();
+    final selected = await showModalBottomSheet<List<ModelAssignment>>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => FractionallySizedBox(
+        heightFactor: 0.78,
+        child: ComparisonModelPicker(
+          state: widget.state,
+          options: options,
+          initialSelection: initialSelection,
+        ),
+      ),
+    );
+    if (!mounted || selected == null) return;
     setState(() {
-      _comparisonMode = !_comparisonMode;
-      if (_comparisonMode) {
+      _comparisonModels = selected;
+      if (enableOnConfirm) {
+        _comparisonMode = true;
         _imageGenerationMode = false;
         _webSearchEnabled = false;
       }
@@ -442,10 +490,7 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
         ),
       );
     }
-    setState(() {
-      _pendingAttachments = [..._pendingAttachments, ...attachments];
-      _dockExpanded = false;
-    });
+    _appendPendingAttachments(attachments);
   }
 
   Future<void> _pickChatFiles() async {
@@ -468,10 +513,23 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
         ),
       );
     }
-    setState(() {
-      _pendingAttachments = [..._pendingAttachments, ...attachments];
-      _dockExpanded = false;
-    });
+    _appendPendingAttachments(attachments);
+  }
+
+  void _appendPendingAttachments(List<MessageAttachment> attachments) {
+    if (attachments.isEmpty) return;
+    final limited = applyChatAttachmentLimits(
+      existingCount: _pendingAttachments.length,
+      incoming: attachments,
+    );
+    if (limited.accepted.isNotEmpty) {
+      setState(() {
+        _pendingAttachments = [..._pendingAttachments, ...limited.accepted];
+        _dockExpanded = false;
+      });
+    }
+    final message = limited.message;
+    if (message != null) _snack(message);
   }
 
   void _removePendingAttachment(MessageAttachment attachment) {
@@ -657,7 +715,8 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
                     onToggleExpanded: () =>
                         setState(() => _dockExpanded = !_dockExpanded),
                     onToggleWebSearch: _toggleWebSearch,
-                    onToggleComparison: _toggleComparison,
+                    onToggleComparison: () => _toggleComparison(),
+                    onConfigureComparison: () => _configureComparison(),
                     onSubmit: _submit,
                     onPickChatImages: _pickChatImages,
                     onPickChatFiles: _pickChatFiles,

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../core/app_utils.dart';
 import '../core/zip_writer.dart';
 import '../data/ai/ai_gateway.dart';
+import '../data/ai/ai_response_parsers.dart';
 import '../data/ai/image_tool_call_parser.dart';
 import '../data/ai/openai_compatible_client.dart' show GeneratedImageResult;
 import '../domain/models.dart';
@@ -17,6 +18,7 @@ import 'services/personalization_service.dart';
 import 'services/provider_config_service.dart';
 import 'services/session_manager.dart';
 import 'services/theme_service.dart';
+import 'token_pricing.dart';
 import 'weaview_preferences.dart';
 
 class _ImageAspect {
@@ -38,16 +40,6 @@ class _ComparisonTarget {
 
   final AiProvider provider;
   final ModelAssignment assignment;
-}
-
-class _TokenPricing {
-  const _TokenPricing({
-    required this.inputPerMillionUsd,
-    required this.outputPerMillionUsd,
-  });
-
-  final double inputPerMillionUsd;
-  final double outputPerMillionUsd;
 }
 
 class BackupImportResult {
@@ -472,7 +464,7 @@ class WeaviewState extends ChangeNotifier {
     );
     final completionTokens = _estimateTokensForText(outputText);
     if (promptTokens <= 0 && completionTokens <= 0) return;
-    final pricing = _pricingFor(provider.name, assignment.model);
+    final pricing = tokenPricingFor(provider.name, assignment.model);
     final cost =
         (promptTokens * pricing.inputPerMillionUsd +
             completionTokens * pricing.outputPerMillionUsd) /
@@ -546,75 +538,6 @@ class WeaviewState extends ChangeNotifier {
       (rune >= 0x3400 && rune <= 0x9FFF) ||
       (rune >= 0xF900 && rune <= 0xFAFF) ||
       (rune >= 0x20000 && rune <= 0x2A6DF);
-
-  _TokenPricing _pricingFor(String provider, String model) {
-    final providerKey = provider.toLowerCase();
-    final modelKey = model.toLowerCase();
-    if (providerKey.contains('deepseek') || modelKey.contains('deepseek')) {
-      return const _TokenPricing(
-        inputPerMillionUsd: 0.27,
-        outputPerMillionUsd: 1.10,
-      );
-    }
-    if (providerKey.contains('gemini') || modelKey.contains('gemini')) {
-      if (modelKey.contains('flash')) {
-        return const _TokenPricing(
-          inputPerMillionUsd: 0.10,
-          outputPerMillionUsd: 0.40,
-        );
-      }
-      return const _TokenPricing(
-        inputPerMillionUsd: 1.25,
-        outputPerMillionUsd: 5,
-      );
-    }
-    if (providerKey.contains('kimi') || modelKey.contains('moonshot')) {
-      return const _TokenPricing(
-        inputPerMillionUsd: 0.42,
-        outputPerMillionUsd: 0.42,
-      );
-    }
-    if (providerKey.contains('anthropic') || modelKey.contains('claude')) {
-      if (modelKey.contains('haiku')) {
-        return const _TokenPricing(
-          inputPerMillionUsd: 0.80,
-          outputPerMillionUsd: 4,
-        );
-      }
-      if (modelKey.contains('sonnet')) {
-        return const _TokenPricing(
-          inputPerMillionUsd: 3,
-          outputPerMillionUsd: 15,
-        );
-      }
-      return const _TokenPricing(
-        inputPerMillionUsd: 15,
-        outputPerMillionUsd: 75,
-      );
-    }
-    if (modelKey.contains('4o-mini')) {
-      return const _TokenPricing(
-        inputPerMillionUsd: 0.15,
-        outputPerMillionUsd: 0.60,
-      );
-    }
-    if (modelKey.contains('4o') || modelKey.contains('4.1')) {
-      return const _TokenPricing(
-        inputPerMillionUsd: 2.50,
-        outputPerMillionUsd: 10,
-      );
-    }
-    if (modelKey.startsWith('o3') || modelKey.startsWith('o4')) {
-      return const _TokenPricing(
-        inputPerMillionUsd: 1.10,
-        outputPerMillionUsd: 4.40,
-      );
-    }
-    return const _TokenPricing(
-      inputPerMillionUsd: 0.50,
-      outputPerMillionUsd: 1.50,
-    );
-  }
 
   Future<void> completeUserProfileWithToolModel() async {
     await _personal.completeUserProfileWithToolModel(
@@ -1027,12 +950,26 @@ class WeaviewState extends ChangeNotifier {
   Future<void> submitModelComparison(
     String value, {
     List<MessageAttachment> attachments = const [],
+    List<ModelAssignment> selectedModels = const [],
   }) async {
     final content = value.trim();
     if ((content.isEmpty && attachments.isEmpty) || isStreaming) return;
     _applyPromptAppearanceIntent(content);
 
-    final targets = _comparisonTargets().take(3).toList();
+    final availableTargets = _comparisonTargets();
+    final targets = <_ComparisonTarget>[];
+    if (selectedModels.isEmpty) {
+      targets.addAll(availableTargets.take(3));
+    } else {
+      for (final selected in selectedModels.take(5)) {
+        final target = availableTargets.firstWhereOrNull(
+          (candidate) =>
+              candidate.assignment.provider == selected.provider &&
+              candidate.assignment.model == selected.model,
+        );
+        if (target != null) targets.add(target);
+      }
+    }
     if (targets.length < 2) {
       messages
         ..add(ChatMessage.user(content, attachments: attachments))
@@ -1089,13 +1026,18 @@ class WeaviewState extends ChangeNotifier {
               onThemeUpdate: (_) {},
             );
             if (runId != _streamRunId || _cancelStreamRequested) return;
-            final content = stripImageToolCalls(raw).trim();
+            final split = splitReasoning(stripImageToolCalls(raw));
+            final content = split.answer.trim();
+            final reasoning = split.reasoning.trim();
             _recordTokenUsage(
               provider: target.provider,
               assignment: target.assignment,
               promptMessages: conversation,
               systemInstruction: prompt,
-              outputText: content,
+              outputText: [
+                content,
+                reasoning,
+              ].where((item) => item.isNotEmpty).join('\n'),
               source: 'comparison',
               sessionId: taskSessionId,
             );
@@ -1111,6 +1053,7 @@ class WeaviewState extends ChangeNotifier {
                 provider: target.provider.name,
                 model: target.assignment.model,
                 content: content,
+                reasoning: reasoning,
                 elapsedMs: DateTime.now().difference(started).inMilliseconds,
               ),
             );
@@ -2037,11 +1980,14 @@ $prompt
     for (final provider in orderedProviders) {
       for (final model in provider.models) {
         addTarget(provider, model);
-        if (targets.length >= 3) return targets;
       }
     }
     return targets;
   }
+
+  List<ModelAssignment> get comparisonModelOptions => [
+    for (final target in _comparisonTargets()) target.assignment,
+  ];
 
   bool _looksLikeImageModel(AiModel model) {
     return looksLikeImageGenerationModel(

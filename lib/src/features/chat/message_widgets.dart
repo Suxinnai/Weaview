@@ -9,6 +9,7 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../../app/app_constants.dart';
 import '../../app/weaview_state.dart';
+import '../../data/ai/ai_response_parsers.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets/shared_widgets.dart';
 import 'markdown_segments.dart';
@@ -335,7 +336,7 @@ class _MessageBubbleState extends State<MessageBubble> {
   }
 }
 
-class ModelComparisonPanel extends StatelessWidget {
+class ModelComparisonPanel extends StatefulWidget {
   const ModelComparisonPanel({
     super.key,
     required this.state,
@@ -346,12 +347,73 @@ class ModelComparisonPanel extends StatelessWidget {
   final List<ModelComparisonResult> results;
 
   @override
+  State<ModelComparisonPanel> createState() => _ModelComparisonPanelState();
+}
+
+class _ModelComparisonPanelState extends State<ModelComparisonPanel> {
+  int _currentPage = 0;
+  double _dragDx = 0;
+  double _dragDy = 0;
+
+  WeaviewState get state => widget.state;
+  List<ModelComparisonResult> get results => widget.results;
+
+  @override
+  void didUpdateWidget(covariant ModelComparisonPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_currentPage >= results.length && results.isNotEmpty) {
+      _currentPage = results.length - 1;
+    }
+  }
+
+  void _goToPage(int page) {
+    if (page < 0 || page >= results.length) return;
+    setState(() => _currentPage = page);
+  }
+
+  void _handleCardPointerDown(PointerDownEvent event) {
+    _dragDx = 0;
+    _dragDy = 0;
+  }
+
+  void _handleCardPointerMove(PointerMoveEvent event) {
+    _dragDx += event.delta.dx;
+    _dragDy += event.delta.dy;
+  }
+
+  void _handleCardPointerUp(PointerUpEvent event) {
+    final dragDx = _dragDx;
+    final dragDy = _dragDy;
+    _dragDx = 0;
+    _dragDy = 0;
+    if (dragDx.abs() < 48 || dragDx.abs() < dragDy.abs() * 1.2) return;
+    if (dragDx < 0) {
+      _goToPage(_currentPage + 1);
+    } else {
+      _goToPage(_currentPage - 1);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+    final maxBodyHeight = math
+        .min(420.0, math.max(180.0, screenHeight * 0.42))
+        .toDouble();
+    final panelMaxWidth = math.max(0.0, width - 58);
+    final completed = results.where((item) => !item.loading).length;
+    final failed = results.where((item) => item.error.trim().isNotEmpty).length;
+    final running = results.any((item) => item.loading);
+    final statusLabel = running
+        ? '生成中 · $completed/${results.length}'
+        : failed > 0
+        ? '完成 · $failed 个异常'
+        : '已完成';
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
-        constraints: BoxConstraints(maxWidth: width - 58),
+        constraints: BoxConstraints(maxWidth: panelMaxWidth),
         decoration: BoxDecoration(
           color: state
               .layer(context)
@@ -368,38 +430,111 @@ class ModelComparisonPanel extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
               child: Row(
                 children: [
-                  Icon(
-                    Icons.view_column_rounded,
-                    size: 18,
-                    color: state.accents[0],
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '多模型对照',
-                      style: state.textStyle(
-                        context,
-                        size: 13.5,
-                        weight: FontWeight.w600,
-                      ),
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: state.accents[0].withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.view_carousel_rounded,
+                      size: 16,
+                      color: state.accents[0],
                     ),
                   ),
-                  Text(
-                    '${results.length} 个模型',
-                    style: state.textStyle(context, size: 11.5, opacity: 0.45),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '多模型对照',
+                          style: state.textStyle(
+                            context,
+                            size: 14,
+                            weight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          statusLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: state.textStyle(
+                            context,
+                            size: 11.2,
+                            opacity: 0.46,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    key: const Key('comparison-page-label'),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 9,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: state.text(context).withValues(alpha: 0.055),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '${_currentPage + 1} / ${results.length}',
+                      style: state.textStyle(
+                        context,
+                        size: 11.5,
+                        weight: FontWeight.w700,
+                        opacity: 0.56,
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-            for (var i = 0; i < results.length; i++) ...[
-              if (i > 0)
-                Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: state.text(context).withValues(alpha: 0.06),
+            Semantics(
+              label:
+                  '左右滑动主卡切换模型。当前第 ${_currentPage + 1} 个模型，共 ${results.length} 个模型',
+              child: Listener(
+                key: const Key('comparison-card-swipe-zone'),
+                behavior: HitTestBehavior.translucent,
+                onPointerDown: _handleCardPointerDown,
+                onPointerMove: _handleCardPointerMove,
+                onPointerUp: _handleCardPointerUp,
+                child: AnimatedSwitcher(
+                  key: const Key('comparison-page-view'),
+                  duration: const Duration(milliseconds: 240),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeOutCubic,
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(
+                        scale: Tween<double>(begin: 0.985, end: 1).animate(
+                          CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic,
+                          ),
+                        ),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Padding(
+                    key: ValueKey(results[_currentPage].id),
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+                    child: _ComparisonResultCard(
+                      state: state,
+                      result: results[_currentPage],
+                      index: _currentPage,
+                      maxBodyHeight: maxBodyHeight,
+                    ),
+                  ),
                 ),
-              _ComparisonResultTile(state: state, result: results[i]),
-            ],
+              ),
+            ),
+            const SizedBox(height: 12),
           ],
         ),
       ),
@@ -407,103 +542,211 @@ class ModelComparisonPanel extends StatelessWidget {
   }
 }
 
-class _ComparisonResultTile extends StatelessWidget {
-  const _ComparisonResultTile({required this.state, required this.result});
+class _ComparisonResultCard extends StatelessWidget {
+  const _ComparisonResultCard({
+    required this.state,
+    required this.result,
+    required this.index,
+    required this.maxBodyHeight,
+  });
+
+  final WeaviewState state;
+  final ModelComparisonResult result;
+  final int index;
+  final double maxBodyHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    final error = result.error.trim();
+    final storedContent = result.content.trim();
+    final storedReasoning = result.reasoning.trim();
+    final visibleSplit = splitReasoning(storedContent);
+    final content = visibleSplit.answer.trim();
+    final reasoning = storedReasoning.isNotEmpty
+        ? storedReasoning
+        : visibleSplit.reasoning.trim();
+    final dark = state.isDark(context);
+    return Container(
+      key: Key('comparison-result-card-$index'),
+      decoration: BoxDecoration(
+        color: state.background(context).withValues(alpha: dark ? 0.48 : 0.72),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: state.text(context).withValues(alpha: 0.07)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: dark ? 0.18 : 0.055),
+            blurRadius: 22,
+            spreadRadius: -10,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 14, 13),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: state.accents[index % 2].withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.auto_awesome_rounded,
+                    size: 15,
+                    color: state.accents[index % 2],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        result.provider,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: state.textStyle(
+                          context,
+                          size: 13.5,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        result.model,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: state.textStyle(
+                          context,
+                          size: 11.5,
+                          opacity: 0.46,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _ComparisonStatusBadge(state: state, result: result),
+              ],
+            ),
+          ),
+          Divider(
+            height: 1,
+            color: state.text(context).withValues(alpha: 0.06),
+          ),
+          ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: maxBodyHeight),
+            child: SingleChildScrollView(
+              key: Key('comparison-result-scroll-$index'),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (reasoning.isNotEmpty) ...[
+                    ReasoningPanel(
+                      state: state,
+                      reasoning: reasoning,
+                      thinking: false,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  if (content.isNotEmpty)
+                    _AiMarkdown(
+                      state: state,
+                      data: content,
+                      textAlign: TextAlign.left,
+                    )
+                  else if (error.isNotEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: Colors.red.withValues(alpha: 0.18),
+                        ),
+                      ),
+                      child: Text(
+                        error,
+                        style: state
+                            .textStyle(context, size: 13.2, height: 1.5)
+                            .copyWith(color: Colors.red),
+                      ),
+                    )
+                  else
+                    Text(
+                      result.loading ? '正在等待模型返回…' : '暂无结果',
+                      style: state.textStyle(
+                        context,
+                        size: 13.2,
+                        opacity: 0.46,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ComparisonStatusBadge extends StatelessWidget {
+  const _ComparisonStatusBadge({required this.state, required this.result});
 
   final WeaviewState state;
   final ModelComparisonResult result;
 
   @override
   Widget build(BuildContext context) {
-    final error = result.error.trim();
-    final content = result.content.trim();
-    final bodyColor = error.isNotEmpty
+    final failed = result.error.trim().isNotEmpty;
+    final color = result.loading
+        ? state.accents[0]
+        : failed
         ? Colors.red
-        : state.text(context).withValues(alpha: 0.82);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        : sendGreen;
+    final label = result.loading
+        ? '生成中'
+        : failed
+        ? '异常'
+        : '${result.elapsedMs}ms';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: state.accents[0].withValues(alpha: 0.12),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.auto_awesome_rounded,
-                  size: 15,
-                  color: state.text(context).withValues(alpha: 0.58),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${result.provider} · ${result.model}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: state.textStyle(
-                        context,
-                        size: 13.5,
-                        weight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      result.loading ? '正在生成...' : '${result.elapsedMs}ms',
-                      style: state.textStyle(
-                        context,
-                        size: 11.5,
-                        opacity: 0.46,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (result.loading)
-                const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else if (error.isNotEmpty)
-                Icon(Icons.error_outline_rounded, color: Colors.red, size: 18)
-              else
-                Icon(
-                  Icons.check_circle_outline_rounded,
-                  color: sendGreen,
-                  size: 18,
-                ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (content.isNotEmpty)
-            Text(
-              content,
-              style: state
-                  .textStyle(context, size: 13.6, height: 1.55)
-                  .copyWith(color: bodyColor),
-            )
-          else if (error.isNotEmpty)
-            Text(
-              error,
-              style: state
-                  .textStyle(context, size: 13.2, height: 1.5)
-                  .copyWith(color: Colors.red),
+          if (result.loading)
+            SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(strokeWidth: 1.8, color: color),
             )
           else
-            Text(
-              '暂无结果',
-              style: state.textStyle(context, size: 13.2, opacity: 0.46),
+            Icon(
+              failed
+                  ? Icons.error_outline_rounded
+                  : Icons.check_circle_outline_rounded,
+              size: 13,
+              color: color,
             ),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: state
+                .textStyle(context, size: 10.8, weight: FontWeight.w700)
+                .copyWith(color: color),
+          ),
         ],
       ),
     );

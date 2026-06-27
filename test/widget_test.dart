@@ -262,6 +262,7 @@ $$E = mc^2$$
           provider: 'OpenAI',
           model: 'gpt-test',
           content: '第一版回答',
+          reasoning: '第一版思考',
           elapsedMs: 120,
         ),
         ModelComparisonResult(
@@ -281,6 +282,7 @@ $$E = mc^2$$
     expect(restored.comparisonResults, hasLength(2));
     expect(restored.comparisonResults.first.provider, 'OpenAI');
     expect(restored.comparisonResults.first.content, '第一版回答');
+    expect(restored.comparisonResults.first.reasoning, '第一版思考');
     expect(restored.comparisonResults.last.error, '模型不可用');
   });
 
@@ -391,6 +393,11 @@ $$E = mc^2$$
 
     expect(find.text('用量统计'), findsOneWidget);
     expect(find.text('累计 token'), findsOneWidget);
+    expect(find.byKey(const Key('usage-activity-heatmap')), findsOneWidget);
+    expect(find.byKey(const Key('usage-token-trend')), findsOneWidget);
+    expect(find.byKey(const Key('usage-model-donut')), findsOneWidget);
+    await tester.drag(find.byType(ListView), const Offset(0, -600));
+    await tester.pumpAndSettle();
     expect(find.text('多模型对照'), findsOneWidget);
     expect(find.text('OpenAI · gpt-test'), findsWidgets);
     state.dispose();
@@ -989,6 +996,7 @@ $$E = mc^2$$
             onToggleExpanded: () {},
             onToggleWebSearch: () {},
             onToggleComparison: () {},
+            onConfigureComparison: () {},
             onSubmit: () async {},
             onPickChatImages: () async {},
             onPickChatFiles: () async {},
@@ -1089,7 +1097,7 @@ $$E = mc^2$$
     state.dispose();
   });
 
-  testWidgets('setting a provider as current survives returning to list', (
+  testWidgets('provider detail omits set-current action', (
     WidgetTester tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -1139,15 +1147,16 @@ $$E = mc^2$$
     await tester.pumpAndSettle();
     await tester.tap(find.text('OpenAI').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('设为当前'));
+    expect(find.text('设为当前'), findsNothing);
+    await tester.tap(find.text('保存配置'));
     await tester.pumpAndSettle();
 
     final openai = state.providers.firstWhere((p) => p.name == 'OpenAI');
     final deepSeek = state.providers.firstWhere((p) => p.name == 'DeepSeek');
     expect(openai.enabled, isTrue);
-    expect(openai.current, isTrue);
-    expect(openai.status, '使用中');
-    expect(deepSeek.current, isFalse);
+    expect(openai.current, isFalse);
+    expect(openai.status, '已连接');
+    expect(deepSeek.current, isTrue);
     state.dispose();
   });
 

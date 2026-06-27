@@ -4,6 +4,7 @@ class ModelComparisonResult {
     required this.provider,
     required this.model,
     this.content = '',
+    this.reasoning = '',
     this.error = '',
     this.elapsedMs = 0,
     this.loading = false,
@@ -30,6 +31,7 @@ class ModelComparisonResult {
       provider: map['provider']?.toString() ?? '',
       model: map['model']?.toString() ?? '',
       content: map['content']?.toString() ?? '',
+      reasoning: map['reasoning']?.toString() ?? '',
       error: map['error']?.toString() ?? '',
       elapsedMs: _intValue(map['elapsedMs']) ?? 0,
       loading: map['loading'] == true,
@@ -40,6 +42,7 @@ class ModelComparisonResult {
   final String provider;
   final String model;
   final String content;
+  final String reasoning;
   final String error;
   final int elapsedMs;
   final bool loading;
@@ -51,6 +54,7 @@ class ModelComparisonResult {
     String? provider,
     String? model,
     String? content,
+    String? reasoning,
     String? error,
     int? elapsedMs,
     bool? loading,
@@ -60,6 +64,7 @@ class ModelComparisonResult {
       provider: provider ?? this.provider,
       model: model ?? this.model,
       content: content ?? this.content,
+      reasoning: reasoning ?? this.reasoning,
       error: error ?? this.error,
       elapsedMs: elapsedMs ?? this.elapsedMs,
       loading: loading ?? this.loading,
@@ -71,6 +76,7 @@ class ModelComparisonResult {
     'provider': provider,
     'model': model,
     'content': content,
+    'reasoning': reasoning,
     'error': error,
     'elapsedMs': elapsedMs,
     'loading': loading,

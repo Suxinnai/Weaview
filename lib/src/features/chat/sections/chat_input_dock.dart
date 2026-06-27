@@ -22,6 +22,7 @@ class ChatInputDock extends StatelessWidget {
     required this.onToggleExpanded,
     required this.onToggleWebSearch,
     required this.onToggleComparison,
+    required this.onConfigureComparison,
     required this.onSubmit,
     required this.onPickChatImages,
     required this.onPickChatFiles,
@@ -41,6 +42,7 @@ class ChatInputDock extends StatelessWidget {
   final VoidCallback onToggleExpanded;
   final VoidCallback onToggleWebSearch;
   final VoidCallback onToggleComparison;
+  final VoidCallback onConfigureComparison;
   final Future<void> Function() onSubmit;
   final Future<void> Function() onPickChatImages;
   final Future<void> Function() onPickChatFiles;
@@ -78,7 +80,7 @@ class ChatInputDock extends StatelessWidget {
         ? '图像生成'
         : '';
     final activeToolTap = comparisonMode
-        ? onToggleComparison
+        ? onConfigureComparison
         : webSearchEnabled
         ? onToggleWebSearch
         : onToggleExpanded;

@@ -31,6 +31,10 @@ class ChatModelDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.paddingOf(context).top;
+    final panelWidth = math.min(
+      352.0,
+      math.max(0.0, MediaQuery.sizeOf(context).width - 34),
+    );
     final enabledProviders = state.enabledModelProviders;
     final allModels = [
       for (final provider in enabledProviders)
@@ -67,10 +71,7 @@ class ChatModelDropdown extends StatelessWidget {
                   state: state,
                   radius: 22,
                   child: SizedBox(
-                    width: math.min(
-                      352.0,
-                      MediaQuery.sizeOf(context).width - 34,
-                    ),
+                    width: panelWidth,
                     child: Padding(
                       padding: const EdgeInsets.all(10),
                       child: Column(
