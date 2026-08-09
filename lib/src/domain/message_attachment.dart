@@ -7,6 +7,8 @@ class MessageAttachment {
     required this.mimeType,
     required this.kind,
     this.size,
+    this.pixelWidth,
+    this.pixelHeight,
   });
 
   factory MessageAttachment.fromJson(dynamic json) {
@@ -17,6 +19,8 @@ class MessageAttachment {
       mimeType: map['mimeType']?.toString() ?? 'application/octet-stream',
       kind: map['kind']?.toString() == 'image' ? 'image' : 'file',
       size: (map['size'] as num?)?.toInt(),
+      pixelWidth: (map['pixelWidth'] as num?)?.toInt(),
+      pixelHeight: (map['pixelHeight'] as num?)?.toInt(),
     );
   }
 
@@ -25,6 +29,10 @@ class MessageAttachment {
   final String mimeType;
   final String kind;
   final int? size;
+  final int? pixelWidth;
+  final int? pixelHeight;
+
+  bool get hasPixelSize => (pixelWidth ?? 0) > 0 && (pixelHeight ?? 0) > 0;
 
   bool get isImage =>
       kind == 'image' ||
@@ -49,6 +57,8 @@ class MessageAttachment {
     mimeType: mimeType,
     kind: kind,
     size: size,
+    pixelWidth: pixelWidth,
+    pixelHeight: pixelHeight,
   );
 
   Map<String, dynamic> toJson() => {
@@ -57,6 +67,8 @@ class MessageAttachment {
     'mimeType': mimeType,
     'kind': kind,
     'size': size,
+    if (pixelWidth != null) 'pixelWidth': pixelWidth,
+    if (pixelHeight != null) 'pixelHeight': pixelHeight,
   };
 }
 

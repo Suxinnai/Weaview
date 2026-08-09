@@ -14,6 +14,7 @@ class ThemeService {
   Color? textOverride;
   Color? assistantBubbleOverride;
   Color? userBubbleOverride;
+  Color accentColor = accentMint;
   String fontMood = 'sans';
   String fontStyleMood = 'normal';
   String fontWeightMood = 'normal';
@@ -27,6 +28,7 @@ class ThemeService {
     themeMode = prefs.themeMode;
     backgroundOverride = prefs.themeBackground;
     textOverride = prefs.themeText;
+    accentColor = prefs.themeAccent ?? accentMint;
     if (themeMode != ThemeMode.system && backgroundOverride != null) {
       clearGlobalThemeOverrides(prefs);
     }
@@ -87,6 +89,16 @@ class ThemeService {
     return isDark(context) ? mutedDark : mutedLight;
   }
 
+  Color get secondaryAccent {
+    if (accentColor.toARGB32() == accentMint.toARGB32()) return accentGreen;
+    final hsl = HSLColor.fromColor(accentColor);
+    return hsl
+        .withHue((hsl.hue + 38) % 360)
+        .withSaturation((hsl.saturation * 0.78).clamp(0.28, 0.72))
+        .withLightness((hsl.lightness + 0.12).clamp(0.42, 0.74))
+        .toColor();
+  }
+
   TextStyle textStyle(
     BuildContext context, {
     double size = 14,
@@ -122,6 +134,12 @@ class ThemeService {
       clearGlobalThemeOverrides(prefs);
     }
     prefs?.saveThemeMode(mode);
+  }
+
+  void setAccentColor(Color color, WeaviewPreferences? prefs) {
+    accentColor = color;
+    prefs?.saveThemeAccent(color);
+    themePulse++;
   }
 
   void applyAiTheme(
@@ -251,6 +269,7 @@ class ThemeService {
     textOverride = null;
     assistantBubbleOverride = null;
     userBubbleOverride = null;
+    accentColor = accentMint;
     fontMood = 'sans';
     fontStyleMood = 'normal';
     fontWeightMood = 'normal';

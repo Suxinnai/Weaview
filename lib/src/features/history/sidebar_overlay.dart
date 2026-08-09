@@ -31,6 +31,7 @@ class SidebarOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final width = math.min(286.0, MediaQuery.sizeOf(context).width * 0.84);
+    final groupedSessions = _groupSessionsByDate(state.chatSessions);
     return IgnorePointer(
       ignoring: !open,
       child: Stack(
@@ -149,37 +150,36 @@ class SidebarOverlay extends StatelessWidget {
                         ),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                          child: Column(
+                          child: Row(
                             children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: _SidebarModeButton(
-                                      state: state,
-                                      icon: Icons.account_tree_outlined,
-                                      label: '分支图谱',
-                                      onTap: onBranchGraph,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: _SidebarModeButton(
-                                      state: state,
-                                      icon: Icons.dashboard_customize_outlined,
-                                      label: '编织板',
-                                      onTap: onWorkBoard,
-                                    ),
-                                  ),
-                                ],
+                              Expanded(
+                                child: _SidebarModeButton(
+                                  state: state,
+                                  icon: Icons.account_tree_outlined,
+                                  label: '分支图谱',
+                                  onTap: onBranchGraph,
+                                ),
                               ),
-                              const SizedBox(height: 10),
-                              _SidebarModeButton(
-                                state: state,
-                                icon: Icons.payments_outlined,
-                                label:
-                                    '用量统计 · ${_formatSidebarCost(state.totalEstimatedCostUsd)}',
-                                compact: true,
-                                onTap: onUsageStats,
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _SidebarModeButton(
+                                  state: state,
+                                  icon: Icons.dashboard_customize_outlined,
+                                  label: '编织板',
+                                  onTap: onWorkBoard,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _SidebarModeButton(
+                                  state: state,
+                                  icon: Icons.payments_outlined,
+                                  label: '用量',
+                                  subtitle: _formatSidebarCost(
+                                    state.totalEstimatedCostUsd,
+                                  ),
+                                  onTap: onUsageStats,
+                                ),
                               ),
                             ],
                           ),
@@ -193,16 +193,29 @@ class SidebarOverlay extends StatelessWidget {
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 12,
                                 ),
-                                child: Text(
-                                  '历史梦境',
-                                  style: state
-                                      .textStyle(
-                                        context,
-                                        size: 10,
-                                        weight: FontWeight.w700,
-                                        opacity: 0.36,
-                                      )
-                                      .copyWith(letterSpacing: 1.8),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '最近对话',
+                                        style: state
+                                            .textStyle(
+                                              context,
+                                              size: 10,
+                                              weight: FontWeight.w700,
+                                              opacity: 0.36,
+                                            )
+                                            .copyWith(letterSpacing: 1.8),
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.search_rounded,
+                                      size: 20,
+                                      color: state
+                                          .text(context)
+                                          .withValues(alpha: 0.56),
+                                    ),
+                                  ],
                                 ),
                               ),
                               const SizedBox(height: 10),
@@ -220,23 +233,59 @@ class SidebarOverlay extends StatelessWidget {
                                   ),
                                 )
                               else
-                                for (final session in state.chatSessions)
-                                  HistoryTile(
-                                    state: state,
-                                    session: session,
-                                    selected:
-                                        session.id == state.currentSessionId,
-                                    onTap: () {
-                                      state.selectSession(session);
-                                      onClose();
-                                    },
-                                    onLongPress: (tileContext) =>
-                                        _showHistoryActions(
-                                          context,
-                                          tileContext,
-                                          session,
+                                for (final entry
+                                    in groupedSessions.entries) ...[
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      12,
+                                      10,
+                                      12,
+                                      6,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          entry.key,
+                                          style: state
+                                              .textStyle(
+                                                context,
+                                                size: 10,
+                                                weight: FontWeight.w700,
+                                                opacity: 0.36,
+                                              )
+                                              .copyWith(letterSpacing: 1.6),
                                         ),
+                                        const Spacer(),
+                                        Text(
+                                          '${entry.value.length}',
+                                          style: state.textStyle(
+                                            context,
+                                            size: 10,
+                                            weight: FontWeight.w600,
+                                            opacity: 0.28,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
+                                  for (final session in entry.value)
+                                    _HistoryListTile(
+                                      state: state,
+                                      session: session,
+                                      selected:
+                                          session.id == state.currentSessionId,
+                                      onTap: () {
+                                        state.selectSession(session);
+                                        onClose();
+                                      },
+                                      onMore: (tileContext) =>
+                                          _showHistoryActions(
+                                            context,
+                                            tileContext,
+                                            session,
+                                          ),
+                                    ),
+                                ],
                             ],
                           ),
                         ),
@@ -274,11 +323,11 @@ class SidebarOverlay extends StatelessWidget {
                                         ),
                                       ),
                                       Text(
-                                        'Pro Plan',
+                                        'Pro Plan · 已同步',
                                         style: state.textStyle(
                                           context,
-                                          size: 10,
-                                          opacity: 0.4,
+                                          size: 10.5,
+                                          opacity: 0.46,
                                         ),
                                       ),
                                     ],
@@ -452,14 +501,14 @@ class _SidebarModeButton extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
-    this.compact = false,
+    this.subtitle,
   });
 
   final WeaviewState state;
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final bool compact;
+  final String? subtitle;
 
   @override
   Widget build(BuildContext context) {
@@ -470,55 +519,132 @@ class _SidebarModeButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
+          constraints: const BoxConstraints(minHeight: 68),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            child: compact
-                ? Row(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: state.text(context).withValues(alpha: 0.66),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: state.textStyle(
+                    context,
+                    size: 11,
+                    weight: FontWeight.w700,
+                    opacity: 0.74,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: state.textStyle(
+                      context,
+                      size: 9.5,
+                      weight: FontWeight.w600,
+                      opacity: 0.38,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HistoryListTile extends StatelessWidget {
+  const _HistoryListTile({
+    required this.state,
+    required this.session,
+    required this.selected,
+    required this.onTap,
+    required this.onMore,
+  });
+
+  final WeaviewState state;
+  final ChatSession session;
+  final bool selected;
+  final VoidCallback onTap;
+  final ValueChanged<BuildContext> onMore;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Material(
+        color: selected
+            ? state.text(context).withValues(alpha: 0.10)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          onLongPress: () => onMore(context),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(13, 10, 6, 10),
+            child: Row(
+              children: [
+                if (session.pinned) ...[
+                  Icon(
+                    Icons.push_pin_rounded,
+                    size: 14,
+                    color: state.accents[0].withValues(alpha: 0.72),
+                  ),
+                  const SizedBox(width: 7),
+                ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(
-                        icon,
-                        size: 18,
-                        color: state.accents[0].withValues(alpha: 0.82),
-                      ),
-                      const SizedBox(width: 9),
-                      Expanded(
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: state.textStyle(
-                            context,
-                            size: 12,
-                            weight: FontWeight.w700,
-                            opacity: 0.78,
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        icon,
-                        size: 19,
-                        color: state.text(context).withValues(alpha: 0.66),
-                      ),
-                      const SizedBox(height: 5),
                       Text(
-                        label,
-                        maxLines: 1,
+                        session.title,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: state.textStyle(
                           context,
-                          size: 11.5,
+                          size: 13.5,
+                          weight: selected ? FontWeight.w600 : FontWeight.w400,
+                          opacity: selected ? 1 : 0.72,
+                          height: 1.22,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatUpdatedTime(session.updatedAt),
+                        style: state.textStyle(
+                          context,
+                          size: 10,
                           weight: FontWeight.w600,
-                          opacity: 0.72,
+                          opacity: 0.32,
                         ),
                       ),
                     ],
                   ),
+                ),
+                IconButton(
+                  tooltip: '更多操作',
+                  onPressed: () => onMore(context),
+                  visualDensity: VisualDensity.compact,
+                  icon: Icon(
+                    Icons.more_horiz_rounded,
+                    color: state.text(context).withValues(alpha: 0.42),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -531,4 +657,32 @@ String _formatSidebarCost(double value) {
   if (value < 0.01) return '\$${value.toStringAsFixed(4)}';
   if (value < 1) return '\$${value.toStringAsFixed(3)}';
   return '\$${value.toStringAsFixed(2)}';
+}
+
+Map<String, List<ChatSession>> _groupSessionsByDate(
+  List<ChatSession> sessions,
+) {
+  final now = DateTime.now();
+  final startOfToday = DateTime(now.year, now.month, now.day);
+  final startOfYesterday = startOfToday.subtract(const Duration(days: 1));
+  final groups = <String, List<ChatSession>>{'今天': [], '昨天': [], '更早': []};
+  for (final session in sessions) {
+    final updated = DateTime.fromMillisecondsSinceEpoch(session.updatedAt);
+    if (!updated.isBefore(startOfToday)) {
+      groups['今天']!.add(session);
+    } else if (!updated.isBefore(startOfYesterday)) {
+      groups['昨天']!.add(session);
+    } else {
+      groups['更早']!.add(session);
+    }
+  }
+  groups.removeWhere((_, value) => value.isEmpty);
+  return groups;
+}
+
+String _formatUpdatedTime(int timestamp) {
+  final updated = DateTime.fromMillisecondsSinceEpoch(timestamp);
+  final hh = updated.hour.toString().padLeft(2, '0');
+  final mm = updated.minute.toString().padLeft(2, '0');
+  return '$hh:$mm';
 }

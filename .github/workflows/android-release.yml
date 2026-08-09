@@ -1,0 +1,65 @@
+name: Android Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release tag used in artifact filenames (for example v2.0.0)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.41.9"
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-pub
+
+      - name: Test
+        run: flutter test --no-pub
+
+      - name: Build split APKs
+        run: flutter build apk --release --split-per-abi --no-pub
+
+      - name: Prepare release assets
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          mkdir -p release
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "release/weaview-${RELEASE_VERSION}-arm64-v8a.apk"
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk "release/weaview-${RELEASE_VERSION}-armeabi-v7a.apk"
+          cp build/app/outputs/flutter-apk/app-x86_64-release.apk "release/weaview-${RELEASE_VERSION}-x86_64.apk"
+          cd release
+          sha256sum *.apk > SHA256SUMS.txt
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: weaview-${{ inputs.version }}-android
+          path: release/*
+          if-no-files-found: error
+          retention-days: 14

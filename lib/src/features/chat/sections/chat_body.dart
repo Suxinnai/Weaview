@@ -13,7 +13,12 @@ class ChatBody extends StatelessWidget {
     required this.scrollController,
     required this.dockExpanded,
     required this.dockHeight,
+    required this.hasConfiguredChatModel,
+    required this.hasConfiguredImageModel,
     required this.pendingAttachments,
+    required this.onStartChat,
+    required this.onStartImageGeneration,
+    required this.onChooseModel,
     required this.onCopyMessage,
     required this.onRetryMessage,
     required this.onEditMessage,
@@ -29,7 +34,12 @@ class ChatBody extends StatelessWidget {
   final ScrollController scrollController;
   final bool dockExpanded;
   final double dockHeight;
+  final bool hasConfiguredChatModel;
+  final bool hasConfiguredImageModel;
   final List<MessageAttachment> pendingAttachments;
+  final VoidCallback onStartChat;
+  final VoidCallback onStartImageGeneration;
+  final VoidCallback onChooseModel;
   final Future<void> Function(ChatMessage message) onCopyMessage;
   final Future<void> Function(int index) onRetryMessage;
   final Future<void> Function(int index) onEditMessage;
@@ -75,7 +85,9 @@ class ChatBody extends StatelessWidget {
                   child: Center(
                     child: TweenAnimationBuilder<double>(
                       tween: Tween(begin: 0, end: 1),
-                      duration: const Duration(milliseconds: 1000),
+                      duration: MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 650),
                       curve: Curves.easeOutCubic,
                       builder: (context, value, child) {
                         return Transform.translate(
@@ -83,35 +95,43 @@ class ChatBody extends StatelessWidget {
                           child: Opacity(opacity: value, child: child),
                         );
                       },
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            '今天，你想编织什么梦境？',
-                            textAlign: TextAlign.center,
-                            style: state
-                                .textStyle(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 20,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              'WEAVIEW CREATIVE STUDIO',
+                              textAlign: TextAlign.center,
+                              style: state
+                                  .textStyle(
+                                    context,
+                                    size: 10.5,
+                                    weight: FontWeight.w700,
+                                    opacity: 0.48,
+                                  )
+                                  .copyWith(letterSpacing: 1.6),
+                            ),
+                            const SizedBox(height: 12),
+                            Semantics(
+                              header: true,
+                              child: Text(
+                                '今天，你想编织什么梦境？',
+                                textAlign: TextAlign.center,
+                                style: state.textStyle(
                                   context,
-                                  size: 17,
-                                  weight: FontWeight.w300,
-                                  opacity: 0.82,
-                                )
-                                .copyWith(letterSpacing: 1.8),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'What dream shall we weave today?',
-                            textAlign: TextAlign.center,
-                            style: state
-                                .textStyle(
-                                  context,
-                                  size: 12,
-                                  weight: FontWeight.w400,
-                                  opacity: 0.38,
-                                )
-                                .copyWith(letterSpacing: 0.7),
-                          ),
-                        ],
+                                  size: 24,
+                                  weight: FontWeight.w600,
+                                  opacity: 0.9,
+                                  height: 1.25,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),

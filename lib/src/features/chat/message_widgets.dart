@@ -54,6 +54,7 @@ class MessageBubble extends StatefulWidget {
 
 class _MessageBubbleState extends State<MessageBubble> {
   final GlobalKey _actionsKey = GlobalKey();
+  final GlobalKey _assistantActionToggleKey = GlobalKey();
   bool _actionsVisible = false;
   bool _inlineEditing = false;
   TextEditingController? _inlineEditController;
@@ -115,6 +116,16 @@ class _MessageBubbleState extends State<MessageBubble> {
     final width = MediaQuery.sizeOf(context).width;
     final maxWidth = isUser ? width * 0.82 : width - 58;
     final textAlign = _messageTextAlign(state);
+    final assistantGeneratedImages = message.attachments
+        .where((attachment) => attachment.isImage)
+        .toList();
+    final assistantOtherAttachments = message.attachments
+        .where((attachment) => !attachment.isImage)
+        .toList();
+    final showsGeneratedImageGallery =
+        !isUser &&
+        message.activity == 'imageGeneration' &&
+        assistantGeneratedImages.isNotEmpty;
     if (isUser) {
       return Align(
         alignment: _messageShellAlignment(state, isUser: true),
@@ -131,36 +142,52 @@ class _MessageBubbleState extends State<MessageBubble> {
             GestureDetector(
               behavior: HitTestBehavior.translucent,
               onTap: _toggleActions,
-              child: _StyledMessageSurface(
-                state: state,
-                isUser: true,
-                maxWidth: maxWidth,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    if (message.attachments.isNotEmpty) ...[
-                      MessageAttachmentGrid(
-                        state: state,
-                        attachments: message.attachments,
-                        onDownload: widget.onDownloadAttachment,
-                      ),
-                      if (message.content.trim().isNotEmpty)
-                        const SizedBox(height: 10),
-                    ],
-                    if (message.content.trim().isNotEmpty)
-                      Text(
-                        message.content,
-                        textAlign: textAlign,
-                        style: state.textStyle(
-                          context,
-                          size: 14.5,
-                          height: 1.55,
+              child: Semantics(
+                container: true,
+                label: '用户消息',
+                hint: hasActionText ? '可通过下方操作按钮打开消息操作' : null,
+                child: _StyledMessageSurface(
+                  state: state,
+                  isUser: true,
+                  maxWidth: maxWidth,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      if (message.attachments.isNotEmpty) ...[
+                        MessageAttachmentGrid(
+                          state: state,
+                          attachments: message.attachments,
+                          onDownload: widget.onDownloadAttachment,
                         ),
-                      ),
-                  ],
+                        if (message.content.trim().isNotEmpty)
+                          const SizedBox(height: 10),
+                      ],
+                      if (message.content.trim().isNotEmpty)
+                        Text(
+                          message.content,
+                          textAlign: textAlign,
+                          style: state.textStyle(
+                            context,
+                            size: 14.5,
+                            height: 1.55,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
+            if (hasActionText)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: _MessageActionToggle(
+                  state: state,
+                  visible: _actionsVisible,
+                  alignRight: true,
+                  onTap: _toggleActions,
+                  keyValue: 'user-${widget.index}',
+                ),
+              ),
             _ActionReveal(
               key: _actionsKey,
               visible: _actionsVisible,
@@ -200,121 +227,165 @@ class _MessageBubbleState extends State<MessageBubble> {
         final start = _assistantPointerDown;
         _assistantPointerDown = null;
         if (start != null && (event.position - start).distance > 10) return;
+        final toggleBox =
+            _assistantActionToggleKey.currentContext?.findRenderObject()
+                as RenderBox?;
+        if (toggleBox != null && toggleBox.hasSize) {
+          final toggleBounds =
+              toggleBox.localToGlobal(Offset.zero) & toggleBox.size;
+          if (toggleBounds.contains(event.position)) return;
+        }
         if (!message.isThinking && !_inlineEditing) {
           _toggleActions();
         }
       },
-      child: Column(
-        crossAxisAlignment: _messageColumnAlignment(state),
-        children: [
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 460),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
-            transitionBuilder: (child, animation) {
-              final scale = Tween<double>(
-                begin: 0.98,
-                end: 1,
-              ).animate(animation);
-              return FadeTransition(
-                opacity: animation,
-                child: ScaleTransition(scale: scale, child: child),
-              );
-            },
-            child: message.isImageGenerating
-                ? Column(
-                    key: ValueKey('image-generating-${widget.index}'),
-                    crossAxisAlignment: _messageColumnAlignment(state),
-                    children: [
-                      ImageGenerationPanel(state: state),
-                      const SizedBox(height: 10),
-                    ],
-                  )
-                : Column(
-                    key: ValueKey(
-                      'assistant-content-${widget.index}-${message.attachments.length}',
-                    ),
-                    crossAxisAlignment: _messageColumnAlignment(state),
-                    children: [
-                      if (message.reasoning.trim().isNotEmpty ||
-                          message.isThinking) ...[
-                        ReasoningPanel(
-                          state: state,
-                          reasoning: message.reasoning,
-                          thinking: message.isThinking,
-                        ),
+      child: Semantics(
+        container: true,
+        label: '助手消息',
+        hint: hasActionText ? '可通过下方操作按钮打开消息操作' : null,
+        child: Column(
+          crossAxisAlignment: _messageColumnAlignment(state),
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 460),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) {
+                final scale = Tween<double>(
+                  begin: 0.98,
+                  end: 1,
+                ).animate(animation);
+                return FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(scale: scale, child: child),
+                );
+              },
+              child: message.isImageGenerating
+                  ? Column(
+                      key: ValueKey('image-generating-${widget.index}'),
+                      crossAxisAlignment: _messageColumnAlignment(state),
+                      children: [
+                        ImageGenerationPanel(state: state),
                         const SizedBox(height: 10),
                       ],
-                      if (message.comparisonResults.isNotEmpty)
-                        ModelComparisonPanel(
-                          state: state,
-                          results: message.comparisonResults,
-                        )
-                      else if (message.attachments.isNotEmpty ||
-                          message.content.trim().isNotEmpty ||
-                          !message.isThinking)
-                        _StyledMessageSurface(
-                          state: state,
-                          isUser: false,
-                          maxWidth: maxWidth,
-                          child: Column(
-                            crossAxisAlignment: _messageColumnAlignment(state),
-                            children: [
-                              if (message.attachments.isNotEmpty) ...[
-                                MessageAttachmentGrid(
-                                  state: state,
-                                  attachments: message.attachments,
-                                  onDownload: widget.onDownloadAttachment,
-                                  imageExtent: 176,
-                                  animateImages: true,
-                                ),
-                                if (message.content.trim().isNotEmpty)
-                                  const SizedBox(height: 12),
-                              ],
-                              if (_inlineEditing)
-                                _InlineModelEditor(
-                                  state: state,
-                                  controller: _inlineEditController!,
-                                  onCancel: _cancelInlineEdit,
-                                  onSave: _saveInlineEdit,
-                                )
-                              else if (message.content.trim().isNotEmpty ||
-                                  message.attachments.isEmpty)
-                                _AiMarkdown(
-                                  state: state,
-                                  data: message.content.isEmpty
-                                      ? ' '
-                                      : message.content,
-                                  textAlign: textAlign,
-                                ),
-                            ],
+                    )
+                  : Column(
+                      key: ValueKey(
+                        'assistant-content-${widget.index}-${message.attachments.length}',
+                      ),
+                      crossAxisAlignment: _messageColumnAlignment(state),
+                      children: [
+                        if (message.reasoning.trim().isNotEmpty ||
+                            message.isThinking) ...[
+                          ReasoningPanel(
+                            state: state,
+                            reasoning: message.reasoning,
+                            thinking: message.isThinking,
                           ),
-                        ),
-                    ],
-                  ),
-          ),
-          _ActionReveal(
-            key: _actionsKey,
-            visible: _actionsVisible,
-            child: MessageActionBar(
-              state: state,
-              isModel: true,
-              hasText: hasActionText,
-              onCopy: widget.onCopy,
-              onRetry: widget.onRetry,
-              onEdit: _startInlineEdit,
-              onTranslate: widget.onTranslate,
-              onBranch: widget.onBranch,
-              onSaveCard: widget.onSaveCard,
-              onDelete: widget.onDelete,
-              onSpeak: widget.onSpeak,
+                          const SizedBox(height: 10),
+                        ],
+                        if (message.comparisonResults.isNotEmpty)
+                          ModelComparisonPanel(
+                            state: state,
+                            results: message.comparisonResults,
+                          )
+                        else if (message.attachments.isNotEmpty ||
+                            message.content.trim().isNotEmpty ||
+                            !message.isThinking)
+                          _StyledMessageSurface(
+                            state: state,
+                            isUser: false,
+                            maxWidth: maxWidth,
+                            child: Column(
+                              crossAxisAlignment: _messageColumnAlignment(
+                                state,
+                              ),
+                              children: [
+                                if (showsGeneratedImageGallery) ...[
+                                  GeneratedImageGallery(
+                                    state: state,
+                                    attachments: assistantGeneratedImages,
+                                    onDownload: widget.onDownloadAttachment,
+                                  ),
+                                  if (assistantOtherAttachments.isNotEmpty) ...[
+                                    const SizedBox(height: 10),
+                                    MessageAttachmentGrid(
+                                      state: state,
+                                      attachments: assistantOtherAttachments,
+                                      onDownload: widget.onDownloadAttachment,
+                                      animateImages: true,
+                                    ),
+                                  ],
+                                  if (message.content.trim().isNotEmpty)
+                                    const SizedBox(height: 12),
+                                ] else if (message.attachments.isNotEmpty) ...[
+                                  MessageAttachmentGrid(
+                                    state: state,
+                                    attachments: message.attachments,
+                                    onDownload: widget.onDownloadAttachment,
+                                    imageExtent: 176,
+                                    animateImages: true,
+                                  ),
+                                  if (message.content.trim().isNotEmpty)
+                                    const SizedBox(height: 12),
+                                ],
+                                if (_inlineEditing)
+                                  _InlineModelEditor(
+                                    state: state,
+                                    controller: _inlineEditController!,
+                                    onCancel: _cancelInlineEdit,
+                                    onSave: _saveInlineEdit,
+                                  )
+                                else if (message.content.trim().isNotEmpty ||
+                                    message.attachments.isEmpty)
+                                  _AiMarkdown(
+                                    state: state,
+                                    data: message.content.isEmpty
+                                        ? ' '
+                                        : message.content,
+                                    textAlign: textAlign,
+                                  ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
             ),
-          ),
-          if (message.translation.trim().isNotEmpty) ...[
-            const SizedBox(height: 10),
-            TranslationBlock(state: state, text: message.translation),
+            if (hasActionText)
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: _MessageActionToggle(
+                  key: _assistantActionToggleKey,
+                  state: state,
+                  visible: _actionsVisible,
+                  alignRight: false,
+                  onTap: _toggleActions,
+                  keyValue: 'assistant-${widget.index}',
+                ),
+              ),
+            _ActionReveal(
+              key: _actionsKey,
+              visible: _actionsVisible,
+              child: MessageActionBar(
+                state: state,
+                isModel: true,
+                hasText: hasActionText,
+                onCopy: widget.onCopy,
+                onRetry: widget.onRetry,
+                onEdit: _startInlineEdit,
+                onTranslate: widget.onTranslate,
+                onBranch: widget.onBranch,
+                onSaveCard: widget.onSaveCard,
+                onDelete: widget.onDelete,
+                onSpeak: widget.onSpeak,
+              ),
+            ),
+            if (message.translation.trim().isNotEmpty) ...[
+              const SizedBox(height: 10),
+              TranslationBlock(state: state, text: message.translation),
+            ],
           ],
-        ],
+        ),
       ),
     );
     return Align(
@@ -331,6 +402,71 @@ class _MessageBubbleState extends State<MessageBubble> {
           const SizedBox(height: 8),
           assistantContent,
         ],
+      ),
+    );
+  }
+}
+
+class _MessageActionToggle extends StatelessWidget {
+  const _MessageActionToggle({
+    super.key,
+    required this.state,
+    required this.visible,
+    required this.alignRight,
+    required this.onTap,
+    required this.keyValue,
+  });
+
+  final WeaviewState state;
+  final bool visible;
+  final bool alignRight;
+  final VoidCallback onTap;
+  final String keyValue;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = visible ? '收起操作' : '显示操作';
+    final text = state.text(context);
+    final background = state
+        .layer(context)
+        .withValues(alpha: state.isDark(context) ? 0.34 : 0.54);
+    return Align(
+      alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
+      child: Semantics(
+        button: true,
+        label: label,
+        child: Tooltip(
+          message: label,
+          child: Material(
+            color: background,
+            borderRadius: BorderRadius.circular(999),
+            child: InkWell(
+              key: ValueKey('message-action-toggle-$keyValue'),
+              borderRadius: BorderRadius.circular(999),
+              onTap: onTap,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+                child: Center(
+                  child: Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: text.withValues(alpha: 0.05),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Icon(
+                      visible
+                          ? Icons.keyboard_arrow_up_rounded
+                          : Icons.more_horiz_rounded,
+                      size: 18,
+                      color: text.withValues(alpha: 0.58),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

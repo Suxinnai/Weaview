@@ -29,12 +29,15 @@ class WeaviewPreferences {
   String get userName => _prefs.getString(_PrefsKey.userName) ?? '织梦者';
   String get assistantName => _prefs.getString(_PrefsKey.assistantName) ?? '织境';
   String get userProfile => _prefs.getString(_PrefsKey.userProfile) ?? '';
+  String? get lastSessionId => _prefs.getString(_PrefsKey.lastSessionId);
 
   ThemeMode get themeMode =>
       decodeThemeMode(_prefs.getString(_PrefsKey.themeMode));
   Color? get themeBackground =>
       colorFromHex(_prefs.getString(_PrefsKey.themeBackground));
   Color? get themeText => colorFromHex(_prefs.getString(_PrefsKey.themeText));
+  Color? get themeAccent =>
+      colorFromHex(_prefs.getString(_PrefsKey.themeAccent));
   Color? get assistantBubble =>
       colorFromHex(_prefs.getString(_PrefsKey.themeAssistantBubble));
   Color? get userBubble =>
@@ -157,6 +160,10 @@ class WeaviewPreferences {
     _prefs.setString(_PrefsKey.themeText, colorToHex(value));
   }
 
+  void saveThemeAccent(Color value) {
+    _prefs.setString(_PrefsKey.themeAccent, colorToHex(value));
+  }
+
   void clearGlobalThemeOverrides() {
     _prefs
       ..remove(_PrefsKey.themeBackground)
@@ -214,6 +221,7 @@ class WeaviewPreferences {
       ..remove(_PrefsKey.themeText)
       ..remove(_PrefsKey.themeAssistantBubble)
       ..remove(_PrefsKey.themeUserBubble)
+      ..remove(_PrefsKey.themeAccent)
       ..setString(_PrefsKey.themeFontFamily, fontFamily)
       ..setString(_PrefsKey.themeFontStyle, fontStyle)
       ..setString(_PrefsKey.themeFontWeight, fontWeight)
@@ -308,6 +316,11 @@ class WeaviewPreferences {
     );
   }
 
+  void saveLastSessionId(String? sessionId) {
+    final value = sessionId?.trim() ?? '';
+    _prefs.setString(_PrefsKey.lastSessionId, value);
+  }
+
   void saveProviders(List<AiProvider> providers) {
     _prefs.setString(
       _PrefsKey.aiProviders,
@@ -353,6 +366,7 @@ abstract final class _PrefsKey {
   static const themeMode = 'theme_mode';
   static const themeBackground = 'theme_background';
   static const themeText = 'theme_text';
+  static const themeAccent = 'theme_accent';
   static const themeAssistantBubble = 'theme_assistant_bubble';
   static const themeUserBubble = 'theme_user_bubble';
   static const themeFontFamily = 'theme_font_family';
@@ -363,6 +377,7 @@ abstract final class _PrefsKey {
   static const themeAssistantBubbleOpacity = 'theme_assistant_bubble_opacity';
   static const themeUserBubbleOpacity = 'theme_user_bubble_opacity';
   static const chatSessions = 'chat_sessions';
+  static const lastSessionId = 'last_session_id';
   static const aiProviders = 'ai_providers';
   static const aiModelAssignments = 'ai_model_assignments';
   static const aiMemories = 'ai_memories';

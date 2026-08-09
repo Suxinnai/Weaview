@@ -12,7 +12,10 @@ void main() {
         'ChatGPT Images 2.0',
         'imagen-4',
         'gemini-3-pro-image',
+        'gemini-3.1-flash-lite-image',
+        'gemini-3.1-flash-image',
         'gemini-3.1-flash-image-preview',
+        'gemini-2.5-flash-image',
         'nano-banana-pro',
         'FLUX.2',
         'qwen-image-edit',
@@ -114,5 +117,29 @@ void main() {
       expect(capabilities, containsAll(['chat', 'vision']));
       expect(capabilities, isNot(contains('image')));
     });
+  });
+
+  test('ships the complete stable Gemini image model catalog', () {
+    expect(
+      geminiImageModels.map((model) => model.id),
+      containsAllInOrder([
+        'gemini-3.1-flash-lite-image',
+        'gemini-3.1-flash-image',
+        'gemini-3-pro-image',
+        'gemini-2.5-flash-image',
+      ]),
+    );
+    expect(
+      geminiImageModels.map((model) => model.name),
+      containsAllInOrder([
+        'Nano Banana 2 Lite',
+        'Nano Banana 2',
+        'Nano Banana Pro',
+        'Nano Banana',
+      ]),
+    );
+    for (final model in geminiImageModels) {
+      expect(model.capabilities, containsAll(['vision', 'image']));
+    }
   });
 }

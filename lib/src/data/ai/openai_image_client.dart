@@ -36,6 +36,8 @@ class OpenAiImageClient {
     required String imageModel,
     required Duration timeout,
     String size = '1024x1024',
+    Map<String, dynamic> imageRequestExtraBody = const {},
+    bool includeImageSize = true,
   }) async {
     final imageAttachments = attachments
         .where((attachment) => attachment.isImage)
@@ -123,6 +125,8 @@ class OpenAiImageClient {
           imageModel: imageModel,
           timeout: timeout,
           size: size,
+          extraBody: imageRequestExtraBody,
+          includeSize: includeImageSize,
         );
       }
     } catch (error) {
@@ -522,6 +526,8 @@ $prompt
     required String imageModel,
     required Duration timeout,
     required String size,
+    required Map<String, dynamic> extraBody,
+    required bool includeSize,
   }) async {
     final uri = Uri.parse(
       '${app_utils.normalizeBaseUrl(baseUrl)}/images/generations',
@@ -535,6 +541,8 @@ $prompt
         imageModel: imageModel,
         timeout: timeout,
         size: size,
+        extraBody: extraBody,
+        includeSize: includeSize,
         retryTransient: false,
       );
       return _imageResultFromPayload(
@@ -557,6 +565,8 @@ $prompt
         imageModel: imageModel,
         timeout: timeout,
         size: size,
+        extraBody: extraBody,
+        includeSize: includeSize,
       );
       return _imageResultFromPayload(
         payload,
@@ -578,6 +588,8 @@ $prompt
     required String imageModel,
     required Duration timeout,
     required String size,
+    required Map<String, dynamic> extraBody,
+    required bool includeSize,
     bool retryTransient = true,
   }) {
     Future<ParsedImageGenerationResult> operation() async {
@@ -592,10 +604,11 @@ $prompt
             body: jsonEncode({
               'model': imageModel,
               'prompt': prompt,
-              'size': size,
+              if (includeSize) 'size': size,
               'output_format': 'png',
               'response_format': 'b64_json',
               'n': 1,
+              ...extraBody,
             }),
           )
           .timeout(timeout);
@@ -620,6 +633,8 @@ $prompt
     required String imageModel,
     required Duration timeout,
     required String size,
+    required Map<String, dynamic> extraBody,
+    required bool includeSize,
   }) async {
     final client = http.Client();
     try {
@@ -632,11 +647,12 @@ $prompt
         ..body = jsonEncode({
           'model': imageModel,
           'prompt': prompt,
-          'size': size,
+          if (includeSize) 'size': size,
           'output_format': 'png',
           'response_format': 'b64_json',
           'n': 1,
           'stream': true,
+          ...extraBody,
         });
       final response = await client.send(request).timeout(timeout);
       if (response.statusCode < 200 || response.statusCode >= 300) {

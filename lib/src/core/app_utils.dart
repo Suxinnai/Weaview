@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -94,16 +95,65 @@ Color readableTextFor(Color background) {
   return background.computeLuminance() > 0.48 ? textLight : textDark;
 }
 
+const int _maxAvatarCacheEntries = 4;
+const int _maxAvatarDecodeExtent = 256;
+final Map<String, ImageProvider> _avatarImageProviders = {};
+
+void configureImageMemoryPolicy() {
+  final cache = PaintingBinding.instance.imageCache;
+  cache.maximumSize = 120;
+  cache.maximumSizeBytes = 64 * 1024 * 1024;
+}
+
+void releaseBackgroundImageMemory() {
+  final cache = PaintingBinding.instance.imageCache;
+  cache.clearLiveImages();
+  cache.clear();
+  _avatarImageProviders.clear();
+}
+
+int thumbnailDecodeWidth(BuildContext context) {
+  final logicalWidth = MediaQuery.sizeOf(context).width;
+  final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+  return math.min(1024, math.max(480, (logicalWidth * pixelRatio).round()));
+}
+
+int previewDecodeWidth(BuildContext context) {
+  final logicalWidth = MediaQuery.sizeOf(context).width;
+  final pixelRatio = MediaQuery.devicePixelRatioOf(context);
+  return math.min(
+    2048,
+    math.max(1024, (logicalWidth * pixelRatio * 1.5).round()),
+  );
+}
+
 ImageProvider? avatarImage(String value) {
   if (value.isEmpty) return null;
+  final cached = _avatarImageProviders[value];
+  if (cached != null) return cached;
+  ImageProvider? provider;
   if (value.startsWith('data:image')) {
     final comma = value.indexOf(',');
     if (comma < 0) return null;
-    return MemoryImage(base64Decode(value.substring(comma + 1)));
+    provider = ResizeImage(
+      MemoryImage(base64Decode(value.substring(comma + 1))),
+      width: _maxAvatarDecodeExtent,
+      height: _maxAvatarDecodeExtent,
+    );
+  } else {
+    final file = File(value);
+    if (!file.existsSync()) return null;
+    provider = ResizeImage(
+      FileImage(file),
+      width: _maxAvatarDecodeExtent,
+      height: _maxAvatarDecodeExtent,
+    );
   }
-  final file = File(value);
-  if (!file.existsSync()) return null;
-  return FileImage(file);
+  if (_avatarImageProviders.length >= _maxAvatarCacheEntries) {
+    _avatarImageProviders.remove(_avatarImageProviders.keys.first);
+  }
+  _avatarImageProviders[value] = provider;
+  return provider;
 }
 
 String formatBytes(int bytes) {

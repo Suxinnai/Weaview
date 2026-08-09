@@ -43,7 +43,7 @@ void main() {
     state.dispose();
   });
 
-  testWidgets('comparison picker enforces the five-model maximum', (
+  testWidgets('comparison picker enforces the three-model maximum', (
     tester,
   ) async {
     final state = WeaviewState();
@@ -64,13 +64,11 @@ void main() {
       ),
     );
 
-    for (final model in ['model-3', 'model-4', 'model-5', 'model-6']) {
-      await tester.tap(find.text(model));
-      await tester.pump();
-    }
+    await tester.tap(find.text('model-3'));
+    await tester.pump();
 
-    expect(find.text('已选择 5/5'), findsOneWidget);
-    expect(find.text('最多选择 5 个模型'), findsOneWidget);
+    expect(find.text('已选 3/3'), findsOneWidget);
+    expect(find.text('最多同时选择 3 个模型'), findsOneWidget);
     state.dispose();
   });
 

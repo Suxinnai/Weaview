@@ -9,6 +9,51 @@ import '../../../domain/models.dart';
 import '../../../shared/widgets/shared_widgets.dart';
 import '../settings_sheet.dart';
 
+String _roleLabel(String role) {
+  return SettingsSheetState.settingsRoles[role]?.$1 ?? role;
+}
+
+String _roleCapabilityHint(String role) {
+  switch (role) {
+    case 'image':
+      return '仅显示支持图片生成的模型。';
+    case 'tool':
+      return '优先使用支持工具调用的聊天模型；纯生图模型不会出现在这里。';
+    case 'title':
+    case 'suggest':
+    case 'translate':
+    case 'chat':
+      return '仅显示可用于文本对话的模型；纯生图模型不会出现在这里。';
+    default:
+      return '将根据角色能力自动过滤模型。';
+  }
+}
+
+String? _validateRoleDraft({
+  required String role,
+  required ModelAssignment draft,
+  required Iterable<AiProvider> providers,
+}) {
+  if (draft.provider.trim().isEmpty || draft.model.trim().isEmpty) return null;
+  final provider = providers.firstWhereOrNull((p) => p.name == draft.provider);
+  if (provider == null) {
+    return '已选提供商不可用，请重新选择。';
+  }
+  final model = provider.models.firstWhereOrNull((m) => m.name == draft.model);
+  if (model == null) {
+    return '已选模型不存在，请重新选择。';
+  }
+  if (!supportsModelRole(
+    role: role,
+    id: model.id,
+    name: model.name,
+    capabilities: model.capabilities,
+  )) {
+    return '${_roleLabel(role)}不能使用当前模型，请改选兼容模型。';
+  }
+  return null;
+}
+
 extension SettingsDetailViews on SettingsSheetState {
   Widget systemPromptView() {
     final state = widget.state;
@@ -563,7 +608,7 @@ extension SettingsDetailViews on SettingsSheetState {
                   Expanded(
                     child: SoftButton(
                       state: state,
-                      label: editingProvider!.enabled ? '禁用当前' : '重新启用',
+                      label: editingProvider!.enabled ? '禁用提供商' : '重新启用',
                       danger: editingProvider!.enabled,
                       onTap: () => saveProvider(
                         false,
@@ -608,17 +653,33 @@ extension SettingsDetailViews on SettingsSheetState {
 
   Widget modelRoleConfigView() {
     final state = widget.state;
+    final role = editingRole ?? 'chat';
     final providers = [
       ...state.enabledModelProviders,
       if (roleDraft.provider.isNotEmpty &&
           !state.enabledModelProviders.any((p) => p.name == roleDraft.provider))
         ...state.providers.where((p) => p.name == roleDraft.provider),
     ];
-    final providerModels =
+    final allProviderModels =
         providers
             .firstWhereOrNull((p) => p.name == roleDraft.provider)
             ?.models ??
         const <AiModel>[];
+    final providerModels = allProviderModels
+        .where(
+          (model) => supportsModelRole(
+            role: role,
+            id: model.id,
+            name: model.name,
+            capabilities: model.capabilities,
+          ),
+        )
+        .toList();
+    final incompatibleSelection = _validateRoleDraft(
+      role: role,
+      draft: roleDraft,
+      providers: providers,
+    );
     return scrollContent([
       SectionLabel(state: state, label: '默认模型'),
       CardShell(
@@ -634,9 +695,25 @@ extension SettingsDetailViews on SettingsSheetState {
               items: ['未选择', ...providers.map((p) => p.name)],
               itemDescriptions: {
                 for (final provider in providers)
-                  provider.name: provider.status == '使用中'
-                      ? '当前启用'
-                      : '${provider.models.length} 个模型',
+                  provider.name: (() {
+                    final compatibleCount = provider.models
+                        .where(
+                          (model) => supportsModelRole(
+                            role: role,
+                            id: model.id,
+                            name: model.name,
+                            capabilities: model.capabilities,
+                          ),
+                        )
+                        .length;
+                    if (compatibleCount == 0) {
+                      return '无兼容模型';
+                    }
+                    if (provider.status == '使用中') {
+                      return '当前启用 · $compatibleCount 个兼容模型';
+                    }
+                    return '$compatibleCount 个兼容模型';
+                  })(),
               },
               onChanged: (value) => updateSheet(() {
                 roleDraft = roleDraft.copyWith(
@@ -660,6 +737,19 @@ extension SettingsDetailViews on SettingsSheetState {
                   model: value == '未选择' ? '' : value,
                 );
               }),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              incompatibleSelection ??
+                  (roleDraft.provider.isNotEmpty && providerModels.isEmpty
+                      ? '当前提供商没有适合${_roleLabel(role)}的模型。'
+                      : _roleCapabilityHint(role)),
+              style: state.textStyle(
+                context,
+                size: 12,
+                opacity: incompatibleSelection == null ? 0.5 : 0.82,
+                height: 1.45,
+              ),
             ),
           ],
         ),
@@ -712,9 +802,19 @@ extension SettingsDetailViews on SettingsSheetState {
         label: '保存设置',
         accent: true,
         onTap: () {
-          if (editingRole != null) {
-            state.saveModelAssignment(editingRole!, roleDraft);
+          final currentRole = editingRole;
+          if (currentRole == null) return;
+          final validationMessage = _validateRoleDraft(
+            role: currentRole,
+            draft: roleDraft,
+            providers: providers,
+          );
+          if (validationMessage != null) {
+            updateSheet(() => statusText = validationMessage);
+            widget.showSnack(validationMessage);
+            return;
           }
+          state.saveModelAssignment(currentRole, roleDraft);
           goBack();
         },
       ),

@@ -144,20 +144,24 @@ class _MessageIconAction extends StatelessWidget {
   Widget build(BuildContext context) {
     final dark = state.isDark(context);
     final text = state.text(context);
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: state.layer(context).withValues(alpha: dark ? 0.62 : 0.74),
-        shape: const CircleBorder(),
-        elevation: dark ? 0 : 4,
-        shadowColor: Colors.black.withValues(alpha: 0.08),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: SizedBox(
-            width: 34,
-            height: 34,
-            child: Icon(icon, size: 16.5, color: text.withValues(alpha: 0.62)),
+    return Semantics(
+      button: true,
+      label: tooltip,
+      child: Tooltip(
+        message: tooltip,
+        child: Material(
+          color: state.layer(context).withValues(alpha: dark ? 0.62 : 0.74),
+          shape: const CircleBorder(),
+          elevation: dark ? 0 : 4,
+          shadowColor: Colors.black.withValues(alpha: 0.08),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onTap,
+            child: SizedBox(
+              width: 44,
+              height: 44,
+              child: Icon(icon, size: 18, color: text.withValues(alpha: 0.62)),
+            ),
           ),
         ),
       ),

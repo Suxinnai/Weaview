@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/weaview_state.dart';
 import '../../domain/models.dart';
+import '../../shared/widgets/brand_icon.dart';
 
 class ComparisonModelPicker extends StatefulWidget {
   const ComparisonModelPicker({
@@ -20,20 +21,47 @@ class ComparisonModelPicker extends StatefulWidget {
 }
 
 class _ComparisonModelPickerState extends State<ComparisonModelPicker> {
+  late final Set<String> _availableKeys = widget.options.map(_modelKey).toSet();
   late final Set<String> _selected = widget.initialSelection
       .map(_modelKey)
-      .where(widget.options.map(_modelKey).toSet().contains)
-      .take(5)
+      .where(_availableKeys.contains)
+      .take(3)
       .toSet();
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+  String _providerFilter = _allProvidersKey;
   String? _validationMessage;
+
+  List<String> get _providerOptions {
+    final providers = <String>{};
+    for (final option in widget.options) {
+      final provider = option.provider.trim();
+      if (provider.isNotEmpty) providers.add(provider);
+    }
+    final sorted = providers.toList()..sort((a, b) => a.compareTo(b));
+    return [_allProvidersKey, ...sorted];
+  }
+
+  List<ModelAssignment> get _visibleOptions {
+    final normalized = _query.trim().toLowerCase();
+    return widget.options.where((option) {
+      if (_providerFilter != _allProvidersKey &&
+          option.provider != _providerFilter) {
+        return false;
+      }
+      if (normalized.isEmpty) return true;
+      final haystack = '${option.provider} ${option.model}'.toLowerCase();
+      return haystack.contains(normalized);
+    }).toList();
+  }
 
   void _toggle(ModelAssignment option) {
     final key = _modelKey(option);
     setState(() {
       _validationMessage = null;
       if (_selected.remove(key)) return;
-      if (_selected.length >= 5) {
-        _validationMessage = '最多选择 5 个模型';
+      if (_selected.length >= 3) {
+        _validationMessage = '最多选择 3 个模型';
         return;
       }
       _selected.add(key);
@@ -52,12 +80,24 @@ class _ComparisonModelPickerState extends State<ComparisonModelPicker> {
   }
 
   @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final state = widget.state;
     final dark = state.isDark(context);
+    final textColor = state.text(context);
+    final visibleOptions = _visibleOptions;
+    final selectedItems = [
+      for (final option in widget.options)
+        if (_selected.contains(_modelKey(option))) option,
+    ];
     return Material(
       color: state.layer(context).withValues(alpha: dark ? 0.98 : 1),
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
       clipBehavior: Clip.antiAlias,
       child: SafeArea(
         top: false,
@@ -65,32 +105,33 @@ class _ComparisonModelPickerState extends State<ComparisonModelPicker> {
           children: [
             const SizedBox(height: 10),
             Container(
-              width: 38,
-              height: 4,
+              width: 80,
+              height: 5,
               decoration: BoxDecoration(
-                color: state.text(context).withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(2),
+                color: textColor.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(999),
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+              padding: const EdgeInsets.fromLTRB(20, 18, 16, 8),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '选择对照模型',
+                          '选择对比模型',
                           style: state.textStyle(
                             context,
                             size: 18,
                             weight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         Text(
-                          '选择 2–5 个已配置的聊天模型',
+                          '最多同时选择 3 个模型',
                           style: state.textStyle(
                             context,
                             size: 13,
@@ -98,6 +139,16 @@ class _ComparisonModelPickerState extends State<ComparisonModelPicker> {
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2, right: 6),
+                    child: Text(
+                      '已选 ${_selected.length}/3',
+                      key: const Key('comparison-selection-count'),
+                      style: state
+                          .textStyle(context, size: 15, weight: FontWeight.w700)
+                          .copyWith(color: state.accents[0]),
                     ),
                   ),
                   IconButton(
@@ -109,134 +160,111 @@ class _ComparisonModelPickerState extends State<ComparisonModelPicker> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
-              child: Row(
-                children: [
-                  Text(
-                    '已选择 ${_selected.length}/5',
-                    key: const Key('comparison-selection-count'),
-                    style: state
-                        .textStyle(context, size: 12.5, weight: FontWeight.w600)
-                        .copyWith(color: state.accents[0]),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+              child: TextField(
+                controller: _searchController,
+                minLines: 1,
+                maxLines: 1,
+                decoration: InputDecoration(
+                  hintText: '搜索模型',
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    color: textColor.withValues(alpha: 0.42),
                   ),
-                  if (_validationMessage != null) ...[
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        _validationMessage!,
-                        key: const Key('comparison-selection-error'),
-                        textAlign: TextAlign.end,
-                        style: state
-                            .textStyle(context, size: 12.5)
-                            .copyWith(color: Colors.red),
-                      ),
-                    ),
-                  ],
-                ],
+                  filled: true,
+                  fillColor: textColor.withValues(alpha: dark ? 0.07 : 0.045),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(18),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                ),
+                onChanged: (value) => setState(() => _query = value),
               ),
             ),
-            Divider(
-              height: 1,
-              color: state.text(context).withValues(alpha: 0.07),
-            ),
-            Expanded(
+            SizedBox(
+              height: 48,
               child: ListView.separated(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                itemCount: widget.options.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 4),
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                scrollDirection: Axis.horizontal,
+                itemCount: _providerOptions.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 10),
                 itemBuilder: (context, index) {
-                  final option = widget.options[index];
-                  final selected = _selected.contains(_modelKey(option));
-                  return Semantics(
+                  final provider = _providerOptions[index];
+                  final selected = provider == _providerFilter;
+                  final label = provider == _allProvidersKey ? '全部' : provider;
+                  return _ProviderFilterChip(
+                    state: state,
+                    label: label,
                     selected: selected,
-                    button: true,
-                    label:
-                        '${option.provider} ${option.model}${selected ? '，已选择' : ''}',
-                    child: Material(
-                      color: selected
-                          ? state.accents[0].withValues(alpha: 0.10)
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(16),
-                      child: InkWell(
-                        key: Key('comparison-option-${_modelKey(option)}'),
-                        borderRadius: BorderRadius.circular(16),
-                        onTap: () => _toggle(option),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(minHeight: 56),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  width: 36,
-                                  height: 36,
-                                  decoration: BoxDecoration(
-                                    color: state.accents[index % 2].withValues(
-                                      alpha: 0.12,
-                                    ),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.auto_awesome_rounded,
-                                    size: 17,
-                                    color: state.accents[index % 2],
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        option.model,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: state.textStyle(
-                                          context,
-                                          size: 14,
-                                          weight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        option.provider,
-                                        style: state.textStyle(
-                                          context,
-                                          size: 12,
-                                          opacity: 0.50,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Checkbox(
-                                  value: selected,
-                                  onChanged: (_) => _toggle(option),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                    onTap: () => setState(() => _providerFilter = provider),
                   );
                 },
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-              child: SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: FilledButton(
-                  key: const Key('comparison-selection-confirm'),
-                  onPressed: _selected.length >= 2 ? _confirm : null,
-                  child: const Text('开始对照'),
+            if (_validationMessage != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    _validationMessage!,
+                    key: const Key('comparison-selection-error'),
+                    style: state
+                        .textStyle(context, size: 12.5)
+                        .copyWith(color: Colors.red),
+                  ),
                 ),
+              ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: visibleOptions.isEmpty
+                  ? _EmptyComparisonState(state: state, query: _query)
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                      itemCount: visibleOptions.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final option = visibleOptions[index];
+                        final selected = _selected.contains(_modelKey(option));
+                        return _ComparisonOptionCard(
+                          state: state,
+                          option: option,
+                          selected: selected,
+                          onTap: () => _toggle(option),
+                        );
+                      },
+                    ),
+            ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+              decoration: BoxDecoration(
+                border: Border(
+                  top: BorderSide(color: textColor.withValues(alpha: 0.08)),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _SelectedComparisonSummary(
+                      state: state,
+                      selectedItems: selectedItems,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  SizedBox(
+                    width: 172,
+                    height: 52,
+                    child: FilledButton(
+                      key: const Key('comparison-selection-confirm'),
+                      onPressed: _selected.length >= 2 ? _confirm : null,
+                      child: const Text('开始对比'),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -246,5 +274,327 @@ class _ComparisonModelPickerState extends State<ComparisonModelPicker> {
   }
 }
 
+class _ProviderFilterChip extends StatelessWidget {
+  const _ProviderFilterChip({
+    required this.state,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final WeaviewState state;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = state.text(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onTap,
+          child: Ink(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+            decoration: BoxDecoration(
+              color: selected
+                  ? state.accents[0].withValues(alpha: 0.12)
+                  : textColor.withValues(alpha: 0.04),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: selected
+                    ? state.accents[0].withValues(alpha: 0.26)
+                    : textColor.withValues(alpha: 0.08),
+              ),
+            ),
+            child: Center(
+              child: Text(
+                label,
+                style: state
+                    .textStyle(
+                      context,
+                      size: 13,
+                      weight: FontWeight.w600,
+                      opacity: selected ? 1 : 0.62,
+                    )
+                    .copyWith(color: selected ? state.accents[0] : textColor),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ComparisonOptionCard extends StatelessWidget {
+  const _ComparisonOptionCard({
+    required this.state,
+    required this.option,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final WeaviewState state;
+  final ModelAssignment option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final providerColor = _providerColor(option.provider);
+    final textColor = state.text(context);
+    return Semantics(
+      selected: selected,
+      button: true,
+      label: '${option.provider} ${option.model}${selected ? '，已选择' : ''}',
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(22),
+        child: InkWell(
+          key: Key('comparison-option-${_modelKey(option)}'),
+          borderRadius: BorderRadius.circular(22),
+          onTap: onTap,
+          child: Ink(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+            decoration: BoxDecoration(
+              color: selected
+                  ? state.accents[0].withValues(alpha: 0.08)
+                  : textColor.withValues(alpha: 0.035),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(
+                color: selected
+                    ? state.accents[0].withValues(alpha: 0.24)
+                    : textColor.withValues(alpha: 0.08),
+              ),
+            ),
+            child: Row(
+              children: [
+                BrandIcon.named(
+                  label: option.provider,
+                  color: providerColor,
+                  size: 54,
+                  radius: 18,
+                  padding: 10,
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        option.model,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: state.textStyle(
+                          context,
+                          size: 15,
+                          weight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _modelDescription(option),
+                        style: state.textStyle(
+                          context,
+                          size: 12.5,
+                          opacity: 0.54,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _CapabilityBadge(state: state, label: _modelTag(option)),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: selected ? state.accents[0] : Colors.transparent,
+                    border: Border.all(
+                      color: selected
+                          ? state.accents[0]
+                          : textColor.withValues(alpha: 0.18),
+                      width: 2,
+                    ),
+                  ),
+                  child: selected
+                      ? const Icon(
+                          Icons.check_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        )
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CapabilityBadge extends StatelessWidget {
+  const _CapabilityBadge({required this.state, required this.label});
+
+  final WeaviewState state;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: state.accents[0].withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: state
+            .textStyle(context, size: 11.5, weight: FontWeight.w700)
+            .copyWith(color: state.accents[0]),
+      ),
+    );
+  }
+}
+
+class _SelectedComparisonSummary extends StatelessWidget {
+  const _SelectedComparisonSummary({
+    required this.state,
+    required this.selectedItems,
+  });
+
+  final WeaviewState state;
+  final List<ModelAssignment> selectedItems;
+
+  @override
+  Widget build(BuildContext context) {
+    if (selectedItems.isEmpty) {
+      return Text(
+        '请至少选择 2 个模型开始对比',
+        style: state.textStyle(context, size: 12.5, opacity: 0.52),
+      );
+    }
+    return Row(
+      children: [
+        SizedBox(
+          width: 72,
+          height: 36,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              for (var index = 0; index < selectedItems.length; index++)
+                Positioned(
+                  left: index * 20,
+                  child: BrandIcon.named(
+                    label: selectedItems[index].provider,
+                    color: _providerColor(selectedItems[index].provider),
+                    size: 36,
+                    radius: 14,
+                    padding: 7,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            _selectionSummary(selectedItems),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: state.textStyle(context, size: 12.8, height: 1.35),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EmptyComparisonState extends StatelessWidget {
+  const _EmptyComparisonState({required this.state, required this.query});
+
+  final WeaviewState state;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.search_off_rounded,
+              size: 36,
+              color: state.text(context).withValues(alpha: 0.34),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              query.trim().isEmpty ? '没有可用模型' : '没有找到匹配的模型',
+              style: state.textStyle(
+                context,
+                size: 15,
+                weight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              query.trim().isEmpty ? '请先在提供商页面配置模型。' : '换个关键词或提供商筛选试试。',
+              textAlign: TextAlign.center,
+              style: state.textStyle(context, size: 12.5, opacity: 0.52),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _selectionSummary(List<ModelAssignment> items) {
+  return items.map((item) => item.model).join(' + ');
+}
+
+String _modelDescription(ModelAssignment option) {
+  final text = '${option.provider} ${option.model}'.toLowerCase();
+  if (text.contains('flash')) return '快速响应，适合高频日常任务';
+  if (text.contains('sonnet') || text.contains('pro')) return '深度理解，复杂任务表现更稳';
+  if (text.contains('gpt')) return '通用能力强，适合多场景创作';
+  if (text.contains('deepseek')) return '推理成本友好，适合分析型任务';
+  return '已配置模型，可参与并行回答对比';
+}
+
+String _modelTag(ModelAssignment option) {
+  final text = '${option.provider} ${option.model}'.toLowerCase();
+  if (text.contains('flash')) return '快速';
+  if (text.contains('sonnet') || text.contains('pro') || text.contains('r1')) {
+    return '推理';
+  }
+  if (text.contains('gpt')) return '通用';
+  return option.provider.trim().isEmpty ? '模型' : option.provider;
+}
+
+Color _providerColor(String providerName) {
+  for (final provider in AiProvider.defaults()) {
+    if (provider.name.toLowerCase() == providerName.toLowerCase()) {
+      return provider.color;
+    }
+  }
+  return BrandIconRegistry.fallbackColorFor(providerName);
+}
+
 String _modelKey(ModelAssignment assignment) =>
     '${assignment.provider}\u0000${assignment.model}';
+
+const _allProvidersKey = '__all__';

@@ -31,9 +31,12 @@ class ProviderConfigService {
       if (normalized.baseUrl.isEmpty && preset?.baseUrl.isNotEmpty == true) {
         normalized = normalized.copyWith(baseUrl: preset!.baseUrl);
       }
-      if (normalized.name.toLowerCase().contains('gemini') &&
-          normalized.apiKey.isEmpty) {
-        return normalized.copyWith(models: const [], status: '未配置');
+      if (preset != null) {
+        normalized = normalized.copyWith(
+          models: withPresetModels(normalized.models, preset.models),
+          imageApi: preset.imageApi,
+          status: normalized.apiKey.isEmpty ? '未配置' : normalized.status,
+        );
       }
       return normalized;
     }).toList();

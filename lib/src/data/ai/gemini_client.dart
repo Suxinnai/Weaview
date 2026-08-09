@@ -11,6 +11,64 @@ import 'openai_compatible_client.dart';
 class GeminiClient {
   const GeminiClient();
 
+  Future<List<AiModel>> fetchModels({
+    required String apiKey,
+    required String baseUrl,
+    required Duration timeout,
+  }) async {
+    final uri = _nativeGeminiUri(baseUrl: baseUrl, resourcePath: '/models');
+    final response = await http
+        .get(
+          uri,
+          headers: {'Accept': 'application/json', 'x-goog-api-key': apiKey},
+        )
+        .timeout(timeout);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Gemini models HTTP ${response.statusCode}: ${response.body}',
+      );
+    }
+    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+    final remote = <AiModel>[];
+    for (final record in decoded['models'] as List? ?? const []) {
+      if (record is! Map) continue;
+      final rawName = record['name']?.toString() ?? '';
+      final id = _normalizeGeminiModel(rawName);
+      if (id.isEmpty) continue;
+      remote.add(
+        AiModel(
+          id: id,
+          name: record['displayName']?.toString().trim().isNotEmpty == true
+              ? record['displayName'].toString()
+              : id,
+          capabilities: modelCapabilitiesFromRecord({
+            ...record.cast<String, dynamic>(),
+            'id': id,
+          }),
+        ),
+      );
+    }
+    return dedupeModels(withGeminiImageModels(remote));
+  }
+
+  Future<String> testImageConnection({
+    required String apiKey,
+    required String baseUrl,
+    required String model,
+    required Duration timeout,
+  }) async {
+    final started = DateTime.now();
+    final result = await generateImage(
+      apiKey: apiKey,
+      baseUrl: baseUrl,
+      model: model,
+      prompt: 'Generate a tiny clean app test image: one mint dot on white.',
+      timeout: timeout,
+    );
+    final elapsed = DateTime.now().difference(started).inMilliseconds;
+    return '连接成功，Gemini 原生生图接口响应正常：${result.route}（${elapsed}ms）';
+  }
+
   Future<String> generate({
     required String apiKey,
     required String model,
@@ -129,6 +187,81 @@ class GeminiClient {
     required Duration timeout,
     List<MessageAttachment> attachments = const [],
     String baseUrl = '',
+    String? aspectRatio,
+    String? imageSize,
+  }) async {
+    final results = await generateImages(
+      apiKey: apiKey,
+      model: model,
+      prompt: prompt,
+      timeout: timeout,
+      attachments: attachments,
+      baseUrl: baseUrl,
+      aspectRatio: aspectRatio,
+      imageSize: imageSize,
+    );
+    return results.first;
+  }
+
+  Future<List<GeneratedImageResult>> generateImages({
+    required String apiKey,
+    required String model,
+    required String prompt,
+    required Duration timeout,
+    List<MessageAttachment> attachments = const [],
+    String baseUrl = '',
+    int outputCount = 1,
+    String? aspectRatio,
+    String? imageSize,
+  }) async {
+    final requestedCount = outputCount.clamp(1, 4).toInt();
+    final first = await _requestImages(
+      apiKey: apiKey,
+      model: model,
+      prompt: prompt,
+      timeout: timeout,
+      attachments: attachments,
+      baseUrl: baseUrl,
+      aspectRatio: aspectRatio,
+      imageSize: imageSize,
+    );
+    if (first.length >= requestedCount) {
+      return first.take(requestedCount).toList();
+    }
+
+    final remaining = requestedCount - first.length;
+    final attempts = await Future.wait([
+      for (var index = 0; index < remaining; index++)
+        _requestImages(
+          apiKey: apiKey,
+          model: model,
+          prompt: prompt,
+          timeout: timeout,
+          attachments: attachments,
+          baseUrl: baseUrl,
+          aspectRatio: aspectRatio,
+          imageSize: imageSize,
+        ).then(
+          (images) => _GeminiImageAttempt(images: images),
+          onError: (Object error, StackTrace _) => const _GeminiImageAttempt(),
+        ),
+    ]);
+    final images = [
+      ...first,
+      for (final attempt in attempts) ...attempt.images,
+    ];
+    return images.take(requestedCount).toList();
+  }
+
+  Future<List<GeneratedImageResult>> _requestImages({
+    required String apiKey,
+    required String model,
+    required String prompt,
+    required Duration timeout,
+    required List<MessageAttachment> attachments,
+    required String baseUrl,
+    String? aspectRatio,
+    String? imageSize,
   }) async {
     final uri = _generateContentUri(baseUrl: baseUrl, model: model);
     final imageParts = <Map<String, dynamic>>[];
@@ -163,6 +296,13 @@ class GeminiClient {
             ],
             'generationConfig': {
               'responseModalities': ['TEXT', 'IMAGE'],
+              if (aspectRatio != null || imageSize != null)
+                'responseFormat': {
+                  'image': {
+                    'aspectRatio': ?aspectRatio,
+                    'imageSize': ?imageSize,
+                  },
+                },
             },
           }),
         )
@@ -173,22 +313,36 @@ class GeminiClient {
       );
     }
     final parsed = _parseGeminiImageResponse(jsonDecode(response.body));
-    if (parsed == null) {
+    if (parsed.isEmpty) {
       throw Exception(
         'Gemini image response did not include inline image data.',
       );
     }
-    return GeneratedImageResult(
-      bytes: parsed.bytes,
-      mimeType: parsed.mimeType,
-      route: '/v1beta/models/${_normalizeGeminiModel(model)}:generateContent',
-      revisedPrompt: parsed.text.trim().isEmpty ? null : parsed.text.trim(),
-    );
+    return [
+      for (final image in parsed)
+        GeneratedImageResult(
+          bytes: image.bytes,
+          mimeType: image.mimeType,
+          route:
+              '/v1beta/models/${_normalizeGeminiModel(model)}:generateContent',
+          revisedPrompt: image.text.trim().isEmpty ? null : image.text.trim(),
+        ),
+    ];
   }
 
   static Uri _generateContentUri({
     required String baseUrl,
     required String model,
+  }) {
+    return _nativeGeminiUri(
+      baseUrl: baseUrl,
+      resourcePath: '/models/${_normalizeGeminiModel(model)}:generateContent',
+    );
+  }
+
+  static Uri _nativeGeminiUri({
+    required String baseUrl,
+    required String resourcePath,
   }) {
     final base = Uri.parse(
       baseUrl.trim().isEmpty
@@ -203,42 +357,46 @@ class GeminiClient {
       apiPath = '$apiPath/v1beta';
     }
     return base.replace(
-      path: '$apiPath/models/${_normalizeGeminiModel(model)}:generateContent',
+      path: '$apiPath$resourcePath',
       queryParameters: base.queryParameters.isEmpty
           ? null
           : base.queryParameters,
     );
   }
 
-  static _GeminiImagePayload? _parseGeminiImageResponse(dynamic decoded) {
+  static List<_GeminiImagePayload> _parseGeminiImageResponse(dynamic decoded) {
     final map = decoded as Map<String, dynamic>;
     final candidates = map['candidates'] as List? ?? [];
-    final parts = candidates.isEmpty
-        ? const []
-        : ((candidates.first as Map)['content'] as Map?)?['parts'] as List? ??
-              const [];
+    final images = <_GeminiImagePayload>[];
     final text = StringBuffer();
-    for (final part in parts) {
-      if (part is! Map) continue;
-      final textPart = part['text']?.toString();
-      if (textPart != null) text.write(textPart);
-      final inlineData = part['inlineData'] ?? part['inline_data'];
-      if (inlineData is! Map) continue;
-      final data = inlineData['data']?.toString();
-      if (data == null || data.trim().isEmpty) continue;
-      final mimeType =
-          inlineData['mimeType']?.toString() ??
-          inlineData['mime_type']?.toString() ??
-          'image/png';
-      return _GeminiImagePayload(
-        bytes: Uint8List.fromList(
-          base64Decode(data.replaceAll(RegExp(r'\s+'), '')),
-        ),
-        mimeType: mimeType,
-        text: text.toString(),
-      );
+    for (final candidate in candidates) {
+      if (candidate is! Map) continue;
+      final parts =
+          (candidate['content'] as Map?)?['parts'] as List? ?? const [];
+      for (final part in parts) {
+        if (part is! Map || part['thought'] == true) continue;
+        final textPart = part['text']?.toString();
+        if (textPart != null) text.write(textPart);
+        final inlineData = part['inlineData'] ?? part['inline_data'];
+        if (inlineData is! Map) continue;
+        final data = inlineData['data']?.toString();
+        if (data == null || data.trim().isEmpty) continue;
+        final mimeType =
+            inlineData['mimeType']?.toString() ??
+            inlineData['mime_type']?.toString() ??
+            'image/png';
+        images.add(
+          _GeminiImagePayload(
+            bytes: Uint8List.fromList(
+              base64Decode(data.replaceAll(RegExp(r'\s+'), '')),
+            ),
+            mimeType: mimeType,
+            text: text.toString(),
+          ),
+        );
+      }
     }
-    return null;
+    return images;
   }
 
   static String _normalizeGeminiModel(String model) {
@@ -342,6 +500,12 @@ class _GeminiImagePayload {
   final Uint8List bytes;
   final String mimeType;
   final String text;
+}
+
+class _GeminiImageAttempt {
+  const _GeminiImageAttempt({this.images = const []});
+
+  final List<GeneratedImageResult> images;
 }
 
 class _GeminiResult {

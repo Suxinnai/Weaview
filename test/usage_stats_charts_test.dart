@@ -71,41 +71,41 @@ void main() {
     expect(usageHeatmapColumnCount(days), 13);
   });
 
-  testWidgets('usage overlay renders heatmap, line and donut charts', (
-    tester,
-  ) async {
-    SharedPreferences.setMockInitialValues({});
-    final state = WeaviewState();
-    await state.load();
-    state.tokenUsageRecords = [
-      _record(id: 'one', model: 'alpha', tokens: 600),
-      _record(id: 'two', model: 'beta', tokens: 400),
-    ];
+  testWidgets(
+    'usage overlay renders trend, provider summary and recent usage',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      final state = WeaviewState();
+      await state.load();
+      state.tokenUsageRecords = [
+        _record(id: 'one', model: 'alpha', tokens: 600),
+        _record(id: 'two', model: 'beta', tokens: 400),
+      ];
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: UsageStatsOverlay(state: state, open: true, onClose: () {}),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: UsageStatsOverlay(state: state, open: true, onClose: () {}),
+          ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.byKey(const Key('usage-activity-heatmap')), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('usage-token-trend')),
-      250,
-    );
-    expect(find.byKey(const Key('usage-token-trend')), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.byKey(const Key('usage-model-donut')),
-      250,
-    );
-    expect(find.byKey(const Key('usage-model-donut')), findsOneWidget);
-    expect(find.text('alpha'), findsOneWidget);
+      expect(find.byKey(const Key('usage-activity-heatmap')), findsNothing);
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('usage-token-trend')),
+        250,
+      );
+      expect(find.byKey(const Key('usage-token-trend')), findsOneWidget);
+      expect(find.byKey(const Key('usage-model-donut')), findsNothing);
+      await tester.scrollUntilVisible(find.text('按提供商'), 250);
+      expect(find.text('按提供商'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('provider · alpha'), 250);
+      expect(find.text('provider · alpha'), findsOneWidget);
 
-    state.dispose();
-  });
+      state.dispose();
+    },
+  );
 
   testWidgets('usage overlay exposes loading and empty states', (tester) async {
     final loadingState = WeaviewState();
@@ -140,7 +140,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('暂无用量记录'), findsOneWidget);
+    expect(find.text('当前时间范围暂无记录'), findsOneWidget);
     expect(find.byKey(const Key('usage-activity-heatmap')), findsNothing);
     emptyState.dispose();
   });

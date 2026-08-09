@@ -6,6 +6,60 @@ import 'package:weaview_flutter/src/data/ai/gemini_client.dart';
 import 'package:weaview_flutter/src/domain/message_attachment.dart';
 
 void main() {
+  test('fetches native Gemini models and merges image presets', () async {
+    String? requestPath;
+    String? apiKeyHeader;
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final serving = server.listen((request) async {
+      requestPath = request.uri.path;
+      apiKeyHeader = request.headers.value('x-goog-api-key');
+      request.response
+        ..statusCode = 200
+        ..headers.contentType = ContentType.json
+        ..write(
+          jsonEncode({
+            'models': [
+              {
+                'name': 'models/gemini-3.1-flash-image',
+                'displayName': 'Gemini 3.1 Flash Image',
+                'supportedGenerationMethods': ['generateContent'],
+              },
+              {
+                'name': 'models/gemini-3.1-flash',
+                'displayName': 'Gemini 3.1 Flash',
+                'supportedGenerationMethods': ['generateContent'],
+              },
+            ],
+          }),
+        );
+      await request.response.close();
+    });
+
+    try {
+      final models = await const GeminiClient().fetchModels(
+        apiKey: 'test-key',
+        baseUrl: 'http://127.0.0.1:${server.port}/v1beta/openai',
+        timeout: const Duration(seconds: 5),
+      );
+
+      expect(requestPath, '/v1beta/models');
+      expect(apiKeyHeader, 'test-key');
+      expect(
+        models.map((model) => model.id),
+        containsAll([
+          'gemini-3.1-flash',
+          'gemini-3.1-flash-lite-image',
+          'gemini-3.1-flash-image',
+          'gemini-3-pro-image',
+          'gemini-2.5-flash-image',
+        ]),
+      );
+    } finally {
+      await serving.cancel();
+      await server.close(force: true);
+    }
+  });
+
   group('GeminiClient image generation', () {
     test('posts native generateContent image requests', () async {
       String? requestPath;
@@ -90,5 +144,135 @@ void main() {
         await tempDir.delete(recursive: true);
       }
     });
+
+    test('returns multiple outputs and skips thought images', () async {
+      var requestCount = 0;
+      Map<String, dynamic>? requestBody;
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final serving = server.listen((request) async {
+        requestCount += 1;
+        requestBody =
+            jsonDecode(await utf8.decoder.bind(request).join())
+                as Map<String, dynamic>;
+        request.response
+          ..statusCode = 200
+          ..headers.contentType = ContentType.json
+          ..write(
+            jsonEncode({
+              'candidates': [
+                {
+                  'content': {
+                    'parts': [
+                      {
+                        'thought': true,
+                        'inlineData': {
+                          'mimeType': 'image/png',
+                          'data': base64Encode(utf8.encode('draft-image')),
+                        },
+                      },
+                      {'text': 'final variants'},
+                      {
+                        'inlineData': {
+                          'mimeType': 'image/png',
+                          'data': base64Encode(utf8.encode('image-one')),
+                        },
+                      },
+                      {
+                        'inline_data': {
+                          'mime_type': 'image/webp',
+                          'data': base64Encode(utf8.encode('image-two')),
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            }),
+          );
+        await request.response.close();
+      });
+
+      try {
+        final results = await const GeminiClient().generateImages(
+          apiKey: 'test-key',
+          baseUrl: 'http://127.0.0.1:${server.port}',
+          model: 'gemini-3.1-flash-image',
+          prompt: 'two tiny planets',
+          outputCount: 2,
+          aspectRatio: '16:9',
+          imageSize: '2K',
+          timeout: const Duration(seconds: 5),
+        );
+
+        expect(requestCount, 1);
+        expect(results, hasLength(2));
+        expect(results.map((result) => utf8.decode(result.bytes)), [
+          'image-one',
+          'image-two',
+        ]);
+        expect(results.last.mimeType, 'image/webp');
+        expect(requestBody?['generationConfig']?['responseFormat']?['image'], {
+          'aspectRatio': '16:9',
+          'imageSize': '2K',
+        });
+        expect(requestBody?['generationConfig']?['imageConfig'], isNull);
+      } finally {
+        await serving.cancel();
+        await server.close(force: true);
+      }
+    });
+
+    test(
+      'issues additional requests when one response has one image',
+      () async {
+        var requestCount = 0;
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        final serving = server.listen((request) async {
+          requestCount += 1;
+          await utf8.decoder.bind(request).join();
+          request.response
+            ..statusCode = 200
+            ..headers.contentType = ContentType.json
+            ..write(
+              jsonEncode({
+                'candidates': [
+                  {
+                    'content': {
+                      'parts': [
+                        {
+                          'inlineData': {
+                            'mimeType': 'image/png',
+                            'data': base64Encode(
+                              utf8.encode('image-$requestCount'),
+                            ),
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              }),
+            );
+          await request.response.close();
+        });
+
+        try {
+          final results = await const GeminiClient().generateImages(
+            apiKey: 'test-key',
+            baseUrl: 'http://127.0.0.1:${server.port}',
+            model: 'gemini-3.1-flash-lite-image',
+            prompt: 'three variants',
+            outputCount: 3,
+            timeout: const Duration(seconds: 5),
+          );
+
+          expect(requestCount, 3);
+          expect(results, hasLength(3));
+        } finally {
+          await serving.cancel();
+          await server.close(force: true);
+        }
+      },
+    );
   });
 }

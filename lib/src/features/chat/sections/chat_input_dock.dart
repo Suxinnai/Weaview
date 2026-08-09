@@ -29,6 +29,8 @@ class ChatInputDock extends StatelessWidget {
     required this.onRemoveAttachment,
     required this.onTextChanged,
     required this.onHeightChanged,
+    this.imageCount = 1,
+    this.onImageCountChanged,
   });
 
   final WeaviewState state;
@@ -49,6 +51,8 @@ class ChatInputDock extends StatelessWidget {
   final ValueChanged<MessageAttachment> onRemoveAttachment;
   final VoidCallback onTextChanged;
   final ValueChanged<Size> onHeightChanged;
+  final int imageCount;
+  final ValueChanged<int>? onImageCountChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -65,21 +69,28 @@ class ChatInputDock extends StatelessWidget {
       (rawInput.characters.length / 18).ceil(),
     );
     final needsExpandedEditor = estimatedLineCount > 3;
-    final activeToolIcon = comparisonMode
+    final imageAttachmentCount = pendingAttachments
+        .where((item) => item.isImage)
+        .length;
+    final fileAttachmentCount =
+        pendingAttachments.length - imageAttachmentCount;
+    final activeToolIcon = imageGenerationMode
+        ? Icons.auto_awesome_rounded
+        : comparisonMode
         ? Icons.view_column_rounded
         : webSearchEnabled
         ? Icons.travel_explore_rounded
-        : imageGenerationMode
-        ? Icons.image_outlined
         : null;
-    final activeToolLabel = comparisonMode
+    final activeToolLabel = imageGenerationMode
+        ? '图片生成'
+        : comparisonMode
         ? '多模型对照'
         : webSearchEnabled
         ? '联网搜索'
-        : imageGenerationMode
-        ? '图像生成'
         : '';
-    final activeToolTap = comparisonMode
+    final activeToolTap = imageGenerationMode
+        ? onToggleExpanded
+        : comparisonMode
         ? onConfigureComparison
         : webSearchEnabled
         ? onToggleWebSearch
@@ -130,6 +141,18 @@ class ChatInputDock extends StatelessWidget {
                     onRemove: onRemoveAttachment,
                   ),
           ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+            child: imageGenerationMode
+                ? _ImageGenerationControls(
+                    state: state,
+                    pendingAttachments: pendingAttachments,
+                    imageCount: imageCount.clamp(1, 4),
+                    onImageCountChanged: onImageCountChanged,
+                  )
+                : const SizedBox.shrink(),
+          ),
           Padding(
             padding: const EdgeInsets.all(4),
             child: Row(
@@ -137,26 +160,35 @@ class ChatInputDock extends StatelessWidget {
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.center,
               children: [
-                GestureDetector(
-                  onTap: onToggleExpanded,
-                  child: AnimatedRotation(
-                    duration: const Duration(milliseconds: 260),
-                    turns: dockExpanded ? 0.125 : 0,
-                    child: Container(
-                      width: 40,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: dockExpanded
-                            ? state.text(context).withValues(alpha: 0.06)
-                            : Colors.transparent,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.add_rounded,
-                        size: 23,
-                        color: state
-                            .text(context)
-                            .withValues(alpha: dockExpanded ? 1 : 0.5),
+                Tooltip(
+                  message: dockExpanded ? '收起附件与工具' : '添加附件与工具',
+                  child: Semantics(
+                    button: true,
+                    expanded: dockExpanded,
+                    label: dockExpanded ? '收起附件与工具' : '添加附件与工具',
+                    child: Material(
+                      color: dockExpanded
+                          ? state.text(context).withValues(alpha: 0.06)
+                          : Colors.transparent,
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: onToggleExpanded,
+                        child: SizedBox(
+                          width: 44,
+                          height: 44,
+                          child: AnimatedRotation(
+                            duration: const Duration(milliseconds: 220),
+                            turns: dockExpanded ? 0.125 : 0,
+                            child: Icon(
+                              Icons.add_rounded,
+                              size: 23,
+                              color: state
+                                  .text(context)
+                                  .withValues(alpha: dockExpanded ? 1 : 0.5),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -190,7 +222,9 @@ class ChatInputDock extends StatelessWidget {
                     textInputAction: TextInputAction.newline,
                     style: state.textStyle(context, size: 15, height: 1.45),
                     decoration: InputDecoration(
-                      hintText: '今天想编织什么？',
+                      hintText: imageGenerationMode
+                          ? '描述要生成或修改的画面…'
+                          : '今天想编织什么？',
                       hintStyle: state.textStyle(
                         context,
                         size: 15,
@@ -224,6 +258,10 @@ class ChatInputDock extends StatelessWidget {
                       state.isStreaming || (canSubmit && !state.isStreaming),
                   onTap: onSubmit,
                   state: state,
+                  idleLabel: imageGenerationMode
+                      ? '生成 ${imageCount.clamp(1, 4)} 张'
+                      : '编织',
+                  streamingLabel: imageGenerationMode ? '生成中' : '编织中',
                 ),
               ],
             ),
@@ -232,40 +270,18 @@ class ChatInputDock extends StatelessWidget {
             duration: const Duration(milliseconds: 260),
             curve: Curves.easeOutCubic,
             child: dockExpanded
-                ? Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                    child: Wrap(
-                      spacing: 9,
-                      runSpacing: 9,
-                      children: [
-                        ToolChip(
-                          icon: Icons.image_outlined,
-                          label: '图片',
-                          state: state,
-                          onTap: onPickChatImages,
-                        ),
-                        ToolChip(
-                          icon: Icons.description_outlined,
-                          label: '文件',
-                          state: state,
-                          onTap: onPickChatFiles,
-                        ),
-                        ToolChip(
-                          icon: Icons.public_rounded,
-                          label: webSearchEnabled ? '关闭联网' : '联网搜索',
-                          state: state,
-                          selected: webSearchEnabled,
-                          onTap: onToggleWebSearch,
-                        ),
-                        ToolChip(
-                          icon: Icons.view_column_rounded,
-                          label: comparisonMode ? '关闭对照' : '多模型对照',
-                          state: state,
-                          selected: comparisonMode,
-                          onTap: onToggleComparison,
-                        ),
-                      ],
-                    ),
+                ? _DockActionSheet(
+                    state: state,
+                    imageGenerationMode: imageGenerationMode,
+                    webSearchEnabled: webSearchEnabled,
+                    comparisonMode: comparisonMode,
+                    imageAttachmentCount: imageAttachmentCount,
+                    fileAttachmentCount: fileAttachmentCount,
+                    onPickChatImages: onPickChatImages,
+                    onPickChatFiles: onPickChatFiles,
+                    onToggleWebSearch: onToggleWebSearch,
+                    onToggleComparison: onToggleComparison,
+                    onConfigureComparison: onConfigureComparison,
                   )
                 : const SizedBox.shrink(),
           ),
@@ -408,6 +424,623 @@ class ChatInputDock extends StatelessWidget {
     } finally {
       editor.dispose();
     }
+  }
+}
+
+class _ImageGenerationControls extends StatelessWidget {
+  const _ImageGenerationControls({
+    required this.state,
+    required this.pendingAttachments,
+    required this.imageCount,
+    required this.onImageCountChanged,
+  });
+
+  final WeaviewState state;
+  final List<MessageAttachment> pendingAttachments;
+  final int imageCount;
+  final ValueChanged<int>? onImageCountChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final assignment = state.modelAssignments['image'];
+    final providerName = assignment?.provider.trim() ?? '';
+    final modelName = assignment?.model.trim() ?? '';
+    final hasModel = providerName.isNotEmpty || modelName.isNotEmpty;
+    final imageAttachments = pendingAttachments
+        .where((item) => item.isImage)
+        .length;
+    final fileAttachments = pendingAttachments.length - imageAttachments;
+    final base = state.text(context);
+    return Container(
+      key: const ValueKey('image-generation-controls'),
+      margin: const EdgeInsets.fromLTRB(10, 10, 10, 4),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: sendGreen.withValues(alpha: state.isDark(context) ? 0.12 : 0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: sendGreen.withValues(alpha: 0.20)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.68),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 20,
+                  color: sendGreen,
+                ),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '图片生成模式',
+                      style: state.textStyle(
+                        context,
+                        size: 13.5,
+                        weight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      imageAttachments > 0
+                          ? '已附加 $imageAttachments 张参考图'
+                          : '可添加多张参考图进行生成或修改',
+                      style: state.textStyle(
+                        context,
+                        size: 11.5,
+                        opacity: 0.56,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _DockStatusPill(
+                state: state,
+                label: '输出 $imageCount 张',
+                selected: true,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(
+                alpha: state.isDark(context) ? 0.06 : 0.48,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: base.withValues(alpha: 0.08)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: sendGreen.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.image_search_rounded,
+                    size: 20,
+                    color: sendGreen,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        hasModel ? modelName : '未选择生图模型',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: state.textStyle(
+                          context,
+                          size: 13,
+                          weight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        hasModel
+                            ? '${providerName.isEmpty ? '当前模型' : providerName} · 当前用于生图'
+                            : '请先从顶部模型选择中切换到支持生图的模型',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: state.textStyle(
+                          context,
+                          size: 11.5,
+                          opacity: 0.54,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _DockStatusPill(state: state, label: '图片生成模式', selected: true),
+              _DockStatusPill(
+                state: state,
+                label: imageAttachments > 0
+                    ? '参考图 $imageAttachments 张'
+                    : '未添加参考图',
+                selected: imageAttachments > 0,
+              ),
+              if (fileAttachments > 0)
+                _DockStatusPill(state: state, label: '文件 $fileAttachments 个'),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Text(
+                '输出数量',
+                style: state.textStyle(
+                  context,
+                  size: 11.5,
+                  weight: FontWeight.w700,
+                  opacity: 0.62,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '一次输出 $imageCount 张',
+                style: state.textStyle(
+                  context,
+                  size: 11.5,
+                  weight: FontWeight.w600,
+                  opacity: 0.58,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          _ImageCountSelector(
+            state: state,
+            value: imageCount,
+            onChanged: onImageCountChanged,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImageCountSelector extends StatelessWidget {
+  const _ImageCountSelector({
+    required this.state,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final WeaviewState state;
+  final int value;
+  final ValueChanged<int>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = state.isDark(context);
+    final base = state.text(context);
+    return Tooltip(
+      message: '输出张数',
+      child: Container(
+        key: const ValueKey('image-count-selector'),
+        height: 42,
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: base.withValues(alpha: dark ? 0.085 : 0.06),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: base.withValues(alpha: 0.08)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var option = 1; option <= 4; option++)
+              Padding(
+                padding: EdgeInsets.only(right: option == 4 ? 0 : 2),
+                child: Semantics(
+                  button: true,
+                  selected: option == value,
+                  label: '输出 $option 张图片',
+                  child: Material(
+                    color: option == value ? sendGreen : Colors.transparent,
+                    borderRadius: BorderRadius.circular(13),
+                    child: InkWell(
+                      key: ValueKey('image-count-option-$option'),
+                      borderRadius: BorderRadius.circular(13),
+                      onTap: onChanged == null
+                          ? null
+                          : () => onChanged!(option),
+                      child: SizedBox(
+                        width: 54,
+                        child: Center(
+                          child: Text(
+                            '$option 张',
+                            style: state
+                                .textStyle(
+                                  context,
+                                  size: 11.5,
+                                  weight: FontWeight.w700,
+                                  opacity: option == value ? 1 : 0.62,
+                                )
+                                .copyWith(
+                                  color: option == value ? Colors.white : base,
+                                ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DockActionSheet extends StatelessWidget {
+  const _DockActionSheet({
+    required this.state,
+    required this.imageGenerationMode,
+    required this.webSearchEnabled,
+    required this.comparisonMode,
+    required this.imageAttachmentCount,
+    required this.fileAttachmentCount,
+    required this.onPickChatImages,
+    required this.onPickChatFiles,
+    required this.onToggleWebSearch,
+    required this.onToggleComparison,
+    required this.onConfigureComparison,
+  });
+
+  final WeaviewState state;
+  final bool imageGenerationMode;
+  final bool webSearchEnabled;
+  final bool comparisonMode;
+  final int imageAttachmentCount;
+  final int fileAttachmentCount;
+  final Future<void> Function() onPickChatImages;
+  final Future<void> Function() onPickChatFiles;
+  final VoidCallback onToggleWebSearch;
+  final VoidCallback onToggleComparison;
+  final VoidCallback onConfigureComparison;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _DockSectionLabel(state: state, label: '添加到对话'),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: _DockAttachmentTile(
+                  state: state,
+                  icon: Icons.image_outlined,
+                  label: '从相册选择',
+                  subtitle: imageAttachmentCount > 0
+                      ? '已添加 $imageAttachmentCount 张图片'
+                      : '图片会作为对话附件或参考图',
+                  onTap: onPickChatImages,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _DockAttachmentTile(
+                  state: state,
+                  icon: Icons.description_outlined,
+                  label: '选择文件',
+                  subtitle: fileAttachmentCount > 0
+                      ? '已添加 $fileAttachmentCount 个文件'
+                      : 'PDF、文档与表格分析',
+                  onTap: onPickChatFiles,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _DockSectionLabel(state: state, label: '工具'),
+          const SizedBox(height: 10),
+          _DockActionRow(
+            state: state,
+            icon: Icons.public_rounded,
+            title: '联网搜索',
+            subtitle: '查找最新信息并带回对话',
+            selected: webSearchEnabled,
+            statusLabel: webSearchEnabled ? '已开启' : '未开启',
+            onTap: onToggleWebSearch,
+          ),
+          const SizedBox(height: 10),
+          _DockActionRow(
+            state: state,
+            icon: Icons.auto_awesome_rounded,
+            title: '图片生成',
+            subtitle: imageGenerationMode
+                ? '当前输入将用于图片生成或修改'
+                : '切换顶部模型到生图模型后自动进入',
+            selected: imageGenerationMode,
+            statusLabel: imageGenerationMode ? '进行中' : '模型切换',
+          ),
+          const SizedBox(height: 10),
+          _DockActionRow(
+            state: state,
+            icon: Icons.view_column_rounded,
+            title: '多模型对比',
+            subtitle: comparisonMode ? '当前会并行比较多个模型回答' : '最多同时选择 3 个模型',
+            selected: comparisonMode,
+            statusLabel: comparisonMode ? '已开启' : '未开启',
+            onTap: onToggleComparison,
+            trailingAction: comparisonMode
+                ? TextButton(
+                    onPressed: onConfigureComparison,
+                    child: const Text('配置'),
+                  )
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DockSectionLabel extends StatelessWidget {
+  const _DockSectionLabel({required this.state, required this.label});
+
+  final WeaviewState state;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      label,
+      style: state.textStyle(
+        context,
+        size: 11.5,
+        weight: FontWeight.w700,
+        opacity: 0.54,
+      ),
+    );
+  }
+}
+
+class _DockAttachmentTile extends StatelessWidget {
+  const _DockAttachmentTile({
+    required this.state,
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final WeaviewState state;
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final Future<void> Function() onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = state.isDark(context);
+    final text = state.text(context);
+    return Semantics(
+      button: true,
+      label: label,
+      hint: subtitle,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Ink(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: text.withValues(alpha: dark ? 0.055 : 0.04),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: text.withValues(alpha: 0.08)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: state.accents[0].withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(icon, size: 20, color: state.accents[0]),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  label,
+                  style: state.textStyle(
+                    context,
+                    size: 13.5,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: state.textStyle(context, size: 11.5, opacity: 0.54),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DockActionRow extends StatelessWidget {
+  const _DockActionRow({
+    required this.state,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.selected,
+    required this.statusLabel,
+    this.onTap,
+    this.trailingAction,
+  });
+
+  final WeaviewState state;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool selected;
+  final String statusLabel;
+  final VoidCallback? onTap;
+  final Widget? trailingAction;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = state.isDark(context);
+    final text = state.text(context);
+    final content = Ink(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: selected
+            ? state.accents[0].withValues(alpha: dark ? 0.14 : 0.10)
+            : text.withValues(alpha: dark ? 0.055 : 0.04),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: selected
+              ? state.accents[0].withValues(alpha: 0.28)
+              : text.withValues(alpha: 0.08),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: selected
+                  ? Colors.white.withValues(alpha: dark ? 0.08 : 0.56)
+                  : Colors.white.withValues(alpha: dark ? 0.04 : 0.48),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              icon,
+              size: 20,
+              color: selected ? state.accents[0] : text.withValues(alpha: 0.68),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: state.textStyle(
+                    context,
+                    size: 13.5,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: state.textStyle(context, size: 11.5, opacity: 0.54),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          _DockStatusPill(state: state, label: statusLabel, selected: selected),
+          if (trailingAction != null) ...[
+            const SizedBox(width: 4),
+            trailingAction!,
+          ],
+        ],
+      ),
+    );
+    return Semantics(
+      button: onTap != null,
+      selected: selected,
+      label: title,
+      hint: subtitle,
+      child: onTap == null
+          ? content
+          : Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(18),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: onTap,
+                child: content,
+              ),
+            ),
+    );
+  }
+}
+
+class _DockStatusPill extends StatelessWidget {
+  const _DockStatusPill({
+    required this.state,
+    required this.label,
+    this.selected = false,
+  });
+
+  final WeaviewState state;
+  final String label;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = state.text(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: selected
+            ? state.accents[0].withValues(alpha: 0.12)
+            : text.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: selected
+              ? state.accents[0].withValues(alpha: 0.24)
+              : text.withValues(alpha: 0.08),
+        ),
+      ),
+      child: Text(
+        label,
+        style: state
+            .textStyle(
+              context,
+              size: 11,
+              weight: FontWeight.w700,
+              opacity: selected ? 1 : 0.58,
+            )
+            .copyWith(color: selected ? state.accents[0] : text),
+      ),
+    );
   }
 }
 

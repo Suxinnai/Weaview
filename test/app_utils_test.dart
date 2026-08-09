@@ -56,5 +56,16 @@ void main() {
       expect(single, ['one']);
       expect(decodeList<int>('not json', (item) => item as int), isEmpty);
     });
+
+    testWidgets('applies a bounded decoded image cache policy', (tester) async {
+      configureImageMemoryPolicy();
+
+      final cache = PaintingBinding.instance.imageCache;
+      expect(cache.maximumSize, 120);
+      expect(cache.maximumSizeBytes, 64 * 1024 * 1024);
+
+      releaseBackgroundImageMemory();
+      expect(cache.currentSizeBytes, 0);
+    });
   });
 }

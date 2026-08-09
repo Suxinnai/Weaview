@@ -62,6 +62,8 @@ class OpenAiCompatibleClient {
     required String imageModel,
     required Duration timeout,
     String size = '1024x1024',
+    Map<String, dynamic> imageRequestExtraBody = const {},
+    bool includeImageSize = true,
   }) => _image.generateImage(
         apiKey: apiKey,
         baseUrl: baseUrl,
@@ -71,6 +73,8 @@ class OpenAiCompatibleClient {
         imageModel: imageModel,
         timeout: timeout,
         size: size,
+        imageRequestExtraBody: imageRequestExtraBody,
+        includeImageSize: includeImageSize,
       );
 
   Future<List<AiModel>> fetchModels({

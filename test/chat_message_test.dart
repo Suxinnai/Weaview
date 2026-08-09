@@ -11,6 +11,7 @@ void main() {
       '',
       isThinking: true,
       activity: 'imageGeneration',
+      imageCount: 4,
     );
 
     final decoded = ChatMessage.fromJson(message.toJson());
@@ -18,7 +19,26 @@ void main() {
     expect(message.isImageGenerating, isTrue);
     expect(decoded.isThinking, isFalse);
     expect(decoded.activity, 'imageGeneration');
+    expect(decoded.imageCount, 4);
     expect(decoded.isImageGenerating, isFalse);
+  });
+
+  test('image attachment persists pixel dimensions without touching bytes', () {
+    const attachment = MessageAttachment(
+      path: '/images/generated.png',
+      name: 'generated.png',
+      mimeType: 'image/png',
+      kind: 'image',
+      size: 4096,
+      pixelWidth: 2048,
+      pixelHeight: 1152,
+    );
+
+    final restored = MessageAttachment.fromJson(attachment.toJson());
+
+    expect(restored.hasPixelSize, isTrue);
+    expect(restored.pixelWidth, 2048);
+    expect(restored.pixelHeight, 1152);
   });
 
   test('OpenAI payload carries user image attachments as image parts', () async {

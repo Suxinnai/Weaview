@@ -74,18 +74,38 @@ Uint8List buildStoredZip(List<ZipEntryData> entries) {
   return output.toBytes();
 }
 
-String? readZipUtf8Entry(Uint8List bytes, String entryName) {
+String? readZipUtf8Entry(
+  Uint8List bytes,
+  String entryName, {
+  int? maxCompressedBytes,
+  int? maxUncompressedBytes,
+}) {
   var offset = 0;
   while (offset + 30 <= bytes.length) {
     if (_readU32(bytes, offset) != 0x04034B50) break;
     final flags = _readU16(bytes, offset + 6);
     final method = _readU16(bytes, offset + 8);
     final compressedSize = _readU32(bytes, offset + 18);
+    final uncompressedSize = _readU32(bytes, offset + 22);
     final nameLength = _readU16(bytes, offset + 26);
     final extraLength = _readU16(bytes, offset + 28);
     final nameStart = offset + 30;
     final dataStart = nameStart + nameLength + extraLength;
     final dataEnd = dataStart + compressedSize;
+    if ((flags & 0x0008) != 0) {
+      throw const FormatException('暂不支持带数据描述符的 ZIP 备份。');
+    }
+    if (maxCompressedBytes != null && compressedSize > maxCompressedBytes) {
+      throw FormatException(
+        'ZIP 条目压缩体积超过 ${_formatLimit(maxCompressedBytes)} 限制。',
+      );
+    }
+    if (maxUncompressedBytes != null &&
+        uncompressedSize > maxUncompressedBytes) {
+      throw FormatException(
+        'ZIP 条目解压后体积超过 ${_formatLimit(maxUncompressedBytes)} 限制。',
+      );
+    }
     if (dataStart > bytes.length || dataEnd > bytes.length) break;
 
     final nameBytes = bytes.sublist(nameStart, nameStart + nameLength);
@@ -100,12 +120,26 @@ String? readZipUtf8Entry(Uint8List bytes, String entryName) {
         8 => ZLibDecoder(raw: true).convert(data),
         _ => throw FormatException('Unsupported zip compression: $method'),
       };
+      if (maxUncompressedBytes != null &&
+          decoded.length > maxUncompressedBytes) {
+        throw FormatException(
+          'ZIP 条目解压后体积超过 ${_formatLimit(maxUncompressedBytes)} 限制。',
+        );
+      }
       return utf8.decode(decoded, allowMalformed: true);
     }
 
     offset = dataEnd;
   }
   return null;
+}
+
+String _formatLimit(int bytes) {
+  final megaBytes = bytes / (1024 * 1024);
+  if (megaBytes == megaBytes.roundToDouble()) {
+    return '${megaBytes.toInt()} MB';
+  }
+  return '${megaBytes.toStringAsFixed(1)} MB';
 }
 
 List<int> _u16(int value) => [value & 0xFF, (value >> 8) & 0xFF];

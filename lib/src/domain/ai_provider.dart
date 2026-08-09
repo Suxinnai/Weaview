@@ -2,6 +2,27 @@ import 'package:flutter/material.dart';
 
 import '../core/app_utils.dart';
 import 'ai_model.dart';
+import 'gemini_image_models.dart';
+import 'image_model_catalog.dart';
+
+enum ImageApiKind {
+  automatic,
+  openAi,
+  gemini,
+  ark,
+  stability,
+  bfl,
+  ideogram,
+  replicate,
+}
+
+ImageApiKind imageApiKindFromName(String? value) {
+  final normalized = value?.trim().toLowerCase() ?? '';
+  return ImageApiKind.values.firstWhere(
+    (kind) => kind.name.toLowerCase() == normalized,
+    orElse: () => ImageApiKind.automatic,
+  );
+}
 
 class AiProvider {
   const AiProvider({
@@ -13,6 +34,7 @@ class AiProvider {
     this.apiKey = '',
     this.baseUrl = '',
     this.models = const [],
+    this.imageApi = ImageApiKind.automatic,
   });
 
   factory AiProvider.fromJson(dynamic json) {
@@ -32,6 +54,7 @@ class AiProvider {
       models: dedupeModels(
         (map['models'] as List? ?? []).map(AiModel.fromJson),
       ),
+      imageApi: imageApiKindFromName(map['imageApi']?.toString()),
     );
   }
 
@@ -43,6 +66,7 @@ class AiProvider {
   final String apiKey;
   final String baseUrl;
   final List<AiModel> models;
+  final ImageApiKind imageApi;
 
   static List<AiProvider> defaults() {
     return const [
@@ -52,6 +76,8 @@ class AiProvider {
         current: false,
         color: Color(0xFF10B981),
         baseUrl: 'https://api.openai.com/v1',
+        models: openAiImageModels,
+        imageApi: ImageApiKind.openAi,
       ),
       AiProvider(
         name: 'Gemini',
@@ -59,6 +85,62 @@ class AiProvider {
         current: false,
         color: Color(0xFF3B82F6),
         baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+        models: geminiImageModels,
+        imageApi: ImageApiKind.gemini,
+      ),
+      AiProvider(
+        name: '火山方舟',
+        status: '未配置',
+        current: false,
+        color: Color(0xFF3370FF),
+        baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+        models: seedreamImageModels,
+        imageApi: ImageApiKind.ark,
+      ),
+      AiProvider(
+        name: 'Recraft',
+        status: '未配置',
+        current: false,
+        color: Color(0xFF6D5DFB),
+        baseUrl: 'https://external.api.recraft.ai/v1',
+        models: recraftImageModels,
+        imageApi: ImageApiKind.openAi,
+      ),
+      AiProvider(
+        name: 'Stability AI',
+        status: '未配置',
+        current: false,
+        color: Color(0xFF7A5AF8),
+        baseUrl: 'https://api.stability.ai',
+        models: stabilityImageModels,
+        imageApi: ImageApiKind.stability,
+      ),
+      AiProvider(
+        name: 'Black Forest Labs',
+        status: '未配置',
+        current: false,
+        color: Color(0xFF151515),
+        baseUrl: 'https://api.bfl.ai/v1',
+        models: bflImageModels,
+        imageApi: ImageApiKind.bfl,
+      ),
+      AiProvider(
+        name: 'Ideogram',
+        status: '未配置',
+        current: false,
+        color: Color(0xFF1D4ED8),
+        baseUrl: 'https://api.ideogram.ai',
+        models: ideogramImageModels,
+        imageApi: ImageApiKind.ideogram,
+      ),
+      AiProvider(
+        name: 'Replicate',
+        status: '未配置',
+        current: false,
+        color: Color(0xFF111827),
+        baseUrl: 'https://api.replicate.com/v1',
+        models: replicateImageModels,
+        imageApi: ImageApiKind.replicate,
       ),
       AiProvider(
         name: 'Anthropic',
@@ -94,6 +176,8 @@ class AiProvider {
         current: false,
         color: Color(0xFF111111),
         baseUrl: 'https://api.x.ai/v1',
+        models: grokImageModels,
+        imageApi: ImageApiKind.openAi,
       ),
     ];
   }
@@ -107,6 +191,7 @@ class AiProvider {
     String? apiKey,
     String? baseUrl,
     List<AiModel>? models,
+    ImageApiKind? imageApi,
   }) {
     return AiProvider(
       name: name ?? this.name,
@@ -117,6 +202,7 @@ class AiProvider {
       apiKey: apiKey ?? this.apiKey,
       baseUrl: baseUrl ?? this.baseUrl,
       models: models == null ? this.models : dedupeModels(models),
+      imageApi: imageApi ?? this.imageApi,
     );
   }
 
@@ -129,6 +215,7 @@ class AiProvider {
     'apiKey': apiKey,
     'baseUrl': baseUrl,
     'models': models.map((m) => m.toJson()).toList(),
+    'imageApi': imageApi.name,
   };
 
   Map<String, dynamic> safeJson() => {

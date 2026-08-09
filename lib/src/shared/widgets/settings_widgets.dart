@@ -9,6 +9,22 @@ import '../../domain/models.dart';
 import 'brand_icon.dart';
 import 'model_capability_chips.dart';
 
+const _settingsCornerRadius = 20.0;
+const _settingsRowMinHeight = 72.0;
+const _settingsControlHeight = 44.0;
+
+Color _settingsBorderColor(WeaviewState state, BuildContext context) {
+  return state.isDark(context)
+      ? Colors.white.withValues(alpha: 0.08)
+      : const Color(0xFFDEE5EF);
+}
+
+Color _settingsSurfaceColor(WeaviewState state, BuildContext context) {
+  return state.isDark(context)
+      ? Colors.white.withValues(alpha: 0.045)
+      : Colors.white.withValues(alpha: 0.92);
+}
+
 class SectionLabel extends StatelessWidget {
   const SectionLabel({required this.state, required this.label, this.icon});
 
@@ -19,14 +35,14 @@ class SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 14),
       child: Row(
         children: [
           if (icon != null) ...[
             Icon(
               icon,
-              size: 15,
-              color: state.text(context).withValues(alpha: 0.42),
+              size: 16,
+              color: state.text(context).withValues(alpha: 0.48),
             ),
             const SizedBox(width: 6),
           ],
@@ -35,11 +51,11 @@ class SectionLabel extends StatelessWidget {
             style: state
                 .textStyle(
                   context,
-                  size: 12,
-                  weight: FontWeight.w800,
-                  opacity: 0.42,
+                  size: 15.5,
+                  weight: FontWeight.w700,
+                  opacity: 0.68,
                 )
-                .copyWith(letterSpacing: 1.7),
+                .copyWith(height: 1.15),
           ),
         ],
       ),
@@ -65,13 +81,20 @@ class CardShell extends StatelessWidget {
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: state.isDark(context)
-            ? Colors.white.withValues(alpha: 0.055)
-            : Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        color: _settingsSurfaceColor(state, context),
+        borderRadius: BorderRadius.circular(_settingsCornerRadius),
         border: Border.all(
-          color: borderColor ?? state.text(context).withValues(alpha: 0.06),
+          color: borderColor ?? _settingsBorderColor(state, context),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(
+              alpha: state.isDark(context) ? 0.0 : 0.02,
+            ),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: child,
     );
@@ -96,20 +119,20 @@ class SettingsActionBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: state.background(context),
         border: Border(
-          top: BorderSide(color: state.text(context).withValues(alpha: 0.06)),
+          top: BorderSide(color: _settingsBorderColor(state, context)),
         ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(
-              alpha: state.isDark(context) ? 0.2 : 0.06,
+              alpha: state.isDark(context) ? 0.0 : 0.025,
             ),
-            blurRadius: 22,
-            offset: const Offset(0, -8),
+            blurRadius: 14,
+            offset: const Offset(0, -4),
           ),
         ],
       ),
       child: Padding(
-        padding: EdgeInsets.fromLTRB(18, 10, 18, 12 + bottom),
+        padding: EdgeInsets.fromLTRB(22, 12, 22, 12 + bottom),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -119,7 +142,7 @@ class SettingsActionBar extends StatelessWidget {
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: state.textStyle(context, size: 12, opacity: 0.66),
+                style: state.textStyle(context, size: 12.5, opacity: 0.62),
               ),
               const SizedBox(height: 8),
             ],
@@ -152,52 +175,98 @@ class SettingsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final row = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
-      child: Row(
-        children: [
-          if (leading != null) ...[leading!, const SizedBox(width: 12)],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: state.textStyle(
-                    context,
-                    size: 15,
-                    weight: FontWeight.w500,
-                  ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 4),
+    final resolvedLeading = leading is Icon
+        ? _SettingsIconContainer(state: state, icon: leading as Icon)
+        : leading;
+    final row = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: _settingsRowMinHeight),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+        child: Row(
+          children: [
+            if (resolvedLeading != null) ...[
+              resolvedLeading,
+              const SizedBox(width: 14),
+            ],
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: state.textStyle(context, size: 12, opacity: 0.5),
+                    title,
+                    style: state.textStyle(
+                      context,
+                      size: 16,
+                      weight: FontWeight.w600,
+                    ),
                   ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle!,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: state.textStyle(
+                        context,
+                        size: 12.5,
+                        opacity: 0.5,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          ?trailing,
-          if (showChevron)
-            Icon(
-              Icons.chevron_right_rounded,
-              color: state.text(context).withValues(alpha: 0.35),
-            ),
-        ],
+            if (trailing != null) ...[const SizedBox(width: 12), trailing!],
+            if (showChevron) ...[
+              const SizedBox(width: 6),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 22,
+                color: state.text(context).withValues(alpha: 0.32),
+              ),
+            ],
+          ],
+        ),
       ),
     );
     if (onTap == null) return row;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: row,
+    return Semantics(
+      button: true,
+      enabled: true,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(_settingsCornerRadius - 2),
+          onTap: onTap,
+          child: row,
+        ),
       ),
+    );
+  }
+}
+
+class _SettingsIconContainer extends StatelessWidget {
+  const _SettingsIconContainer({required this.state, required this.icon});
+
+  final WeaviewState state;
+  final Icon icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final baseColor =
+        icon.color ?? (state.isDark(context) ? accentMint : sendGreen);
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: baseColor.withValues(alpha: state.isDark(context) ? 0.16 : 0.12),
+        shape: BoxShape.circle,
+        border: Border.all(color: baseColor.withValues(alpha: 0.14)),
+      ),
+      alignment: Alignment.center,
+      child: Icon(icon.icon, size: icon.size ?? 19, color: baseColor),
     );
   }
 }
@@ -212,7 +281,9 @@ class DividerLine extends StatelessWidget {
     return Divider(
       height: 1,
       thickness: 1,
-      color: state.text(context).withValues(alpha: 0.055),
+      indent: 18,
+      endIndent: 18,
+      color: _settingsBorderColor(state, context),
     );
   }
 }
@@ -234,38 +305,50 @@ class ThemeChoice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final selectedBackground = state.isDark(context)
+        ? Colors.white.withValues(alpha: 0.08)
+        : state.accents[0].withValues(alpha: 0.14);
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: selected
-                ? state.text(context).withValues(alpha: 0.065)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Column(
-            children: [
-              Icon(
-                icon,
-                size: 25,
-                color: state
-                    .text(context)
-                    .withValues(alpha: selected ? 0.92 : 0.58),
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            constraints: const BoxConstraints(minHeight: 56),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            decoration: BoxDecoration(
+              color: selected ? selectedBackground : Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: selected
+                    ? state.accents[0].withValues(alpha: 0.22)
+                    : Colors.transparent,
               ),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: state.textStyle(
-                  context,
-                  size: 12,
-                  weight: FontWeight.w600,
-                  opacity: selected ? 0.92 : 0.58,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color: selected
+                      ? (state.isDark(context) ? accentMint : sendGreen)
+                      : state.text(context).withValues(alpha: 0.52),
                 ),
-              ),
-            ],
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  style: state.textStyle(
+                    context,
+                    size: 12.5,
+                    weight: FontWeight.w600,
+                    opacity: selected ? 0.96 : 0.6,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -286,27 +369,46 @@ class WeaveSwitch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => onChanged(!value),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        width: 48,
-        height: 26,
-        padding: const EdgeInsets.all(3),
-        decoration: BoxDecoration(
-          color: value
-              ? sendGreen
-              : state.text(context).withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          width: 20,
-          height: 20,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+    final inactiveTrack = state.isDark(context)
+        ? Colors.white.withValues(alpha: 0.16)
+        : const Color(0xFFDCE3EE);
+    return Semantics(
+      button: true,
+      enabled: true,
+      toggled: value,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onChanged(!value),
+        child: SizedBox(
+          width: 56,
+          height: _settingsControlHeight,
+          child: Center(
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              width: 48,
+              height: 30,
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: value ? sendGreen : inactiveTrack,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -328,9 +430,14 @@ class TinyIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints.tightFor(
+        width: _settingsControlHeight,
+        height: _settingsControlHeight,
+      ),
+      padding: EdgeInsets.zero,
+      splashRadius: 22,
       onPressed: onTap,
-      icon: Icon(icon, size: 18, color: color.withValues(alpha: 0.68)),
+      icon: Icon(icon, size: 20, color: color.withValues(alpha: 0.72)),
     );
   }
 }
@@ -349,17 +456,21 @@ class ModelBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 122),
+      constraints: const BoxConstraints(maxWidth: 168),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
           color: active
-              ? sendGreen.withValues(alpha: 0.12)
+              ? state.accents[0].withValues(
+                  alpha: state.isDark(context) ? 0.16 : 0.12,
+                )
               : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
-          border: active
-              ? null
-              : Border.all(color: state.text(context).withValues(alpha: 0.12)),
+          border: Border.all(
+            color: active
+                ? state.accents[0].withValues(alpha: 0.18)
+                : _settingsBorderColor(state, context),
+          ),
         ),
         child: Text(
           label,
@@ -370,7 +481,7 @@ class ModelBadge extends StatelessWidget {
                 context,
                 size: 12.5,
                 weight: FontWeight.w600,
-                opacity: active ? 1 : 0.42,
+                opacity: active ? 0.96 : 0.56,
               )
               .copyWith(color: active ? sendGreen : null),
         ),
@@ -399,44 +510,72 @@ class SoftButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = danger
-        ? Colors.red.withValues(alpha: 0.11)
+        ? Colors.red.withValues(alpha: 0.09)
         : accent
         ? state.accents[0]
-        : state.text(context).withValues(alpha: 0.06);
+        : state.isDark(context)
+        ? Colors.white.withValues(alpha: 0.065)
+        : Colors.white;
+    final borderColor = danger
+        ? Colors.red.withValues(alpha: 0.18)
+        : accent
+        ? Colors.transparent
+        : _settingsBorderColor(state, context);
     final fg = danger
         ? Colors.red
         : accent
         ? Colors.white
         : state.text(context);
-    return Material(
-      color: bg,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        enableFeedback: true,
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, size: 18, color: fg),
-                  const SizedBox(width: 6),
-                ],
-                Flexible(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: state
-                        .textStyle(context, size: 14, weight: FontWeight.w600)
-                        .copyWith(color: fg),
+    return Semantics(
+      button: true,
+      enabled: true,
+      child: Material(
+        color: bg,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          enableFeedback: true,
+          onTap: onTap,
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 52),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor),
+              boxShadow: accent
+                  ? [
+                      BoxShadow(
+                        color: state.accents[0].withValues(alpha: 0.16),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 18, color: fg),
+                    const SizedBox(width: 6),
+                  ],
+                  Flexible(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: state
+                          .textStyle(
+                            context,
+                            size: 14.5,
+                            weight: FontWeight.w600,
+                          )
+                          .copyWith(color: fg),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -463,32 +602,41 @@ class SegmentedPills extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: state.text(context).withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(999),
+        color: state.isDark(context)
+            ? Colors.white.withValues(alpha: 0.045)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: _settingsBorderColor(state, context)),
       ),
       child: Row(
         children: [
           for (final item in items.entries)
             Expanded(
-              child: GestureDetector(
-                onTap: () => onChanged(item.key),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(vertical: 11),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: value == item.key
-                        ? state.layer(context)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    item.value,
-                    style: state.textStyle(
-                      context,
-                      size: 13,
-                      weight: FontWeight.w600,
-                      opacity: value == item.key ? 1 : 0.58,
+              child: Semantics(
+                button: true,
+                selected: value == item.key,
+                child: GestureDetector(
+                  onTap: () => onChanged(item.key),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    constraints: const BoxConstraints(minHeight: 52),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: value == item.key
+                          ? state.accents[0].withValues(
+                              alpha: state.isDark(context) ? 0.16 : 0.12,
+                            )
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      item.value,
+                      style: state.textStyle(
+                        context,
+                        size: 13.5,
+                        weight: FontWeight.w600,
+                        opacity: value == item.key ? 0.96 : 0.58,
+                      ),
                     ),
                   ),
                 ),
@@ -527,15 +675,23 @@ class DropdownField extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: state.textStyle(context, size: 14, opacity: 0.6)),
-        const SizedBox(height: 8),
+        Text(
+          label,
+          style: state.textStyle(
+            context,
+            size: 13.5,
+            weight: FontWeight.w600,
+            opacity: 0.62,
+          ),
+        ),
+        const SizedBox(height: 10),
         Material(
           color: enabled
-              ? state.text(context).withValues(alpha: 0.045)
+              ? _settingsSurfaceColor(state, context)
               : state.text(context).withValues(alpha: 0.025),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(_settingsCornerRadius),
           child: InkWell(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(_settingsCornerRadius),
             onTap: enabled
                 ? () async {
                     final selected = await _openPicker(
@@ -548,12 +704,11 @@ class DropdownField extends StatelessWidget {
                 : null,
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(15, 12, 12, 12),
+              constraints: const BoxConstraints(minHeight: 60),
+              padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(
-                  color: state.text(context).withValues(alpha: 0.055),
-                ),
+                borderRadius: BorderRadius.circular(_settingsCornerRadius),
+                border: Border.all(color: _settingsBorderColor(state, context)),
               ),
               child: Row(
                 children: [
@@ -567,7 +722,7 @@ class DropdownField extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: state.textStyle(
                             context,
-                            size: 14.5,
+                            size: 15,
                             weight: FontWeight.w600,
                             opacity: enabled ? 0.9 : 0.38,
                           ),
@@ -581,7 +736,7 @@ class DropdownField extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: state.textStyle(
                               context,
-                              size: 11,
+                              size: 12,
                               opacity: enabled ? 0.42 : 0.28,
                             ),
                           ),
@@ -623,15 +778,9 @@ class DropdownField extends StatelessWidget {
             decoration: BoxDecoration(
               color: state.background(context),
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(28),
+                top: Radius.circular(24),
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.16),
-                  blurRadius: 30,
-                  offset: const Offset(0, -8),
-                ),
-              ],
+              border: Border.all(color: _settingsBorderColor(state, context)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -668,8 +817,10 @@ class DropdownField extends StatelessWidget {
                       final description = itemDescriptions[item];
                       return Material(
                         color: selected
-                            ? state.accents[0].withValues(alpha: 0.18)
-                            : state.text(context).withValues(alpha: 0.045),
+                            ? state.accents[0].withValues(
+                                alpha: state.isDark(context) ? 0.16 : 0.12,
+                              )
+                            : _settingsSurfaceColor(state, context),
                         borderRadius: BorderRadius.circular(18),
                         child: InkWell(
                           borderRadius: BorderRadius.circular(18),
@@ -1371,20 +1522,20 @@ InputDecoration inputDecoration(WeaviewState state, {String? hint}) {
   return InputDecoration(
     hintText: hint,
     filled: true,
-    fillColor: state.accents[0].withValues(alpha: 0.11),
+    fillColor: state.accents[0].withValues(alpha: 0.08),
     border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
-      borderSide: BorderSide.none,
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(_settingsCornerRadius),
       borderSide: BorderSide(color: state.accents[0].withValues(alpha: 0.16)),
     ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(_settingsCornerRadius),
+      borderSide: BorderSide(color: state.accents[0].withValues(alpha: 0.14)),
+    ),
     focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(_settingsCornerRadius),
       borderSide: BorderSide(color: state.accents[0].withValues(alpha: 0.55)),
     ),
     isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
   );
 }

@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:mime/mime.dart';
 
 import '../../app/weaview_state.dart';
+import '../../core/app_utils.dart';
 import '../../data/ai/ai_gateway.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets/shared_widgets.dart';
@@ -51,6 +52,8 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
   List<MessageAttachment> _pendingAttachments = [];
   double _dockHeight = 68.0;
   bool _backgroundedWithImageGeneration = false;
+  int _imageGenerationCount = 1;
+  int _lifecycleResumeGeneration = 0;
 
   @override
   void initState() {
@@ -58,10 +61,15 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _inputFocus.addListener(_handleInputFocusChange);
     widget.state.addListener(_stateChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !widget.state.hasActiveImageGeneration) return;
+      unawaited(widget.state.resumeInterruptedImageGeneration());
+    });
   }
 
   @override
   void dispose() {
+    _lifecycleResumeGeneration++;
     widget.state.removeListener(_stateChanged);
     _inputFocus.removeListener(_handleInputFocusChange);
     WidgetsBinding.instance.removeObserver(this);
@@ -93,12 +101,18 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
+      _lifecycleResumeGeneration++;
+      if (state != AppLifecycleState.inactive) {
+        releaseBackgroundImageMemory();
+      }
       widget.state.markAppBackgrounded();
       _backgroundedWithImageGeneration = widget.state.hasActiveImageGeneration;
       return;
     }
     if (state != AppLifecycleState.resumed) return;
+    final resumeGeneration = ++_lifecycleResumeGeneration;
     final shouldRetry = _backgroundedWithImageGeneration;
     _backgroundedWithImageGeneration = false;
     for (final delay in const [
@@ -107,7 +121,9 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
       Duration(seconds: 2),
     ]) {
       Future<void>.delayed(delay, () {
-        if (!mounted) return;
+        if (!mounted || resumeGeneration != _lifecycleResumeGeneration) {
+          return;
+        }
         unawaited(
           widget.state.resumeInterruptedImageGeneration(
             retryLastFailure: shouldRetry,
@@ -182,6 +198,7 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
           editingIndex,
           text,
           attachments: attachments,
+          imageCount: _imageGenerationCount,
         );
       } else {
         await widget.state.replaceUserMessageAndSubmit(
@@ -200,7 +217,11 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
         _pendingAttachments = [];
         _dockExpanded = false;
       });
-      await widget.state.submitImageGeneration(text, attachments: attachments);
+      await widget.state.submitImageGeneration(
+        text,
+        attachments: attachments,
+        imageCount: _imageGenerationCount,
+      );
       return;
     }
     if (_comparisonMode) {
@@ -308,6 +329,9 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
             (next?.attachments.any((attachment) => attachment.isImage) ??
                 false);
         _imageGenerationMode = _editingImageGenerationMessage;
+        if (_editingImageGenerationMessage) {
+          _imageGenerationCount = next?.imageCount.clamp(1, 4).toInt() ?? 1;
+        }
         if (_imageGenerationMode) _comparisonMode = false;
         _pendingAttachments = message.attachments
             .map((attachment) => attachment.copy())
@@ -546,6 +570,31 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
     );
   }
 
+  void _startChatFromEmptyState() {
+    setState(() {
+      _imageGenerationMode = false;
+      _comparisonMode = false;
+      _modelDropdownOpen = !_hasConfiguredChatModel();
+    });
+    if (_hasConfiguredChatModel()) _inputFocus.requestFocus();
+  }
+
+  void _startImageGenerationFromEmptyState() {
+    setState(() {
+      _imageGenerationMode = true;
+      _comparisonMode = false;
+      _modelDropdownOpen = !_hasConfiguredImageModel();
+    });
+    if (_hasConfiguredImageModel()) _inputFocus.requestFocus();
+  }
+
+  void _openModelPickerFromEmptyState() {
+    setState(() {
+      _modelDropdownOpen = true;
+      _dockExpanded = false;
+    });
+  }
+
   Future<void> _openSettings() async {
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _dockExpanded = false);
@@ -586,6 +635,38 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
       ),
     );
     FocusManager.instance.primaryFocus?.unfocus();
+  }
+
+  bool _hasConfiguredChatModel() => _hasConfiguredRoleModel('chat');
+
+  bool _hasConfiguredImageModel() => _hasConfiguredRoleModel('image');
+
+  bool _hasConfiguredRoleModel(String role) {
+    final assignment = widget.state.modelAssignments[role];
+    if (assignment == null) return false;
+    final providerName = assignment.provider.trim();
+    final modelName = assignment.model.trim();
+    if (providerName.isEmpty || modelName.isEmpty) return false;
+    AiProvider? provider;
+    for (final item in widget.state.providers) {
+      if (item.enabled &&
+          item.apiKey.trim().isNotEmpty &&
+          item.name == providerName) {
+        provider = item;
+        break;
+      }
+    }
+    if (provider == null) return false;
+    return provider.models.any((model) {
+      final modelId = model.id.trim().isEmpty ? model.name : model.id;
+      if (modelId != modelName && model.name != modelName) return false;
+      return supportsModelRole(
+        role: role,
+        id: model.id,
+        name: model.name,
+        capabilities: model.capabilities,
+      );
+    });
   }
 
   @override
@@ -667,7 +748,12 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
                     scrollController: _scroll,
                     dockExpanded: _dockExpanded,
                     dockHeight: _dockHeight,
+                    hasConfiguredChatModel: _hasConfiguredChatModel(),
+                    hasConfiguredImageModel: _hasConfiguredImageModel(),
                     pendingAttachments: _pendingAttachments,
+                    onStartChat: _startChatFromEmptyState,
+                    onStartImageGeneration: _startImageGenerationFromEmptyState,
+                    onChooseModel: _openModelPickerFromEmptyState,
                     onCopyMessage: _copyMessage,
                     onRetryMessage: _retryMessage,
                     onEditMessage: _editMessage,
@@ -727,6 +813,11 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
                         setState(() => _dockHeight = size.height);
                       }
                     },
+                    imageCount: _imageGenerationCount,
+                    onImageCountChanged: (value) {
+                      if (_imageGenerationCount == value) return;
+                      setState(() => _imageGenerationCount = value);
+                    },
                   ),
                   ChatModelDropdown(
                     state: state,
@@ -739,10 +830,7 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
                       _openSettings();
                     },
                     onSearchChanged: () => setState(() {}),
-                    onSelectModel: (item) {
-                      final role = item.supportsImageGeneration
-                          ? 'image'
-                          : 'chat';
+                    onSelectModel: (item, role) {
                       state.saveModelAssignment(
                         role,
                         ModelAssignment(
@@ -752,7 +840,7 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
                         ),
                       );
                       setState(() {
-                        _imageGenerationMode = item.supportsImageGeneration;
+                        _imageGenerationMode = role == 'image';
                         if (_imageGenerationMode) _comparisonMode = false;
                         _modelDropdownOpen = false;
                         _modelSearch.clear();

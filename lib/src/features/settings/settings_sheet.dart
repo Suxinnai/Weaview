@@ -55,6 +55,8 @@ class SettingsSheetState extends State<SettingsSheet> {
   final TextEditingController memoryController = TextEditingController();
   final TextEditingController systemPromptController = TextEditingController();
   final TextEditingController profileController = TextEditingController();
+  final TextEditingController providerSearchController =
+      TextEditingController();
   final TextEditingController feedbackTitleController = TextEditingController();
   final TextEditingController feedbackDetailController =
       TextEditingController();
@@ -70,15 +72,14 @@ class SettingsSheetState extends State<SettingsSheet> {
   final Set<String> deletingProviders = {};
   String? providerDeleteTarget;
   String? draggingProviderName;
+  bool showAllProviders = false;
   String feedbackType = '问题反馈';
 
   static const settingsTabs = [
     ('general', '通用', Icons.settings_outlined),
     ('providers', '提供商', Icons.cloud_outlined),
-    ('models', '默认模型', Icons.memory_outlined),
-    ('services', '扩展服务', Icons.layers_outlined),
-    ('data', '数据管理', Icons.storage_outlined),
-    ('about', '关于织境', Icons.info_outline_rounded),
+    ('models', '模型', Icons.memory_outlined),
+    ('more', '更多', Icons.tune_rounded),
   ];
 
   static const settingsRoles = {
@@ -119,6 +120,7 @@ class SettingsSheetState extends State<SettingsSheet> {
     memoryController.dispose();
     systemPromptController.dispose();
     profileController.dispose();
+    providerSearchController.dispose();
     feedbackTitleController.dispose();
     feedbackDetailController.dispose();
     feedbackStepsController.dispose();
@@ -130,6 +132,124 @@ class SettingsSheetState extends State<SettingsSheet> {
   }
 
   void updateSheet(VoidCallback fn) => setState(fn);
+
+  Color get _headerTextColor =>
+      widget.state.text(context).withValues(alpha: 0.92);
+
+  Color get _headerMutedColor =>
+      widget.state.text(context).withValues(alpha: 0.62);
+
+  Widget _headerLeadingAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: TextButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 22),
+        label: Text(label),
+        style: TextButton.styleFrom(
+          foregroundColor: _headerTextColor,
+          minimumSize: const Size(84, 44),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          textStyle: widget.state.textStyle(
+            context,
+            size: 14.5,
+            weight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _headerTrailingSpacer() {
+    if (subView != 'main') {
+      return const SizedBox(width: 96, height: 44);
+    }
+    return SizedBox(
+      width: 96,
+      height: 44,
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: IconCircleButton(
+          icon: Icons.search_rounded,
+          onTap: () => setState(() => activeTab = 'providers'),
+          color: widget.state.text(context),
+          size: 40,
+          opacity: 0.76,
+          background: widget.state.text(context).withValues(alpha: 0.045),
+        ),
+      ),
+    );
+  }
+
+  Widget _settingsTabButton((String, String, IconData) tab) {
+    final state = widget.state;
+    final active = activeTab == tab.$1;
+    final activeColor = state.isDark(context) ? accentMint : sendGreen;
+    return Semantics(
+      button: true,
+      selected: active,
+      label: tab.$2,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () => setState(() => activeTab = tab.$1),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
+            decoration: BoxDecoration(
+              color: active
+                  ? state.accents[0].withValues(
+                      alpha: state.isDark(context) ? 0.18 : 0.14,
+                    )
+                  : state.text(context).withValues(alpha: 0.035),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: active
+                    ? state.accents[0].withValues(alpha: 0.30)
+                    : state.text(context).withValues(alpha: 0.04),
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  tab.$2,
+                  style: state
+                      .textStyle(
+                        context,
+                        size: 15,
+                        weight: active ? FontWeight.w700 : FontWeight.w600,
+                        opacity: active ? 0.96 : 0.66,
+                      )
+                      .copyWith(
+                        color: active ? activeColor : _headerMutedColor,
+                      ),
+                ),
+                const SizedBox(height: 6),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  width: active ? 26 : 0,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: activeColor,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -166,6 +286,9 @@ class SettingsSheetState extends State<SettingsSheet> {
       'search_engine_config' => '搜索服务配置',
       'tts_config' => '语音服务配置',
       'feedback_form' => '报告问题 / 提供反馈',
+      'more_services' => '联网与语音',
+      'more_data' => '数据与备份',
+      'more_about' => '关于与反馈',
       _ => '设置',
     };
     return SafeArea(
@@ -175,31 +298,23 @@ class SettingsSheetState extends State<SettingsSheet> {
           color: state.background(context),
           border: Border(
             bottom: BorderSide(
-              color: state.text(context).withValues(alpha: 0.06),
+              color: state.text(context).withValues(alpha: 0.08),
             ),
           ),
         ),
         child: Column(
           children: [
             SizedBox(
-              height: 58,
+              height: 62,
               child: Row(
                 children: [
-                  const SizedBox(width: 12),
-                  TextButton.icon(
-                    onPressed: subView == 'main' ? closeSheet : goBack,
-                    icon: Icon(
-                      subView == 'main'
-                          ? Icons.close_rounded
-                          : Icons.chevron_left_rounded,
-                      size: 22,
-                    ),
-                    label: Text(subView == 'main' ? '关闭' : '返回'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: state
-                          .text(context)
-                          .withValues(alpha: 0.82),
-                    ),
+                  const SizedBox(width: 10),
+                  _headerLeadingAction(
+                    icon: subView == 'main'
+                        ? Icons.close_rounded
+                        : Icons.arrow_back_rounded,
+                    label: subView == 'main' ? '关闭' : '返回',
+                    onTap: subView == 'main' ? closeSheet : goBack,
                   ),
                   Expanded(
                     child: Center(
@@ -210,75 +325,29 @@ class SettingsSheetState extends State<SettingsSheet> {
                         style: state.textStyle(
                           context,
                           size: subView == 'main' ? 20 : 17,
-                          weight: FontWeight.w500,
+                          weight: FontWeight.w700,
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 92),
+                  _headerTrailingSpacer(),
                 ],
               ),
             ),
             if (subView == 'main')
               SizedBox(
-                height: 50,
+                height: 58,
                 child: ListView.separated(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
-                    vertical: 5,
+                    vertical: 6,
                   ),
                   scrollDirection: Axis.horizontal,
                   itemCount: SettingsSheetState.settingsTabs.length,
                   separatorBuilder: (_, _) => const SizedBox(width: 8),
                   itemBuilder: (context, index) {
-                    final tab = SettingsSheetState.settingsTabs[index];
-                    final active = activeTab == tab.$1;
-                    final activeColor = state.accents[0].withValues(
-                      alpha: state.isDark(context) ? 0.18 : 0.22,
-                    );
-                    final inactiveColor = state
-                        .text(context)
-                        .withValues(alpha: 0.055);
-                    return ChoiceChip(
-                      selected: active,
-                      showCheckmark: false,
-                      avatar: Icon(
-                        tab.$3,
-                        size: 17,
-                        color: active
-                            ? (state.isDark(context)
-                                  ? accentMint
-                                  : const Color(0xFF007A78))
-                            : state.text(context).withValues(alpha: 0.62),
-                      ),
-                      label: Text(tab.$2),
-                      onSelected: (_) => setState(() => activeTab = tab.$1),
-                      labelStyle: state
-                          .textStyle(
-                            context,
-                            size: 13,
-                            weight: FontWeight.w600,
-                            opacity: active ? 1 : 0.72,
-                          )
-                          .copyWith(
-                            color: state
-                                .text(context)
-                                .withValues(alpha: active ? 0.96 : 0.72),
-                          ),
-                      selectedColor: activeColor,
-                      disabledColor: inactiveColor,
-                      backgroundColor: inactiveColor,
-                      surfaceTintColor: Colors.transparent,
-                      elevation: 0,
-                      pressElevation: 0,
-                      side: BorderSide(
-                        color: active
-                            ? state.accents[0].withValues(alpha: 0.45)
-                            : Colors.transparent,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(999),
-                      ),
+                    return _settingsTabButton(
+                      SettingsSheetState.settingsTabs[index],
                     );
                   },
                 ),
@@ -333,6 +402,9 @@ class SettingsSheetState extends State<SettingsSheet> {
               'search_engine_config' => searchConfigView(),
               'tts_config' => ttsConfigView(),
               'feedback_form' => feedbackView(),
+              'more_services' => servicesTab(),
+              'more_data' => dataTab(),
+              'more_about' => aboutTab(),
               _ => const SizedBox.shrink(),
             },
     );
@@ -343,9 +415,7 @@ class SettingsSheetState extends State<SettingsSheet> {
       'general' => generalTab(),
       'providers' => providersTab(),
       'models' => modelsTab(),
-      'services' => servicesTab(),
-      'data' => dataTab(),
-      'about' => aboutTab(),
+      'more' => moreTab(),
       _ => const SizedBox.shrink(),
     };
   }
@@ -502,6 +572,7 @@ class SettingsSheetState extends State<SettingsSheet> {
           ? ''
           : AiGateway.normalizeBaseUrl(providerBaseUrl),
       models: providerModels,
+      imageApi: editingProvider?.imageApi ?? ImageApiKind.automatic,
     );
     widget.state.upsertProvider(provider, makeCurrent: makeCurrent);
     editingProvider = widget.state.providers.firstWhereOrNull(
@@ -529,8 +600,11 @@ class SettingsSheetState extends State<SettingsSheet> {
       final models = await AiGateway.fetchModels(
         apiKey: providerKey.trim(),
         baseUrl: providerBaseUrl.trim().isEmpty
-            ? 'https://api.openai.com/v1'
+            ? (providerName.toLowerCase().contains('gemini')
+                  ? ''
+                  : 'https://api.openai.com/v1')
             : providerBaseUrl.trim(),
+        providerName: providerName,
       );
       if (!mounted) return;
       final selected = await showDialog<List<AiModel>>(
@@ -572,10 +646,13 @@ class SettingsSheetState extends State<SettingsSheet> {
       final message = await AiGateway.testConnection(
         apiKey: providerKey.trim(),
         baseUrl: providerBaseUrl.trim().isEmpty
-            ? 'https://api.openai.com/v1'
+            ? (providerName.toLowerCase().contains('gemini')
+                  ? ''
+                  : 'https://api.openai.com/v1')
             : providerBaseUrl.trim(),
         model: model.id,
         capabilities: model.capabilities,
+        providerName: providerName,
       );
       setState(() => statusText = message);
     } catch (error) {

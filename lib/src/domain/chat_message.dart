@@ -10,6 +10,7 @@ class ChatMessage {
     this.translation = '',
     this.isThinking = false,
     this.activity = '',
+    this.imageCount = 1,
     this.comparisonResults = const [],
   });
 
@@ -23,12 +24,14 @@ class ChatMessage {
     String reasoning = '',
     bool isThinking = false,
     String activity = '',
+    int imageCount = 1,
   }) => ChatMessage(
     role: 'model',
     content: content,
     reasoning: reasoning,
     isThinking: isThinking,
     activity: activity,
+    imageCount: imageCount,
   );
 
   factory ChatMessage.modelComparison({
@@ -50,6 +53,9 @@ class ChatMessage {
       reasoning: map['reasoning']?.toString() ?? '',
       translation: map['translation']?.toString() ?? '',
       activity: map['activity']?.toString() ?? '',
+      imageCount: ((map['imageCount'] as num?)?.toInt() ?? 1)
+          .clamp(1, 4)
+          .toInt(),
       comparisonResults: (map['comparisonResults'] as List? ?? [])
           .map(ModelComparisonResult.fromJson)
           .toList(),
@@ -65,6 +71,7 @@ class ChatMessage {
   String translation;
   bool isThinking;
   String activity;
+  int imageCount;
   List<MessageAttachment> attachments;
   List<ModelComparisonResult> comparisonResults;
 
@@ -78,6 +85,7 @@ class ChatMessage {
     translation: translation,
     isThinking: isThinking,
     activity: activity,
+    imageCount: imageCount,
     comparisonResults: comparisonResults,
     attachments: attachments.map((a) => a.copy()).toList(),
   );
@@ -88,6 +96,7 @@ class ChatMessage {
     'reasoning': reasoning,
     'translation': translation,
     'activity': activity,
+    'imageCount': imageCount,
     'comparisonResults': comparisonResults
         .map((item) => item.toJson())
         .toList(),

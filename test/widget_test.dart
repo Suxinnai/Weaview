@@ -129,6 +129,13 @@ $$E = mc^2$$
       expect(providers.where((provider) => provider.current), isEmpty);
       expect(urls['OpenAI'], 'https://api.openai.com/v1');
       expect(urls['Gemini'], contains('/openai'));
+      expect(
+        providers
+            .firstWhere((provider) => provider.name == 'Gemini')
+            .models
+            .map((model) => model.id),
+        containsAll(geminiImageModels.map((model) => model.id)),
+      );
       expect(urls['DeepSeek'], 'https://api.deepseek.com');
       expect(urls['Kimi'], 'https://api.moonshot.cn/v1');
     },
@@ -392,10 +399,12 @@ $$E = mc^2$$
     await tester.pumpAndSettle();
 
     expect(find.text('用量统计'), findsOneWidget);
-    expect(find.text('累计 token'), findsOneWidget);
-    expect(find.byKey(const Key('usage-activity-heatmap')), findsOneWidget);
+    expect(find.text('输入'), findsOneWidget);
+    expect(find.text('输出'), findsOneWidget);
+    expect(find.text('花费'), findsOneWidget);
+    expect(find.byKey(const Key('usage-activity-heatmap')), findsNothing);
     expect(find.byKey(const Key('usage-token-trend')), findsOneWidget);
-    expect(find.byKey(const Key('usage-model-donut')), findsOneWidget);
+    expect(find.byKey(const Key('usage-model-donut')), findsNothing);
     await tester.drag(find.byType(ListView), const Offset(0, -600));
     await tester.pumpAndSettle();
     expect(find.text('多模型对照'), findsOneWidget);
@@ -440,9 +449,9 @@ $$E = mc^2$$
       ),
     );
 
-    final memoryEntry = find.text('记忆管理');
-    await tester.ensureVisible(memoryEntry);
+    await tester.drag(find.byType(ListView).last, const Offset(0, -520));
     await tester.pumpAndSettle();
+    final memoryEntry = find.text('记忆管理');
     await tester.tap(memoryEntry);
     await tester.pumpAndSettle();
 
@@ -504,6 +513,7 @@ $$E = mc^2$$
     await state.load();
     await state.submitImageGeneration(
       '参考这张图生成',
+      imageCount: 4,
       attachments: const [
         MessageAttachment(
           path: '/tmp/reference.png',
@@ -517,6 +527,7 @@ $$E = mc^2$$
 
     expect(state.messages.first.role, 'user');
     expect(state.messages.first.attachments.single.name, 'reference.png');
+    expect(state.messages.last.imageCount, 4);
     expect(state.messages.last.content, contains('生图模型'));
     state.dispose();
   });
@@ -954,7 +965,7 @@ $$E = mc^2$$
                 onClose: () {},
                 onOpenSettings: () {},
                 onSearchChanged: () {},
-                onSelectModel: (_) {},
+                onSelectModel: (_, _) {},
               ),
             ],
           ),
@@ -1214,7 +1225,7 @@ $$E = mc^2$$
     await tester.pumpAndSettle();
     await tester.tap(find.text('OpenAI').first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('禁用当前'));
+    await tester.tap(find.text('禁用提供商'));
     await tester.pumpAndSettle();
 
     final openai = state.providers.firstWhere((p) => p.name == 'OpenAI');

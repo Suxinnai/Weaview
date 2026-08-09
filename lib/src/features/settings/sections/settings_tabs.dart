@@ -3,9 +3,9 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../../../app/app_constants.dart';
@@ -20,32 +20,84 @@ extension SettingsTabs on SettingsSheetState {
   Widget generalTab() {
     final state = widget.state;
     return scrollContent([
-      SectionLabel(state: state, label: '外观与主题'),
+      SectionLabel(state: state, label: '外观'),
       CardShell(
         state: state,
-        padding: const EdgeInsets.all(8),
-        child: Row(
+        child: Column(
           children: [
-            ThemeChoice(
-              state: state,
-              icon: Icons.light_mode_outlined,
-              label: '浅色',
-              selected: state.themeMode == ThemeMode.light,
-              onTap: () => state.setThemeModeValue(ThemeMode.light),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '主题',
+                          style: state.textStyle(
+                            context,
+                            size: 15,
+                            weight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '选择浅色、深色或跟随系统',
+                          style: state.textStyle(
+                            context,
+                            size: 12,
+                            opacity: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: _ThemeSegmentedControl(
+                      state: state,
+                      current: state.themeMode,
+                      onSelected: state.setThemeModeValue,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            ThemeChoice(
+            DividerLine(state: state),
+            SettingsRow(
               state: state,
-              icon: Icons.dark_mode_outlined,
-              label: '深色',
-              selected: state.themeMode == ThemeMode.dark,
-              onTap: () => state.setThemeModeValue(ThemeMode.dark),
-            ),
-            ThemeChoice(
-              state: state,
-              icon: Icons.monitor_rounded,
-              label: '跟随系统',
-              selected: state.themeMode == ThemeMode.system,
-              onTap: () => state.setThemeModeValue(ThemeMode.system),
+              title: '强调色',
+              subtitle: '按钮、选中状态与动效使用的颜色',
+              showChevron: true,
+              onTap: () {
+                _showAccentPalette();
+              },
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 220),
+                    curve: Curves.easeOutCubic,
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: state.accents.first,
+                      border: Border.all(
+                        color: state.text(context).withValues(alpha: 0.10),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: state.accents.first.withValues(alpha: 0.22),
+                          blurRadius: 12,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+              ),
             ),
           ],
         ),
@@ -59,17 +111,12 @@ extension SettingsTabs on SettingsSheetState {
             SettingsRow(
               state: state,
               title: '昵称',
-              subtitle: '你的专属代号',
-              trailing: SizedBox(
-                width: 128,
-                child: TextFormField(
-                  initialValue: state.userName,
-                  onChanged: state.updateUserName,
-                  textAlign: TextAlign.right,
-                  style: state.textStyle(context, size: 14),
-                  decoration: inputDecoration(state, hint: '织梦者'),
-                ),
-              ),
+              subtitle: '在对话与侧边栏中显示',
+              showChevron: true,
+              onTap: () {
+                _showNicknameEditor();
+              },
+              trailing: _ValuePill(state: state, text: state.userName),
             ),
             DividerLine(state: state),
             SettingsRow(
@@ -92,6 +139,11 @@ extension SettingsTabs on SettingsSheetState {
                     imageSize: 42,
                     accent: state.accents[0],
                   ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: state.text(context).withValues(alpha: 0.35),
+                  ),
                 ],
               ),
             ),
@@ -112,7 +164,7 @@ extension SettingsTabs on SettingsSheetState {
         ),
       ),
       const SizedBox(height: 28),
-      SectionLabel(state: state, label: '人设设置'),
+      SectionLabel(state: state, label: 'AI 个性化'),
       CardShell(
         state: state,
         child: Column(
@@ -136,42 +188,6 @@ extension SettingsTabs on SettingsSheetState {
             DividerLine(state: state),
             SettingsRow(
               state: state,
-              title: '助手头像',
-              subtitle: '自定义AI伙伴的形象',
-              showChevron: false,
-              onTap: () => widget.onPickAvatar(false),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (state.assistantAvatar.isNotEmpty)
-                    TinyIcon(
-                      icon: Icons.delete_outline_rounded,
-                      color: Colors.red,
-                      onTap: () => state.updateAssistantAvatar(''),
-                    ),
-                  TinyIcon(
-                    icon: Icons.edit_outlined,
-                    color: state.text(context),
-                    onTap: () => widget.onPickAvatar(false),
-                  ),
-                ],
-              ),
-            ),
-            DividerLine(state: state),
-            SettingsRow(
-              state: state,
-              title: '情绪化回应',
-              subtitle: '梦境的感性程度',
-              onTap: () => state.setEmotionEnabled(!state.emotionEnabled),
-              trailing: WeaveSwitch(
-                state: state,
-                value: state.emotionEnabled,
-                onChanged: state.setEmotionEnabled,
-              ),
-            ),
-            DividerLine(state: state),
-            SettingsRow(
-              state: state,
               title: '记忆管理',
               subtitle: '查看或清除AI长效记忆',
               showChevron: true,
@@ -183,19 +199,154 @@ extension SettingsTabs on SettingsSheetState {
     ]);
   }
 
+  Future<void> _showAccentPalette() async {
+    final state = widget.state;
+    const options = <({String label, Color color})>[
+      (label: '薄荷', color: Color(0xFF70D8C7)),
+      (label: '海蓝', color: Color(0xFF3487F3)),
+      (label: '紫罗兰', color: Color(0xFF7C6CF2)),
+      (label: '珊瑚', color: Color(0xFFF06A73)),
+      (label: '琥珀', color: Color(0xFFE49A32)),
+      (label: '墨绿', color: Color(0xFF167D68)),
+    ];
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (sheetContext) => Container(
+        key: const ValueKey('accent_palette_sheet'),
+        padding: const EdgeInsets.fromLTRB(22, 4, 22, 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '选择强调色',
+              style: state.textStyle(
+                sheetContext,
+                size: 20,
+                weight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '会同步更新按钮、选中状态和界面光晕。',
+              style: state.textStyle(sheetContext, size: 13, opacity: 0.56),
+            ),
+            const SizedBox(height: 20),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final option in options)
+                  _AccentChoice(
+                    state: state,
+                    label: option.label,
+                    color: option.color,
+                    selected:
+                        state.accents.first.toARGB32() ==
+                        option.color.toARGB32(),
+                    onTap: () {
+                      state.setAccentColor(option.color);
+                      Navigator.of(sheetContext).pop();
+                    },
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showNicknameEditor() async {
+    final state = widget.state;
+    var draft = state.userName;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('修改昵称'),
+        content: TextFormField(
+          key: const ValueKey('nickname_editor_field'),
+          initialValue: draft,
+          autofocus: true,
+          maxLength: 20,
+          textInputAction: TextInputAction.done,
+          decoration: const InputDecoration(labelText: '昵称', hintText: '织梦者'),
+          onChanged: (value) => draft = value,
+          onFieldSubmitted: (value) => Navigator.of(dialogContext).pop(value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(draft),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (result == null) return;
+    state.updateUserName(result);
+  }
+
   Widget providersTab() {
     final state = widget.state;
+    final query = providerSearchController.text.trim().toLowerCase();
+    final matchingProviders = state.providers.where((provider) {
+      if (query.isEmpty) return true;
+      return provider.name.toLowerCase().contains(query) ||
+          provider.status.toLowerCase().contains(query) ||
+          provider.models.any(
+            (model) =>
+                model.name.toLowerCase().contains(query) ||
+                model.id.toLowerCase().contains(query),
+          );
+    }).toList();
     final assignedProviderNames = state.modelAssignments.values
         .map((assignment) => assignment.provider.trim())
         .where((provider) => provider.isNotEmpty)
         .toSet();
-    void clearDeleteTarget() {
-      if (providerDeleteTarget == null && draggingProviderName == null) return;
-      updateSheet(() {
-        providerDeleteTarget = null;
-        draggingProviderName = null;
-      });
+    final configuredCount = state.providers.where(_isProviderConfigured).length;
+    final prioritizedProviders = <AiProvider>[];
+    if (query.isEmpty && !showAllProviders) {
+      const featuredNames = [
+        'OpenAI',
+        'Gemini',
+        'Anthropic',
+        'DeepSeek',
+        'Grok',
+        'Kimi',
+      ];
+      for (final provider in state.providers) {
+        if (_isProviderConfigured(provider) ||
+            provider.current ||
+            assignedProviderNames.contains(provider.name)) {
+          prioritizedProviders.add(provider);
+        }
+      }
+      for (final name in featuredNames) {
+        final provider = state.providers.firstWhereOrNull(
+          (item) => item.name == name,
+        );
+        if (provider != null &&
+            !prioritizedProviders.any((item) => item.name == provider.name)) {
+          prioritizedProviders.add(provider);
+        }
+      }
+      for (final provider in state.providers) {
+        if (!prioritizedProviders.any((item) => item.name == provider.name)) {
+          prioritizedProviders.add(provider);
+        }
+      }
     }
+    final visibleProviders = query.isNotEmpty || showAllProviders
+        ? matchingProviders
+        : prioritizedProviders.take(6).toList();
+    final hiddenProviderCount =
+        matchingProviders.length - visibleProviders.length;
 
     void dropProviderOn(String providerName, int targetIndex) {
       final fromIndex = state.providers.indexWhere(
@@ -212,34 +363,93 @@ extension SettingsTabs on SettingsSheetState {
 
     return GestureDetector(
       behavior: HitTestBehavior.translucent,
-      onTap: clearDeleteTarget,
+      onTap: () => updateSheet(() {
+        providerDeleteTarget = null;
+        draggingProviderName = null;
+      }),
       child: scrollContent([
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: SectionLabel(state: state, label: '模型提供商'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '模型提供商',
+                    style: state.textStyle(
+                      context,
+                      size: 24,
+                      weight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '已配置 $configuredCount / ${state.providers.length} 个提供商',
+                    style: state.textStyle(context, size: 13, opacity: 0.56),
+                  ),
+                ],
+              ),
             ),
+            const SizedBox(width: 12),
             TextButton.icon(
               onPressed: () => openProviderConfig(null),
-              icon: const Icon(Icons.add_rounded, size: 17),
+              icon: const Icon(Icons.add_rounded, size: 18),
               label: const Text('自定义提供商'),
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            const gap = 14.0;
-            final cardWidth = (constraints.maxWidth - gap) / 2;
-            return Wrap(
-              spacing: gap,
-              runSpacing: 14,
+        const SizedBox(height: 16),
+        CardShell(
+          state: state,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+          child: TextField(
+            controller: providerSearchController,
+            onChanged: (_) => updateSheet(() {}),
+            style: state.textStyle(context, size: 14),
+            decoration: InputDecoration(
+              hintText: '搜索提供商',
+              hintStyle: state.textStyle(context, size: 14, opacity: 0.38),
+              prefixIcon: Icon(
+                Icons.search_rounded,
+                color: state.text(context).withValues(alpha: 0.42),
+              ),
+              border: InputBorder.none,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        AnimatedSize(
+          duration: MediaQuery.disableAnimationsOf(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child: CardShell(
+            state: state,
+            child: Column(
               children: [
-                for (var index = 0; index < state.providers.length; index++)
+                if (visibleProviders.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(22),
+                    child: Text(
+                      '没有匹配的提供商',
+                      style: state.textStyle(context, size: 14, opacity: 0.56),
+                    ),
+                  ),
+                for (
+                  var index = 0;
+                  index < visibleProviders.length;
+                  index++
+                ) ...[
+                  if (index > 0) DividerLine(state: state),
                   Builder(
-                    key: ValueKey('provider_${state.providers[index].name}'),
+                    key: ValueKey('provider_${visibleProviders[index].name}'),
                     builder: (context) {
-                      final provider = state.providers[index];
+                      final provider = visibleProviders[index];
+                      final actualIndex = state.providers.indexWhere(
+                        (item) => item.name == provider.name,
+                      );
                       final isCurrent =
                           provider.enabled &&
                           (provider.current || provider.status == '使用中');
@@ -259,73 +469,112 @@ extension SettingsTabs on SettingsSheetState {
                         onWillAcceptWithDetails: (details) =>
                             details.data != provider.name,
                         onAcceptWithDetails: (details) {
-                          dropProviderOn(details.data, index);
+                          dropProviderOn(details.data, actualIndex);
                           updateSheet(() {
-                            providerDeleteTarget = details.data;
                             draggingProviderName = null;
                           });
                         },
                         builder: (context, candidateData, rejectedData) {
                           final hovering = candidateData.isNotEmpty;
-                          final card = AnimatedScale(
-                            duration: const Duration(milliseconds: 140),
-                            curve: Curves.easeOutCubic,
-                            scale: draggingProviderName == provider.name
-                                ? 0.96
-                                : hovering
-                                ? 0.98
-                                : 1,
-                            child: GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: () {
-                                if (controlsVisible) {
-                                  clearDeleteTarget();
-                                } else {
-                                  openProviderConfig(provider);
-                                }
-                              },
-                              child: _ProviderGridCard(
-                                state: state,
-                                provider: provider,
-                                active: active,
-                                activeLabel: activeLabel,
-                                controlsVisible: controlsVisible,
-                                highlighted: hovering || controlsVisible,
-                                onDelete: () =>
-                                    confirmDeleteProvider(provider.name),
+                          final row = _ProviderGridCard(
+                            state: state,
+                            provider: provider,
+                            active: active,
+                            activeLabel: activeLabel,
+                            controlsVisible: controlsVisible,
+                            highlighted: hovering,
+                            onEdit: () => openProviderConfig(provider),
+                            onDelete: () =>
+                                confirmDeleteProvider(provider.name),
+                            onToggle: (value) =>
+                                state.setProviderEnabled(provider.name, value),
+                          );
+                          return LongPressDraggable<String>(
+                            data: provider.name,
+                            delay: const Duration(milliseconds: 320),
+                            dragAnchorStrategy: pointerDragAnchorStrategy,
+                            rootOverlay: true,
+                            feedback: SizedBox(
+                              width: 420,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: row,
                               ),
                             ),
-                          );
-
-                          return SizedBox(
-                            width: cardWidth,
-                            child: LongPressDraggable<String>(
-                              data: provider.name,
-                              delay: const Duration(milliseconds: 360),
-                              dragAnchorStrategy: pointerDragAnchorStrategy,
-                              rootOverlay: true,
-                              feedback: SizedBox(width: cardWidth, height: 124),
-                              childWhenDragging: card,
-                              onDragStarted: () => updateSheet(() {
-                                providerDeleteTarget = provider.name;
-                                draggingProviderName = provider.name;
-                              }),
-                              onDraggableCanceled: (_, _) => updateSheet(() {
-                                draggingProviderName = null;
-                              }),
-                              onDragEnd: (_) => updateSheet(() {
-                                draggingProviderName = null;
-                              }),
-                              child: card,
+                            childWhenDragging: Opacity(
+                              opacity: 0.46,
+                              child: row,
+                            ),
+                            onDragStarted: () => updateSheet(() {
+                              providerDeleteTarget = provider.name;
+                              draggingProviderName = provider.name;
+                            }),
+                            onDraggableCanceled: (_, _) => updateSheet(() {
+                              draggingProviderName = null;
+                            }),
+                            onDragEnd: (_) => updateSheet(() {
+                              draggingProviderName = null;
+                            }),
+                            child: AnimatedScale(
+                              duration: const Duration(milliseconds: 140),
+                              curve: Curves.easeOutCubic,
+                              scale: draggingProviderName == provider.name
+                                  ? 0.98
+                                  : hovering
+                                  ? 0.992
+                                  : 1,
+                              child: row,
                             ),
                           );
                         },
                       );
                     },
                   ),
+                ],
               ],
-            );
-          },
+            ),
+          ),
+        ),
+        if (query.isEmpty && (hiddenProviderCount > 0 || showAllProviders)) ...[
+          const SizedBox(height: 10),
+          Center(
+            child: TextButton.icon(
+              key: const ValueKey('toggle_all_providers'),
+              onPressed: () => updateSheet(() {
+                showAllProviders = !showAllProviders;
+              }),
+              icon: Icon(
+                showAllProviders
+                    ? Icons.expand_less_rounded
+                    : Icons.expand_more_rounded,
+              ),
+              label: Text(
+                showAllProviders
+                    ? '收起提供商'
+                    : '查看全部 ${matchingProviders.length} 个',
+              ),
+            ),
+          ),
+        ],
+        const SizedBox(height: 14),
+        Text(
+          '点按进入配置，长按可调整顺序；仅已连接且启用的提供商参与模型分配。',
+          style: state.textStyle(context, size: 12, opacity: 0.46),
+        ),
+        const SizedBox(height: 16),
+        CardShell(
+          state: state,
+          child: SettingsRow(
+            state: state,
+            title: '导入备份配置',
+            subtitle: '前往数据管理恢复提供商与默认模型分配',
+            leading: Icon(
+              Icons.upload_file_outlined,
+              color: state.text(context).withValues(alpha: 0.66),
+            ),
+            showChevron: true,
+            onTap: () => updateSheet(() => subView = 'more_data'),
+          ),
         ),
       ]),
     );
@@ -333,61 +582,214 @@ extension SettingsTabs on SettingsSheetState {
 
   Widget modelsTab() {
     final state = widget.state;
+    final groups = <({String label, List<String> roles})>[
+      (label: '常用模型', roles: const ['chat', 'image']),
+    ];
     return scrollContent([
-      SectionLabel(state: state, label: '默认模型分配'),
-      for (final entry in SettingsSheetState.settingsRoles.entries)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: CardShell(
-            state: state,
-            child: SettingsRow(
-              state: state,
-              title: entry.value.$1,
-              subtitle: entry.value.$2,
-              showChevron: true,
-              trailing: ModelBadge(
-                state: state,
-                label:
-                    state.modelAssignments[entry.key]?.model.isNotEmpty == true
-                    ? state.modelAssignments[entry.key]!.model
-                    : '未分配',
-                active:
-                    state.modelAssignments[entry.key]?.model.isNotEmpty == true,
-              ),
-              onTap: () {
-                updateSheet(() {
-                  editingRole = entry.key;
-                  roleDraft = state.modelAssignments[entry.key]!;
-                  subView = 'model_role_config';
-                });
-              },
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '默认模型',
+                  style: state.textStyle(
+                    context,
+                    size: 24,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '只保留日常最常用的两项',
+                  style: state.textStyle(context, size: 14, opacity: 0.56),
+                ),
+              ],
             ),
           ),
+          const SizedBox(width: 12),
+          TextButton.icon(
+            onPressed: () {
+              for (final entry in ModelAssignment.defaults().entries) {
+                state.saveModelAssignment(entry.key, entry.value);
+              }
+              updateSheet(() {});
+            },
+            icon: const Icon(Icons.undo_rounded, size: 18),
+            label: const Text('恢复默认'),
+          ),
+        ],
+      ),
+      const SizedBox(height: 16),
+      CardShell(
+        state: state,
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+        child: Row(
+          children: [
+            Icon(
+              Icons.info_outline_rounded,
+              size: 18,
+              color: state.text(context).withValues(alpha: 0.46),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                '标题、建议、翻译与工具任务会自动复用主对话模型，保持配置简单。',
+                style: state.textStyle(context, size: 13, opacity: 0.62),
+              ),
+            ),
+          ],
         ),
+      ),
+      const SizedBox(height: 24),
+      for (final group in groups) ...[
+        SectionLabel(state: state, label: group.label),
+        CardShell(
+          state: state,
+          child: Column(
+            children: [
+              for (var index = 0; index < group.roles.length; index++) ...[
+                if (index > 0) DividerLine(state: state),
+                Builder(
+                  builder: (context) {
+                    final role = group.roles[index];
+                    final entry = SettingsSheetState.settingsRoles[role]!;
+                    final assignment = state.modelAssignments[role]!;
+                    return SettingsRow(
+                      state: state,
+                      title: entry.$1,
+                      subtitle: assignment.model.trim().isEmpty
+                          ? entry.$2
+                          : _assignmentSubtitle(assignment),
+                      leading: _SettingsIconBadge(
+                        state: state,
+                        icon: _roleIcon(role),
+                      ),
+                      showChevron: true,
+                      trailing: _ModelAssignmentBadge(
+                        state: state,
+                        provider: assignment.provider,
+                        model: assignment.model,
+                      ),
+                      onTap: () {
+                        updateSheet(() {
+                          editingRole = role;
+                          roleDraft = assignment;
+                          subView = 'model_role_config';
+                        });
+                      },
+                    );
+                  },
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+      ],
     ]);
   }
 
-  Widget servicesTab() {
+  Widget moreTab() {
     final state = widget.state;
     return scrollContent([
-      SectionLabel(state: state, label: '搜索服务', icon: Icons.public_rounded),
+      Text(
+        '更多设置',
+        style: state.textStyle(context, size: 24, weight: FontWeight.w700),
+      ),
+      const SizedBox(height: 6),
+      Text(
+        '低频选项集中在这里，需要时再进入。',
+        style: state.textStyle(context, size: 14, opacity: 0.56),
+      ),
+      const SizedBox(height: 18),
       CardShell(
         state: state,
         child: Column(
           children: [
             SettingsRow(
               state: state,
-              title: '默认搜索引擎',
-              subtitle:
-                  '正在使用: ${SettingsSheetState.settingsEngines.firstWhere((e) => e.$1 == state.searchConfig.active, orElse: () => SettingsSheetState.settingsEngines.first).$2}',
+              title: '联网与语音',
+              subtitle: '搜索服务、朗读与自定义 TTS',
+              leading: _SettingsIconBadge(
+                state: state,
+                icon: Icons.language_rounded,
+              ),
               showChevron: true,
+              onTap: () => updateSheet(() => subView = 'more_services'),
+            ),
+            DividerLine(state: state),
+            SettingsRow(
+              state: state,
+              title: '数据与备份',
+              subtitle: '导入导出、缓存与本地数据',
+              leading: _SettingsIconBadge(
+                state: state,
+                icon: Icons.inventory_2_outlined,
+              ),
+              showChevron: true,
+              onTap: () => updateSheet(() => subView = 'more_data'),
+            ),
+            DividerLine(state: state),
+            SettingsRow(
+              state: state,
+              title: '关于与反馈',
+              subtitle: '版本信息、开源许可与问题反馈',
+              leading: _SettingsIconBadge(
+                state: state,
+                icon: Icons.info_outline_rounded,
+              ),
+              showChevron: true,
+              onTap: () => updateSheet(() => subView = 'more_about'),
+            ),
+          ],
+        ),
+      ),
+    ]);
+  }
+
+  Widget servicesTab() {
+    final state = widget.state;
+    final activeSearchEngine = SettingsSheetState.settingsEngines.firstWhere(
+      (engine) => engine.$1 == state.searchConfig.active,
+      orElse: () => SettingsSheetState.settingsEngines.first,
+    );
+    final searchConnected =
+        (state.searchConfig.keys[state.searchConfig.active]
+            ?.trim()
+            .isNotEmpty ??
+        false);
+    return scrollContent([
+      SectionLabel(state: state, label: '联网与检索'),
+      CardShell(
+        state: state,
+        child: Column(
+          children: [
+            SettingsRow(
+              state: state,
+              title: '搜索服务',
+              subtitle: searchConnected
+                  ? '${activeSearchEngine.$2} · 已连接'
+                  : '${activeSearchEngine.$2} · 待配置 API Key',
+              leading: _SettingsIconBadge(
+                state: state,
+                icon: Icons.public_rounded,
+              ),
+              showChevron: true,
+              trailing: _StatusPill(
+                state: state,
+                text: searchConnected ? '已连接' : '未完成',
+                active: searchConnected,
+              ),
               onTap: () => updateSheet(() => subView = 'search_engine_config'),
             ),
             DividerLine(state: state),
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
               child: Text(
-                '支持配置 Tavily、Brave、Perplexity 等联网搜索服务，为模型提供实时信息支持。',
+                '支持配置 Tavily、Brave、Perplexity 等联网搜索服务，为对话提供实时信息来源。',
                 style: state.textStyle(
                   context,
                   size: 12,
@@ -400,11 +802,7 @@ extension SettingsTabs on SettingsSheetState {
         ),
       ),
       const SizedBox(height: 28),
-      SectionLabel(
-        state: state,
-        label: '语音服务 (TTS)',
-        icon: Icons.volume_up_outlined,
-      ),
+      SectionLabel(state: state, label: '语音服务'),
       CardShell(
         state: state,
         child: Column(
@@ -412,6 +810,10 @@ extension SettingsTabs on SettingsSheetState {
             SettingsRow(
               state: state,
               title: '系统 TTS',
+              leading: _SettingsIconBadge(
+                state: state,
+                icon: Icons.volume_up_outlined,
+              ),
               subtitle: state.activeTtsId == 'system'
                   ? '已手动启用设备默认语音引擎'
                   : '使用设备默认语音引擎，需手动启用',
@@ -429,6 +831,12 @@ extension SettingsTabs on SettingsSheetState {
               SettingsRow(
                 state: state,
                 title: tts.name,
+                leading: _SettingsIconBadge(
+                  state: state,
+                  icon: state.activeTtsId == tts.id
+                      ? Icons.record_voice_over_outlined
+                      : Icons.graphic_eq_rounded,
+                ),
                 subtitle: state.activeTtsId == tts.id
                     ? '已启用 · ${tts.model.isNotEmpty ? tts.model : '待配置模型'}'
                     : tts.apiKey.isNotEmpty || tts.baseUrl.isNotEmpty
@@ -454,7 +862,10 @@ extension SettingsTabs on SettingsSheetState {
             SettingsRow(
               state: state,
               title: '添加自定义 TTS 提供商',
-              leading: Icon(Icons.add_rounded, color: state.accents[0]),
+              leading: _SettingsIconBadge(
+                state: state,
+                icon: Icons.add_rounded,
+              ),
               onTap: () {
                 updateSheet(() {
                   editingTts = TtsProviderConfig(
@@ -534,7 +945,7 @@ extension SettingsTabs on SettingsSheetState {
     }
 
     return scrollContent([
-      SectionLabel(state: state, label: '本地数据概览'),
+      SectionLabel(state: state, label: '存储概览'),
       CardShell(
         state: state,
         padding: const EdgeInsets.all(22),
@@ -542,23 +953,31 @@ extension SettingsTabs on SettingsSheetState {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(
-                  formatBytes(total),
-                  style: state.textStyle(
-                    context,
-                    size: 31,
-                    weight: FontWeight.w300,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '已使用 ${formatBytes(total)}',
+                        style: state.textStyle(
+                          context,
+                          size: 28,
+                          weight: FontWeight.w300,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '本地保存对话、记忆、作品卡、用量与配置摘要',
+                        style: state.textStyle(context, size: 12, opacity: 0.5),
+                      ),
+                    ],
                   ),
                 ),
-                const Spacer(),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 7),
-                  child: Text(
-                    '总已用空间',
-                    style: state.textStyle(context, size: 13, opacity: 0.52),
-                  ),
+                const SizedBox(width: 12),
+                _ValuePill(
+                  state: state,
+                  text: '${state.chatSessions.length} 个会话',
                 ),
               ],
             ),
@@ -571,7 +990,7 @@ extension SettingsTabs on SettingsSheetState {
                   children: [
                     Expanded(
                       flex: segmentFlex(sessionBytes),
-                      child: Container(color: Colors.blue),
+                      child: Container(color: const Color(0xFF0F9FA7)),
                     ),
                     Expanded(
                       flex: segmentFlex(memoryBytes),
@@ -579,19 +998,19 @@ extension SettingsTabs on SettingsSheetState {
                     ),
                     Expanded(
                       flex: segmentFlex(workCardBytes),
-                      child: Container(color: Colors.teal),
+                      child: Container(color: const Color(0xFF74D9CF)),
                     ),
                     Expanded(
                       flex: segmentFlex(tokenUsageBytes),
-                      child: Container(color: Colors.indigo),
+                      child: Container(color: const Color(0xFFDDE6F4)),
                     ),
                     Expanded(
                       flex: segmentFlex(providerBytes),
-                      child: Container(color: Colors.purple),
+                      child: Container(color: const Color(0xFF8FD7D3)),
                     ),
                     Expanded(
                       flex: segmentFlex(configBytes),
-                      child: Container(color: const Color(0xFFF59E0B)),
+                      child: Container(color: const Color(0xFFC8D5EE)),
                     ),
                   ],
                 ),
@@ -601,8 +1020,8 @@ extension SettingsTabs on SettingsSheetState {
             StorageRow(
               state: state,
               label: '对话记录',
-              description: '历史梦境与消息内容',
-              color: Colors.blue,
+              description: '历史会话、消息分支与消息内容',
+              color: const Color(0xFF0F9FA7),
               bytes: sessionBytes,
               ratio: total == 0 ? 0 : sessionBytes / total,
             ),
@@ -617,16 +1036,16 @@ extension SettingsTabs on SettingsSheetState {
             StorageRow(
               state: state,
               label: '作品卡与编织板',
-              description: '可复用作品片段、来源会话和置顶状态',
-              color: Colors.teal,
+              description: '沉淀的作品内容与工作数据',
+              color: const Color(0xFF74D9CF),
               bytes: workCardBytes,
               ratio: total == 0 ? 0 : workCardBytes / total,
             ),
             StorageRow(
               state: state,
               label: 'Token 用量统计',
-              description: '本地估算 token、调用来源和花费记录',
-              color: Colors.indigo,
+              description: '本地估算的 token 与花费记录',
+              color: const Color(0xFFDDE6F4),
               bytes: tokenUsageBytes,
               ratio: total == 0 ? 0 : tokenUsageBytes / total,
             ),
@@ -634,17 +1053,83 @@ extension SettingsTabs on SettingsSheetState {
               state: state,
               label: '提供商与模型',
               description: 'API 配置摘要、模型列表和能力标记',
-              color: Colors.purple,
+              color: const Color(0xFF8FD7D3),
               bytes: providerBytes,
               ratio: total == 0 ? 0 : providerBytes / total,
             ),
             StorageRow(
               state: state,
               label: '应用偏好',
-              description: '默认模型、搜索/TTS、主题与表单设置',
-              color: const Color(0xFFF59E0B),
+              description: '默认模型、搜索/TTS 与外观偏好',
+              color: const Color(0xFFC8D5EE),
               bytes: configBytes,
               ratio: total == 0 ? 0 : configBytes / total,
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 24),
+      SectionLabel(state: state, label: '备份与迁移'),
+      CardShell(
+        state: state,
+        child: Column(
+          children: [
+            SettingsRow(
+              state: state,
+              title: '创建备份',
+              subtitle: '导出本地 JSON 数据与说明文件',
+              leading: _SettingsIconBadge(
+                state: state,
+                icon: Icons.backup_outlined,
+              ),
+              trailing: _InlineActionButton(
+                state: state,
+                label: '导出',
+                accent: true,
+                onTap: () async {
+                  final fileName =
+                      'weaview_backup_${DateTime.now().millisecondsSinceEpoch}.zip';
+                  final path = await FilePicker.saveFile(
+                    dialogTitle: '导出 Weaview 备份',
+                    fileName: fileName,
+                    bytes: state.exportZipBytes(),
+                  );
+                  if (path != null) {
+                    widget.showSnack('备份已导出。');
+                  } else {
+                    widget.showSnack('已取消导出。');
+                  }
+                },
+              ),
+            ),
+            DividerLine(state: state),
+            SettingsRow(
+              state: state,
+              title: '导入备份',
+              subtitle: '从 JSON 或 ZIP 恢复本地设置与历史',
+              leading: _SettingsIconBadge(
+                state: state,
+                icon: Icons.upload_file_outlined,
+              ),
+              trailing: _InlineActionButton(
+                state: state,
+                label: '导入',
+                onTap: _importBackup,
+              ),
+              onTap: _importBackup,
+            ),
+            DividerLine(state: state),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
+              child: Text(
+                '备份文件会对敏感 API Key 进行脱敏处理，原始附件文件不会打包进备份。',
+                style: state.textStyle(
+                  context,
+                  size: 12,
+                  opacity: 0.54,
+                  height: 1.48,
+                ),
+              ),
             ),
           ],
         ),
@@ -690,91 +1175,45 @@ extension SettingsTabs on SettingsSheetState {
         ),
       ),
       const SizedBox(height: 24),
-      SectionLabel(state: state, label: '数据操作'),
+      SectionLabel(state: state, label: '危险操作'),
       CardShell(
         state: state,
-        padding: const EdgeInsets.all(18),
+        borderColor: Colors.red.withValues(alpha: 0.20),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '导出备份会生成 ZIP 文件，包含本地 JSON 数据和说明文件。敏感 API Key 会以星号脱敏。',
-              style: state.textStyle(
-                context,
-                size: 13,
-                opacity: 0.58,
-                height: 1.45,
+            SettingsRow(
+              state: state,
+              title: '清空所有本地数据',
+              subtitle: '删除对话、记忆、提供商、模型分配与应用偏好',
+              leading: _SettingsIconBadge(
+                state: state,
+                icon: Icons.warning_amber_rounded,
+                danger: true,
               ),
+              showChevron: true,
+              onTap: confirmClearData,
             ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: SoftButton(
-                    state: state,
-                    label: '导出备份',
-                    icon: Icons.backup_outlined,
-                    accent: true,
-                    onTap: () async {
-                      final fileName =
-                          'weaview_backup_${DateTime.now().millisecondsSinceEpoch}.zip';
-                      final path = await FilePicker.saveFile(
-                        dialogTitle: '导出 Weaview 备份',
-                        fileName: fileName,
-                        bytes: state.exportZipBytes(),
-                      );
-                      if (path != null) {
-                        widget.showSnack('备份已导出。');
-                      } else {
-                        await Clipboard.setData(
-                          ClipboardData(text: state.exportJson()),
-                        );
-                        widget.showSnack('未选择保存位置，已复制脱敏 JSON 到剪贴板。');
-                      }
-                    },
-                  ),
+            DividerLine(state: state),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 16),
+              child: Text(
+                '该操作不可撤销。执行前建议先导出备份。',
+                style: state.textStyle(
+                  context,
+                  size: 12,
+                  opacity: 0.58,
+                  height: 1.45,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: SoftButton(
-                    state: state,
-                    label: '导入备份',
-                    icon: Icons.upload_file_outlined,
-                    onTap: _importBackup,
-                  ),
-                ),
-              ],
+              ),
             ),
           ],
         ),
       ),
-      const SizedBox(height: 24),
-      SectionLabel(state: state, label: '危险操作'),
-      CardShell(
-        state: state,
-        padding: const EdgeInsets.all(18),
-        borderColor: Colors.red.withValues(alpha: 0.24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '清空所有本地数据会删除对话记录、记忆数据、作品卡、Token 用量统计、应用配置、提供商和模型分配。操作前请先导出备份。',
-              style: state.textStyle(
-                context,
-                size: 13,
-                opacity: 0.64,
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 14),
-            SoftButton(
-              state: state,
-              label: '清空所有本地数据',
-              icon: Icons.delete_forever_outlined,
-              danger: true,
-              onTap: confirmClearData,
-            ),
-          ],
+      const SizedBox(height: 16),
+      Center(
+        child: Text(
+          '数据默认仅保存在当前设备。',
+          style: state.textStyle(context, size: 12, opacity: 0.44),
         ),
       ),
     ]);
@@ -790,6 +1229,12 @@ extension SettingsTabs on SettingsSheetState {
       );
       if (result == null || result.files.isEmpty) return;
       final file = result.files.single;
+      if (file.size > WeaviewState.maxBackupArchiveBytes) {
+        widget.showSnack(
+          '备份文件超过 ${WeaviewState.maxBackupArchiveBytes ~/ (1024 * 1024)} MB 限制。',
+        );
+        return;
+      }
       final bytes =
           file.bytes ??
           (file.path == null ? null : await File(file.path!).readAsBytes());
@@ -811,77 +1256,596 @@ extension SettingsTabs on SettingsSheetState {
 
   Widget aboutTab() {
     final state = widget.state;
+    void openSuggestionFeedback() {
+      FocusManager.instance.primaryFocus?.unfocus();
+      updateSheet(() {
+        feedbackType = '功能建议';
+        feedbackTitleController.clear();
+        feedbackDetailController.clear();
+        feedbackStepsController.clear();
+        feedbackContactController.clear();
+        statusText = '';
+        subView = 'feedback_form';
+      });
+    }
+
     return scrollContent([
-      const SizedBox(height: 22),
-      Center(
+      CardShell(
+        state: state,
+        child: FutureBuilder<AppVersionInfo>(
+          future: appVersionInfoFuture,
+          builder: (context, snapshot) {
+            final version = snapshot.data ?? fallbackAppVersionInfo;
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 78,
+                        height: 78,
+                        clipBehavior: Clip.antiAlias,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(26),
+                          border: Border.all(
+                            color: state.accents[0].withValues(alpha: 0.30),
+                          ),
+                        ),
+                        child: Image.asset(
+                          'assets/app_icon.png',
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(width: 18),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '织境 Weaview',
+                              style: state.textStyle(
+                                context,
+                                size: 22,
+                                weight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '在对话中编织想法',
+                              style: state.textStyle(
+                                context,
+                                size: 14,
+                                opacity: 0.58,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              version.display,
+                              style: state.textStyle(
+                                context,
+                                size: 13,
+                                opacity: 0.46,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                DividerLine(state: state),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SoftButton(
+                          state: state,
+                          label: '检查更新',
+                          icon: Icons.refresh_rounded,
+                          onTap: checkForUpdates,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      _StatusPill(
+                        state: state,
+                        text: '发布源 GitHub',
+                        active: true,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+      const SizedBox(height: 24),
+      SectionLabel(state: state, label: '支持'),
+      CardShell(
+        state: state,
         child: Column(
           children: [
-            Container(
-              width: 96,
-              height: 96,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(32),
-                border: Border.all(
-                  color: state.accents[0].withValues(alpha: 0.35),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: state.accents[0].withValues(alpha: 0.18),
-                    blurRadius: 28,
-                    offset: const Offset(0, 12),
-                  ),
-                ],
+            SettingsRow(
+              state: state,
+              title: '报告问题',
+              subtitle: '提交结构化问题反馈',
+              leading: _SettingsIconBadge(
+                state: state,
+                icon: Icons.error_outline_rounded,
               ),
-              child: Image.asset('assets/app_icon.png', fit: BoxFit.cover),
+              showChevron: true,
+              onTap: openFeedback,
             ),
-            const SizedBox(height: 22),
-            Text(
-              'WEAVIEW',
-              style: state
-                  .textStyle(context, size: 30, weight: FontWeight.w300)
-                  .copyWith(letterSpacing: 4),
+            DividerLine(state: state),
+            SettingsRow(
+              state: state,
+              title: '功能建议',
+              subtitle: '提交想法或改进建议',
+              leading: _SettingsIconBadge(
+                state: state,
+                icon: Icons.lightbulb_outline_rounded,
+              ),
+              showChevron: true,
+              onTap: openSuggestionFeedback,
             ),
-            const SizedBox(height: 8),
+            DividerLine(state: state),
+            SettingsRow(
+              state: state,
+              title: 'GitHub Issues',
+              subtitle: '在仓库中查看或新建问题单',
+              leading: _SettingsIconBadge(
+                state: state,
+                icon: Icons.open_in_new_rounded,
+              ),
+              showChevron: true,
+              onTap: () => openExternalUrl(githubFeedbackUrl),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 24),
+      SectionLabel(state: state, label: '应用信息'),
+      CardShell(
+        state: state,
+        child: Column(
+          children: [
             FutureBuilder<AppVersionInfo>(
               future: appVersionInfoFuture,
               builder: (context, snapshot) {
                 final version = snapshot.data ?? fallbackAppVersionInfo;
-                return Text(
-                  version.display,
-                  style: state.textStyle(context, size: 13, opacity: 0.5),
+                return SettingsRow(
+                  state: state,
+                  title: '当前版本',
+                  subtitle: version.full,
+                  leading: _SettingsIconBadge(
+                    state: state,
+                    icon: Icons.info_outline_rounded,
+                  ),
+                  trailing: _ValuePill(state: state, text: version.tag),
                 );
               },
             ),
-            const SizedBox(height: 30),
-            AboutButton(state: state, label: '检查更新', onTap: checkForUpdates),
-            AboutButton(
+            DividerLine(state: state),
+            SettingsRow(
               state: state,
-              label: '开源许可',
+              title: '发布日志',
+              subtitle: '查看 GitHub Releases',
+              leading: _SettingsIconBadge(
+                state: state,
+                icon: Icons.history_rounded,
+              ),
+              showChevron: true,
+              onTap: () => openExternalUrl(githubReleasesUrl),
+            ),
+            DividerLine(state: state),
+            SettingsRow(
+              state: state,
+              title: '开源许可',
+              subtitle: '查看第三方依赖许可证',
+              leading: _SettingsIconBadge(
+                state: state,
+                icon: Icons.code_rounded,
+              ),
+              showChevron: true,
               onTap: () =>
                   showLicensePage(context: context, applicationName: 'Weaview'),
             ),
-            AboutButton(
+          ],
+        ),
+      ),
+      const SizedBox(height: 28),
+      Center(
+        child: Text(
+          'Made with care for thoughtful conversations.',
+          textAlign: TextAlign.center,
+          style: state.textStyle(context, size: 12, opacity: 0.34, height: 1.6),
+        ),
+      ),
+    ]);
+  }
+
+  String _assignmentSubtitle(ModelAssignment assignment) {
+    if (assignment.model.trim().isEmpty) return '未分配';
+    if (assignment.provider.trim().isEmpty) return assignment.model;
+    return '${assignment.provider} · ${assignment.model}';
+  }
+
+  IconData _roleIcon(String role) => switch (role) {
+    'chat' => Icons.chat_bubble_outline_rounded,
+    'title' => Icons.short_text_rounded,
+    'suggest' => Icons.lightbulb_outline_rounded,
+    'translate' => Icons.translate_rounded,
+    'tool' => Icons.handyman_outlined,
+    'image' => Icons.image_outlined,
+    _ => Icons.memory_outlined,
+  };
+}
+
+class _ThemeSegmentedControl extends StatelessWidget {
+  const _ThemeSegmentedControl({
+    required this.state,
+    required this.current,
+    required this.onSelected,
+  });
+
+  final WeaviewState state;
+  final ThemeMode current;
+  final ValueChanged<ThemeMode> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: state.isDark(context)
+            ? Colors.white.withValues(alpha: 0.06)
+            : state.text(context).withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: state.text(context).withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ThemeSegmentButton(
               state: state,
-              label: '报告问题 / 提供反馈',
-              accent: true,
-              onTap: openFeedback,
+              label: '浅色',
+              selected: current == ThemeMode.light,
+              onTap: () => onSelected(ThemeMode.light),
             ),
-            const SizedBox(height: 40),
-            Text(
-              'Crafted with intentionality.\n© 2026 Weaview App.',
-              textAlign: TextAlign.center,
+          ),
+          Expanded(
+            child: _ThemeSegmentButton(
+              state: state,
+              label: '深色',
+              selected: current == ThemeMode.dark,
+              onTap: () => onSelected(ThemeMode.dark),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: _ThemeSegmentButton(
+              state: state,
+              label: '跟随系统',
+              selected: current == ThemeMode.system,
+              onTap: () => onSelected(ThemeMode.system),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ThemeSegmentButton extends StatelessWidget {
+  const _ThemeSegmentButton({
+    required this.state,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final WeaviewState state;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected
+          ? state.accents[0].withValues(
+              alpha: state.isDark(context) ? 0.24 : 0.18,
+            )
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: SizedBox(
+          height: 40,
+          child: Center(
+            child: Text(
+              label,
+              maxLines: 1,
               style: state.textStyle(
                 context,
-                size: 11,
-                opacity: 0.3,
-                height: 1.7,
+                size: 12,
+                weight: FontWeight.w600,
+                opacity: selected ? 0.96 : 0.58,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AccentChoice extends StatelessWidget {
+  const _AccentChoice({
+    required this.state,
+    required this.label,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final WeaviewState state;
+  final String label;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$label 强调色',
+      child: Material(
+        color: selected
+            ? color.withValues(alpha: state.isDark(context) ? 0.18 : 0.12)
+            : state.text(context).withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: AnimatedContainer(
+            duration: MediaQuery.disableAnimationsOf(context)
+                ? Duration.zero
+                : const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            constraints: const BoxConstraints(minWidth: 104, minHeight: 52),
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: selected
+                    ? color.withValues(alpha: 0.72)
+                    : state.text(context).withValues(alpha: 0.07),
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 22,
+                  height: 22,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withValues(alpha: 0.24),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                  child: selected
+                      ? const Icon(
+                          Icons.check_rounded,
+                          size: 15,
+                          color: Colors.white,
+                        )
+                      : null,
+                ),
+                const SizedBox(width: 9),
+                Text(
+                  label,
+                  style: state.textStyle(
+                    context,
+                    size: 13,
+                    weight: selected ? FontWeight.w700 : FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ValuePill extends StatelessWidget {
+  const _ValuePill({required this.state, required this.text});
+
+  final WeaviewState state;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: state.isDark(context)
+            ? Colors.white.withValues(alpha: 0.08)
+            : state.text(context).withValues(alpha: 0.035),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: state.text(context).withValues(alpha: 0.08)),
+      ),
+      child: Text(
+        text,
+        style: state.textStyle(context, size: 12, weight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({
+    required this.state,
+    required this.text,
+    required this.active,
+  });
+
+  final WeaviewState state;
+  final String text;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = active
+        ? sendGreen
+        : state.text(context).withValues(alpha: 0.34);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: active ? 0.12 : 0.08),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: state
+            .textStyle(context, size: 12, weight: FontWeight.w700)
+            .copyWith(color: active ? sendGreen : null),
+      ),
+    );
+  }
+}
+
+class _SettingsIconBadge extends StatelessWidget {
+  const _SettingsIconBadge({
+    required this.state,
+    required this.icon,
+    this.danger = false,
+  });
+
+  final WeaviewState state;
+  final IconData icon;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = danger ? Colors.red : state.accents[0];
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: tint.withValues(alpha: danger ? 0.10 : 0.16),
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Icon(
+        icon,
+        size: 20,
+        color: danger
+            ? Colors.red.withValues(alpha: 0.82)
+            : state.text(context).withValues(alpha: 0.72),
+      ),
+    );
+  }
+}
+
+class _InlineActionButton extends StatelessWidget {
+  const _InlineActionButton({
+    required this.state,
+    required this.label,
+    required this.onTap,
+    this.accent = false,
+  });
+
+  final WeaviewState state;
+  final String label;
+  final VoidCallback onTap;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 82,
+      child: SoftButton(
+        state: state,
+        label: label,
+        accent: accent,
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+class _ModelAssignmentBadge extends StatelessWidget {
+  const _ModelAssignmentBadge({
+    required this.state,
+    required this.provider,
+    required this.model,
+  });
+
+  final WeaviewState state;
+  final String provider;
+  final String model;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = model.trim().isNotEmpty;
+    final label = active ? model : '未分配';
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 188),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+          color: active
+              ? state.accents[0].withValues(alpha: 0.12)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: active
+                ? state.accents[0].withValues(alpha: 0.20)
+                : state.text(context).withValues(alpha: 0.10),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (provider.trim().isNotEmpty) ...[
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: state.accents[0],
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: state.textStyle(
+                  context,
+                  size: 12,
+                  weight: FontWeight.w600,
+                  opacity: active ? 0.94 : 0.44,
+                ),
               ),
             ),
           ],
         ),
       ),
-    ]);
+    );
   }
 }
 
@@ -950,6 +1914,12 @@ class _DataInfoLine extends StatelessWidget {
   }
 }
 
+bool _isProviderConfigured(AiProvider provider) {
+  return provider.apiKey.trim().isNotEmpty ||
+      provider.status == '已连接' ||
+      provider.status == '使用中';
+}
+
 class _ProviderGridCard extends StatelessWidget {
   const _ProviderGridCard({
     required this.state,
@@ -957,7 +1927,9 @@ class _ProviderGridCard extends StatelessWidget {
     required this.active,
     required this.activeLabel,
     required this.controlsVisible,
+    required this.onEdit,
     required this.onDelete,
+    required this.onToggle,
     this.highlighted = false,
   });
 
@@ -966,14 +1938,15 @@ class _ProviderGridCard extends StatelessWidget {
   final bool active;
   final String? activeLabel;
   final bool controlsVisible;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final ValueChanged<bool> onToggle;
   final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
-    final connected =
-        provider.enabled &&
-        (provider.status == '已连接' || provider.status == '使用中');
+    final configured = _isProviderConfigured(provider);
+    final connected = provider.enabled && configured;
     final showWaveBorder = controlsVisible;
     final solidBorderColor = active
         ? state.accents[0].withValues(alpha: 0.48)
@@ -985,101 +1958,179 @@ class _ProviderGridCard extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            height: 124,
-            padding: const EdgeInsets.fromLTRB(17, 14, 15, 13),
-            decoration: BoxDecoration(
-              color: active
-                  ? (state.isDark(context)
-                        ? Colors.white.withValues(alpha: 0.10)
-                        : Colors.white.withValues(alpha: 0.88))
-                  : (state.isDark(context)
-                        ? Colors.white.withValues(alpha: 0.055)
-                        : Colors.white.withValues(alpha: 0.70)),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(
-                color: showWaveBorder ? Colors.transparent : solidBorderColor,
-                width: active || highlighted ? 1.35 : 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: active
-                      ? state.accents[0].withValues(alpha: 0.16)
-                      : Colors.black.withValues(alpha: 0.025),
-                  blurRadius: active ? 24 : 14,
-                  offset: const Offset(0, 8),
+          InkWell(
+            onTap: onEdit,
+            borderRadius: BorderRadius.circular(22),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              height: 82,
+              padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
+              decoration: BoxDecoration(
+                color: active
+                    ? (state.isDark(context)
+                          ? Colors.white.withValues(alpha: 0.10)
+                          : Colors.white.withValues(alpha: 0.88))
+                    : (state.isDark(context)
+                          ? Colors.white.withValues(alpha: 0.055)
+                          : Colors.white.withValues(alpha: 0.70)),
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(
+                  color: showWaveBorder ? Colors.transparent : solidBorderColor,
+                  width: active || highlighted ? 1.35 : 1,
                 ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    BrandIcon.provider(
-                      provider: provider,
-                      size: 30,
-                      radius: 11,
-                      padding: 5,
-                    ),
-                    const Spacer(),
-                    if (activeLabel != null && !controlsVisible)
-                      Text(
-                        activeLabel!,
-                        style: state
-                            .textStyle(
-                              context,
-                              size: 10,
-                              weight: FontWeight.w800,
-                            )
-                            .copyWith(
-                              color: state.accents[0].withValues(alpha: 0.58),
-                              letterSpacing: 0.8,
-                            ),
-                      ),
-                    if (controlsVisible) const SizedBox(width: 36),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  provider.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: state.textStyle(
-                    context,
-                    size: 18,
-                    weight: FontWeight.w500,
+                boxShadow: [
+                  BoxShadow(
+                    color: active
+                        ? state.accents[0].withValues(alpha: 0.16)
+                        : Colors.black.withValues(alpha: 0.025),
+                    blurRadius: active ? 24 : 14,
+                    offset: const Offset(0, 8),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        color: connected ? sendGreen : Colors.grey,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Text(
-                        provider.enabled ? provider.status : '已禁用',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: state.textStyle(
-                          context,
-                          size: 11,
-                          opacity: 0.54,
-                          weight: FontWeight.w600,
+                ],
+              ),
+              child: Row(
+                children: [
+                  BrandIcon.provider(
+                    provider: provider,
+                    size: 44,
+                    radius: 15,
+                    padding: 6,
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                provider.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: state.textStyle(
+                                  context,
+                                  size: 17,
+                                  weight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            if (activeLabel != null && !controlsVisible) ...[
+                              const SizedBox(width: 8),
+                              Text(
+                                activeLabel!,
+                                style: state
+                                    .textStyle(
+                                      context,
+                                      size: 10,
+                                      weight: FontWeight.w800,
+                                    )
+                                    .copyWith(
+                                      color: state.accents[0].withValues(
+                                        alpha: 0.6,
+                                      ),
+                                      letterSpacing: 0.8,
+                                    ),
+                              ),
+                            ],
+                          ],
                         ),
-                      ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: connected ? sendGreen : Colors.grey,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                configured
+                                    ? '${provider.enabled ? provider.status : '已禁用'} · ${provider.models.length} 个模型'
+                                    : '未配置',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: state.textStyle(
+                                  context,
+                                  size: 12,
+                                  opacity: 0.58,
+                                  weight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ],
+                  ),
+                  const SizedBox(width: 10),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (configured) ...[
+                        WeaveSwitch(
+                          state: state,
+                          value: provider.enabled,
+                          onChanged: onToggle,
+                        ),
+                        const SizedBox(width: 4),
+                      ],
+                      PopupMenuButton<String>(
+                        key: ValueKey('provider_menu_${provider.name}'),
+                        tooltip: '提供商操作',
+                        padding: EdgeInsets.zero,
+                        splashRadius: 18,
+                        icon: Icon(
+                          Icons.more_vert_rounded,
+                          size: 20,
+                          color: state.text(context).withValues(alpha: 0.56),
+                        ),
+                        onSelected: (value) {
+                          if (value == 'edit') {
+                            onEdit();
+                          } else if (value == 'delete') {
+                            onDelete();
+                          }
+                        },
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(
+                            value: 'edit',
+                            child: ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(Icons.edit_outlined),
+                              title: Text('编辑'),
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: 'delete',
+                            child: ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(
+                                Icons.delete_outline_rounded,
+                                color: Colors.red,
+                              ),
+                              title: Text('删除'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 2),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 22,
+                        color: state.text(context).withValues(alpha: 0.34),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           if (showWaveBorder)
@@ -1093,52 +2144,37 @@ class _ProviderGridCard extends StatelessWidget {
                 ),
               ),
             ),
-          Positioned(
-            top: 10,
-            right: 10,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 140),
-              switchInCurve: Curves.easeOutBack,
-              switchOutCurve: Curves.easeInCubic,
-              child: controlsVisible
-                  ? Semantics(
-                      key: ValueKey('provider_delete_${provider.name}'),
-                      button: true,
-                      label: '删除提供商',
-                      child: GestureDetector(
-                        onTap: onDelete,
-                        child: Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            color: state.isDark(context)
-                                ? Colors.white.withValues(alpha: 0.11)
-                                : Colors.white.withValues(alpha: 0.82),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: Colors.red.withValues(alpha: 0.24),
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.06),
-                                blurRadius: 12,
-                                offset: const Offset(0, 5),
-                              ),
-                            ],
-                          ),
-                          child: Icon(
-                            Icons.delete_outline_rounded,
-                            size: 18,
-                            color: Colors.red.withValues(alpha: 0.78),
-                          ),
-                        ),
+          if (controlsVisible)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Semantics(
+                key: ValueKey('provider_delete_${provider.name}'),
+                button: true,
+                label: '删除提供商',
+                child: Material(
+                  color: state.isDark(context)
+                      ? Colors.white.withValues(alpha: 0.11)
+                      : Colors.white.withValues(alpha: 0.82),
+                  shape: CircleBorder(
+                    side: BorderSide(color: Colors.red.withValues(alpha: 0.24)),
+                  ),
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: onDelete,
+                    child: SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: Icon(
+                        Icons.delete_outline_rounded,
+                        size: 18,
+                        color: Colors.red.withValues(alpha: 0.78),
                       ),
-                    )
-                  : const SizedBox.shrink(
-                      key: ValueKey('provider_delete_empty'),
                     ),
+                  ),
+                ),
+              ),
             ),
-          ),
         ],
       ),
     );

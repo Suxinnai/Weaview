@@ -22,6 +22,11 @@ class ChatHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final sessionTitle =
+        state.chatSessions
+            .firstWhereOrNull((session) => session.id == state.currentSessionId)
+            ?.title ??
+        '新梦境';
     final activeAssignment = imageGenerationMode
         ? state.modelAssignments['image']
         : state.modelAssignments['chat'];
@@ -29,13 +34,17 @@ class ChatHeader extends StatelessWidget {
     final modelLabel = activeModel.isEmpty
         ? (imageGenerationMode ? '未选择生图模型' : '未选择模型')
         : (imageGenerationMode ? '生图 · $activeModel' : activeModel);
+    final selectorWidth = (MediaQuery.sizeOf(context).width - 112).clamp(
+      180.0,
+      268.0,
+    );
     return SafeArea(
       bottom: false,
       child: Align(
         alignment: Alignment.topCenter,
         child: SizedBox(
           width: double.infinity,
-          height: 58,
+          height: 62,
           child: Stack(
             alignment: Alignment.center,
             children: [
@@ -45,94 +54,113 @@ class ChatHeader extends StatelessWidget {
                   icon: Icons.menu_rounded,
                   onTap: onOpenSidebar,
                   color: state.text(context),
+                  size: 44,
+                  opacity: 0.82,
+                  background: state.text(context).withValues(alpha: 0.055),
                 ),
               ),
-              GestureDetector(
-                onTap: onToggleModelDropdown,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
+              Positioned(
+                right: 12,
+                child: Semantics(
+                  button: true,
+                  label: '新建对话',
+                  child: IconCircleButton(
+                    icon: Icons.edit_rounded,
+                    onTap: state.newSession,
+                    color: state.text(context),
+                    size: 44,
+                    opacity: 0.82,
+                    background: state.text(context).withValues(alpha: 0.055),
                   ),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    color: Colors.transparent,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 230),
-                        child: Text(
-                          state.messages.isNotEmpty
-                              ? state.chatSessions
-                                        .firstWhereOrNull(
-                                          (s) => s.id == state.currentSessionId,
-                                        )
-                                        ?.title ??
-                                    '未命名梦境'
-                              : '新梦境',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: state.textStyle(
-                            context,
-                            size: 14,
-                            weight: FontWeight.w500,
-                            height: 1.1,
+                ),
+              ),
+              Tooltip(
+                message: '选择模型',
+                child: Semantics(
+                  button: true,
+                  expanded: modelDropdownOpen,
+                  label: '选择模型，当前$modelLabel',
+                  child: Material(
+                    color: state
+                        .layer(context)
+                        .withValues(alpha: state.isDark(context) ? 0.70 : 0.76),
+                    borderRadius: BorderRadius.circular(18),
+                    child: InkWell(
+                      onTap: onToggleModelDropdown,
+                      borderRadius: BorderRadius.circular(18),
+                      child: SizedBox(
+                        width: selectorWidth,
+                        height: 48,
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(14, 6, 10, 6),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 7,
+                                height: 7,
+                                decoration: BoxDecoration(
+                                  color: state.accents[0],
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: state.accents[0].withValues(
+                                        alpha: 0.65,
+                                      ),
+                                      blurRadius: 8,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 9),
+                              Flexible(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      sessionTitle,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: state.textStyle(
+                                        context,
+                                        size: 13.5,
+                                        weight: FontWeight.w600,
+                                        height: 1.05,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      modelLabel,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: state.textStyle(
+                                        context,
+                                        size: 10.5,
+                                        weight: FontWeight.w600,
+                                        opacity: 0.58,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              AnimatedRotation(
+                                turns: modelDropdownOpen ? 0.5 : 0,
+                                duration: const Duration(milliseconds: 200),
+                                child: Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  size: 20,
+                                  color: state
+                                      .text(context)
+                                      .withValues(alpha: 0.55),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                      const SizedBox(height: 2),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 5,
-                            height: 5,
-                            decoration: BoxDecoration(
-                              color: state.accents[0],
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: state.accents[0].withValues(
-                                    alpha: 0.8,
-                                  ),
-                                  blurRadius: 8,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 160),
-                            child: Text(
-                              modelLabel,
-                              overflow: TextOverflow.ellipsis,
-                              style: state
-                                  .textStyle(
-                                    context,
-                                    size: 9.5,
-                                    weight: FontWeight.w600,
-                                    opacity: 0.55,
-                                  )
-                                  .copyWith(letterSpacing: 1.4),
-                            ),
-                          ),
-                          AnimatedRotation(
-                            turns: modelDropdownOpen ? -0.25 : 0.25,
-                            duration: const Duration(milliseconds: 220),
-                            child: Icon(
-                              Icons.chevron_right_rounded,
-                              size: 16,
-                              color: state
-                                  .text(context)
-                                  .withValues(alpha: 0.45),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),

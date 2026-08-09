@@ -1,5 +1,6 @@
 // ignore_for_file: use_key_in_widget_constructors
 
+import 'dart:collection';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -35,41 +36,54 @@ class SendButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        height: 38,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: enabled
-              ? streaming
-                    ? const Color(0xFFF97316)
-                    : sendGreen
-              : state.text(context).withValues(alpha: 0.07),
+    final label = streaming ? streamingLabel : idleLabel;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
           borderRadius: BorderRadius.circular(999),
-          boxShadow: enabled
-              ? [
-                  BoxShadow(
-                    color: (streaming ? const Color(0xFFF97316) : sendGreen)
-                        .withValues(alpha: 0.32),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
+          onTap: enabled ? onTap : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: enabled
+                  ? streaming
+                        ? const Color(0xFFF97316)
+                        : sendGreen
+                  : state.text(context).withValues(alpha: 0.07),
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: enabled
+                  ? [
+                      BoxShadow(
+                        color: (streaming ? const Color(0xFFF97316) : sendGreen)
+                            .withValues(alpha: 0.32),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Text(
+              label,
+              style: state
+                  .textStyle(
+                    context,
+                    size: 14,
+                    weight: FontWeight.w600,
+                    opacity: enabled ? 1 : 0.34,
+                  )
+                  .copyWith(
+                    color: enabled ? Colors.white : state.text(context),
                   ),
-                ]
-              : null,
-        ),
-        child: Text(
-          streaming ? streamingLabel : idleLabel,
-          style: state
-              .textStyle(
-                context,
-                size: 14,
-                weight: FontWeight.w600,
-                opacity: enabled ? 1 : 0.34,
-              )
-              .copyWith(color: enabled ? Colors.white : state.text(context)),
+            ),
+          ),
         ),
       ),
     );
@@ -93,37 +107,45 @@ class ToolChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected
-          ? state.accents[0].withValues(alpha: 0.16)
-          : state.text(context).withValues(alpha: 0.055),
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: Material(
+        color: selected
+            ? state.accents[0].withValues(alpha: 0.16)
+            : state.text(context).withValues(alpha: 0.055),
         borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color: selected
-                    ? state.accents[0]
-                    : state.text(context).withValues(alpha: 0.7),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    icon,
+                    size: 18,
+                    color: selected
+                        ? state.accents[0]
+                        : state.text(context).withValues(alpha: 0.7),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    label,
+                    style: state.textStyle(
+                      context,
+                      size: 13,
+                      weight: FontWeight.w600,
+                      opacity: selected ? 1 : 0.82,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 10),
-              Text(
-                label,
-                style: state.textStyle(
-                  context,
-                  size: 13,
-                  weight: FontWeight.w600,
-                  opacity: selected ? 1 : 0.82,
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
@@ -145,32 +167,40 @@ class SuggestionChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = state.isDark(context);
-    return Material(
-      color: Colors.transparent,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
+    return Semantics(
+      button: true,
+      label: label,
+      child: Material(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 230),
-          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
-          decoration: BoxDecoration(
-            color: state.layer(context).withValues(alpha: dark ? 0.22 : 0.34),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: state.accents[0].withValues(alpha: 0.32)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: dark ? 0.14 : 0.04),
-                blurRadius: 12,
-                offset: const Offset(0, 5),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: onTap,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 230, minHeight: 44),
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+            decoration: BoxDecoration(
+              color: state.layer(context).withValues(alpha: dark ? 0.22 : 0.34),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: state.accents[0].withValues(alpha: 0.32),
               ),
-            ],
-          ),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: state.textStyle(context, size: 12.5, opacity: 0.78),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: dark ? 0.14 : 0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Center(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: state.textStyle(context, size: 12.5, opacity: 0.78),
+              ),
+            ),
           ),
         ),
       ),
@@ -275,19 +305,23 @@ class _PendingAttachmentChip extends StatelessWidget {
           Positioned(
             right: 4,
             top: 4,
-            child: GestureDetector(
-              onTap: onRemove,
-              child: Container(
-                width: 22,
-                height: 22,
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.5),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.close_rounded,
-                  size: 15,
-                  color: Colors.white,
+            child: Tooltip(
+              message: '移除附件',
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.5),
+                shape: const CircleBorder(),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: onRemove,
+                  child: const SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: Icon(
+                      Icons.close_rounded,
+                      size: 18,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -316,6 +350,7 @@ class MessageAttachmentGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Wrap(
+      key: const ValueKey('message-attachment-grid'),
       spacing: 8,
       runSpacing: 8,
       children: [
@@ -328,6 +363,347 @@ class MessageAttachmentGrid extends StatelessWidget {
             animateImages: animateImages,
           ),
       ],
+    );
+  }
+}
+
+class GeneratedImageGallery extends StatefulWidget {
+  const GeneratedImageGallery({
+    required this.state,
+    required this.attachments,
+    this.onDownload,
+    this.animateImages = true,
+  });
+
+  final WeaviewState state;
+  final List<MessageAttachment> attachments;
+  final ValueChanged<MessageAttachment>? onDownload;
+  final bool animateImages;
+
+  @override
+  State<GeneratedImageGallery> createState() => _GeneratedImageGalleryState();
+}
+
+class _GeneratedImageGalleryState extends State<GeneratedImageGallery> {
+  final Set<int> _selectedIndices = {0};
+
+  @override
+  Widget build(BuildContext context) {
+    final state = widget.state;
+    final images = widget.attachments
+        .where((attachment) => attachment.isImage)
+        .toList();
+    if (images.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final dark = state.isDark(context);
+    final columns = images.length == 1 ? 1 : 2;
+    return Container(
+      key: const ValueKey('generated-image-gallery'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: state.layer(context).withValues(alpha: dark ? 0.48 : 0.72),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: state.text(context).withValues(alpha: dark ? 0.08 : 0.07),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.auto_awesome_rounded,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '已生成 ${images.length} 张',
+                  style: state.textStyle(
+                    context,
+                    size: 14,
+                    weight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Text(
+                _selectedIndices.isEmpty
+                    ? '点按选择'
+                    : '已选 ${_selectedIndices.length} 张',
+                style: state.textStyle(context, size: 11.5, opacity: 0.52),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final spacing = 10.0;
+              final tileWidth = columns == 1
+                  ? constraints.maxWidth
+                  : (constraints.maxWidth - spacing) / 2;
+              return Wrap(
+                spacing: spacing,
+                runSpacing: spacing,
+                children: [
+                  for (var index = 0; index < images.length; index++)
+                    _GeneratedGridTile(
+                      state: state,
+                      attachments: images,
+                      attachment: images[index],
+                      index: index,
+                      width: tileWidth,
+                      selected: _selectedIndices.contains(index),
+                      animateImages: widget.animateImages,
+                      onToggleSelected: () {
+                        setState(() {
+                          if (!_selectedIndices.add(index)) {
+                            _selectedIndices.remove(index);
+                          }
+                        });
+                      },
+                      onPreview: () => _openImagePreview(
+                        context,
+                        state,
+                        attachments: images,
+                        initialIndex: index,
+                        onDownload: widget.onDownload,
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _GalleryActionButton(
+                  state: state,
+                  icon: Icons.download_rounded,
+                  label: '保存所选',
+                  enabled:
+                      widget.onDownload != null && _selectedIndices.isNotEmpty,
+                  onTap: () {
+                    for (final index in _selectedIndices) {
+                      widget.onDownload?.call(images[index]);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _GalleryActionButton(
+                  state: state,
+                  icon: Icons.open_in_full_rounded,
+                  label: '查看大图',
+                  enabled: _selectedIndices.isNotEmpty,
+                  emphasized: true,
+                  onTap: () {
+                    final index = _selectedIndices.isEmpty
+                        ? 0
+                        : _selectedIndices.first;
+                    _openImagePreview(
+                      context,
+                      state,
+                      attachments: images,
+                      initialIndex: index,
+                      onDownload: widget.onDownload,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GalleryActionButton extends StatelessWidget {
+  const _GalleryActionButton({
+    required this.state,
+    required this.icon,
+    required this.label,
+    required this.enabled,
+    required this.onTap,
+    this.emphasized = false,
+  });
+
+  final WeaviewState state;
+  final IconData icon;
+  final String label;
+  final bool enabled;
+  final VoidCallback onTap;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.primary;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: label,
+      child: Material(
+        color: emphasized
+            ? color.withValues(alpha: enabled ? 0.12 : 0.05)
+            : state.text(context).withValues(alpha: enabled ? 0.05 : 0.025),
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(14),
+          child: SizedBox(
+            height: 44,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 18,
+                  color: emphasized
+                      ? color.withValues(alpha: enabled ? 1 : 0.35)
+                      : state
+                            .text(context)
+                            .withValues(alpha: enabled ? 0.68 : 0.28),
+                ),
+                const SizedBox(width: 7),
+                Text(
+                  label,
+                  style: state.textStyle(
+                    context,
+                    size: 12.5,
+                    weight: FontWeight.w600,
+                    opacity: enabled ? 0.78 : 0.32,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GeneratedGridTile extends StatelessWidget {
+  const _GeneratedGridTile({
+    required this.state,
+    required this.attachments,
+    required this.attachment,
+    required this.index,
+    required this.width,
+    required this.selected,
+    required this.animateImages,
+    required this.onToggleSelected,
+    required this.onPreview,
+  });
+
+  final WeaviewState state;
+  final List<MessageAttachment> attachments;
+  final MessageAttachment attachment;
+  final int index;
+  final double width;
+  final bool selected;
+  final bool animateImages;
+  final VoidCallback onToggleSelected;
+  final VoidCallback onPreview;
+
+  @override
+  Widget build(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final radius = BorderRadius.circular(16);
+    return SizedBox(
+      width: width,
+      height: width,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Material(
+              color: state.text(context).withValues(alpha: 0.04),
+              borderRadius: radius,
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: onToggleSelected,
+                borderRadius: radius,
+                child: Ink(
+                  decoration: BoxDecoration(
+                    borderRadius: radius,
+                    border: Border.all(
+                      color: selected
+                          ? primary
+                          : state.text(context).withValues(alpha: 0.08),
+                      width: selected ? 2 : 1,
+                    ),
+                  ),
+                  child: _AttachmentVisual(
+                    attachment: attachment,
+                    animate: animateImages,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Semantics(
+              button: true,
+              selected: selected,
+              label: '选择图片 ${index + 1}，共 ${attachments.length} 张',
+              child: GestureDetector(
+                onTap: onToggleSelected,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 160),
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: selected
+                        ? primary
+                        : Colors.black.withValues(alpha: 0.24),
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  child: selected
+                      ? const Icon(
+                          Icons.check_rounded,
+                          size: 18,
+                          color: Colors.white,
+                        )
+                      : null,
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 8,
+            bottom: 8,
+            child: Tooltip(
+              message: '查看大图',
+              child: Material(
+                color: Colors.black.withValues(alpha: 0.36),
+                shape: const CircleBorder(),
+                child: InkWell(
+                  onTap: onPreview,
+                  customBorder: const CircleBorder(),
+                  child: const SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: Icon(
+                      Icons.open_in_full_rounded,
+                      size: 17,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -447,8 +823,15 @@ class _ImageAttachmentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final knownSize = attachment.hasPixelSize
+        ? Size(
+            attachment.pixelWidth!.toDouble(),
+            attachment.pixelHeight!.toDouble(),
+          )
+        : null;
     return FutureBuilder<Size>(
-      future: _readImageSize(attachment.path),
+      initialData: knownSize,
+      future: knownSize == null ? _readImageSize(attachment.path) : null,
       builder: (context, snapshot) {
         final ratio = snapshot.data == null
             ? 1.0
@@ -475,10 +858,22 @@ class _ImageAttachmentTile extends StatelessWidget {
         return Material(
           color: Colors.transparent,
           borderRadius: radius,
-          child: InkWell(
-            borderRadius: radius,
-            onTap: () => _openImagePreview(context, state, attachment),
-            child: card,
+          child: Tooltip(
+            message: '预览图片',
+            child: Semantics(
+              button: true,
+              label: '预览图片 ${attachment.name}',
+              child: InkWell(
+                borderRadius: radius,
+                onTap: () => _openImagePreview(
+                  context,
+                  state,
+                  attachments: [attachment],
+                  initialIndex: 0,
+                ),
+                child: card,
+              ),
+            ),
           ),
         );
       },
@@ -486,21 +881,59 @@ class _ImageAttachmentTile extends StatelessWidget {
   }
 }
 
-Future<Size> _readImageSize(String path) async {
-  final bytes = await File(path).readAsBytes();
-  final codec = await ui.instantiateImageCodec(bytes);
-  final frame = await codec.getNextFrame();
-  final image = frame.image;
-  return Size(image.width.toDouble(), image.height.toDouble());
+final _imageSizeCache = _ImageSizeCache(maxEntries: 64);
+
+Future<Size> _readImageSize(String path) => _imageSizeCache.read(path);
+
+class _ImageSizeCache {
+  _ImageSizeCache({required this.maxEntries});
+
+  final int maxEntries;
+  final LinkedHashMap<String, Future<Size>> _entries = LinkedHashMap();
+
+  Future<Size> read(String path) {
+    final cached = _entries.remove(path);
+    if (cached != null) {
+      _entries[path] = cached;
+      return cached;
+    }
+    final future = _readDescriptorSize(path);
+    _entries[path] = future;
+    while (_entries.length > maxEntries) {
+      _entries.remove(_entries.keys.first);
+    }
+    return future;
+  }
+
+  Future<Size> _readDescriptorSize(String path) async {
+    final buffer = await ui.ImmutableBuffer.fromFilePath(path);
+    try {
+      final descriptor = await ui.ImageDescriptor.encoded(buffer);
+      try {
+        return Size(descriptor.width.toDouble(), descriptor.height.toDouble());
+      } finally {
+        descriptor.dispose();
+      }
+    } finally {
+      buffer.dispose();
+    }
+  }
 }
 
 void _openImagePreview(
   BuildContext context,
-  WeaviewState state,
-  MessageAttachment attachment,
-) {
-  final file = File(attachment.path);
-  if (!attachment.isImage || !file.existsSync()) return;
+  WeaviewState state, {
+  required List<MessageAttachment> attachments,
+  int initialIndex = 0,
+  ValueChanged<MessageAttachment>? onDownload,
+}) {
+  final images = attachments
+      .where(
+        (attachment) =>
+            attachment.isImage && File(attachment.path).existsSync(),
+      )
+      .toList();
+  if (images.isEmpty) return;
   final rootContext = context;
   FocusManager.instance.primaryFocus?.unfocus(
     disposition: UnfocusDisposition.scope,
@@ -511,56 +944,13 @@ void _openImagePreview(
     barrierColor: Colors.black.withValues(alpha: 0.82),
     builder: (context) {
       return Dialog.fullscreen(
-        backgroundColor: Colors.black,
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onLongPress: () => _showImagePreviewActions(
-                    rootContext,
-                    context,
-                    state,
-                    attachment,
-                  ),
-                  child: InteractiveViewer(
-                    minScale: 0.7,
-                    maxScale: 4,
-                    child: Center(
-                      child: Image.file(
-                        file,
-                        fit: BoxFit.contain,
-                        filterQuality: FilterQuality.high,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 12,
-                left: 12,
-                child: IconButton.filledTonal(
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  icon: const Icon(Icons.close_rounded),
-                ),
-              ),
-              Positioned(
-                left: 18,
-                right: 18,
-                bottom: 18,
-                child: Text(
-                  attachment.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                  style: state
-                      .textStyle(context, size: 12, weight: FontWeight.w600)
-                      .copyWith(color: Colors.white70),
-                ),
-              ),
-            ],
-          ),
+        backgroundColor: const Color(0xFF101A27),
+        child: _ImagePreviewCarousel(
+          rootContext: rootContext,
+          state: state,
+          attachments: images,
+          initialIndex: initialIndex.clamp(0, images.length - 1),
+          onDownload: onDownload,
         ),
       );
     },
@@ -572,6 +962,205 @@ void _openImagePreview(
   });
 }
 
+class _ImagePreviewCarousel extends StatefulWidget {
+  const _ImagePreviewCarousel({
+    required this.rootContext,
+    required this.state,
+    required this.attachments,
+    required this.initialIndex,
+    this.onDownload,
+  });
+
+  final BuildContext rootContext;
+  final WeaviewState state;
+  final List<MessageAttachment> attachments;
+  final int initialIndex;
+  final ValueChanged<MessageAttachment>? onDownload;
+
+  @override
+  State<_ImagePreviewCarousel> createState() => _ImagePreviewCarouselState();
+}
+
+class _ImagePreviewCarouselState extends State<_ImagePreviewCarousel> {
+  late final PageController _controller = PageController(
+    initialPage: widget.initialIndex,
+  );
+  late int _currentIndex = widget.initialIndex;
+
+  MessageAttachment get _currentAttachment => widget.attachments[_currentIndex];
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Stack(
+        children: [
+          Positioned.fill(
+            bottom: widget.attachments.length > 1 ? 104 : 58,
+            child: PageView.builder(
+              controller: _controller,
+              itemCount: widget.attachments.length,
+              onPageChanged: (value) => setState(() => _currentIndex = value),
+              itemBuilder: (context, index) {
+                final attachment = widget.attachments[index];
+                return Semantics(
+                  label:
+                      '图片预览 ${index + 1} / ${widget.attachments.length}：${attachment.name}',
+                  hint: '支持缩放。更多操作在右上角菜单。',
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onLongPress: () => _showImagePreviewActions(
+                      widget.rootContext,
+                      context,
+                      widget.state,
+                      attachment,
+                    ),
+                    child: InteractiveViewer(
+                      minScale: 0.7,
+                      maxScale: 4,
+                      child: Center(
+                        child: Image.file(
+                          File(attachment.path),
+                          fit: BoxFit.contain,
+                          cacheWidth: previewDecodeWidth(context),
+                          filterQuality: FilterQuality.medium,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          Positioned(
+            top: 12,
+            left: 12,
+            right: 12,
+            child: Row(
+              children: [
+                IconButton.filledTonal(
+                  onPressed: () => Navigator.of(context).maybePop(),
+                  tooltip: '关闭预览',
+                  icon: const Icon(Icons.chevron_left_rounded),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.36),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '${_currentIndex + 1} / ${widget.attachments.length}',
+                    style: widget.state
+                        .textStyle(context, size: 12, weight: FontWeight.w700)
+                        .copyWith(color: Colors.white),
+                  ),
+                ),
+                if (widget.onDownload != null) ...[
+                  const SizedBox(width: 10),
+                  IconButton.filledTonal(
+                    onPressed: () => widget.onDownload!(_currentAttachment),
+                    tooltip: '下载图片',
+                    icon: const Icon(Icons.download_rounded),
+                  ),
+                ],
+                const SizedBox(width: 10),
+                IconButton.filledTonal(
+                  onPressed: () => _showImagePreviewActions(
+                    widget.rootContext,
+                    context,
+                    widget.state,
+                    _currentAttachment,
+                  ),
+                  tooltip: '更多图片操作',
+                  icon: const Icon(Icons.more_horiz_rounded),
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            left: 18,
+            right: 18,
+            bottom: widget.attachments.length > 1 ? 82 : 18,
+            child: Text(
+              _currentAttachment.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: widget.state
+                  .textStyle(context, size: 12, weight: FontWeight.w600)
+                  .copyWith(color: Colors.white70),
+            ),
+          ),
+          if (widget.attachments.length > 1)
+            Positioned(
+              left: 18,
+              right: 18,
+              bottom: 14,
+              height: 58,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                itemCount: widget.attachments.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (context, index) {
+                  final selected = index == _currentIndex;
+                  final attachment = widget.attachments[index];
+                  return Semantics(
+                    button: true,
+                    selected: selected,
+                    label: '查看图片 ${index + 1}',
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => _controller.animateToPage(
+                          index,
+                          duration: const Duration(milliseconds: 220),
+                          curve: Curves.easeOutCubic,
+                        ),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 160),
+                          width: 58,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: selected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Colors.white.withValues(alpha: 0.18),
+                              width: selected ? 2 : 1,
+                            ),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          child: Image.file(
+                            File(attachment.path),
+                            fit: BoxFit.cover,
+                            cacheWidth: 180,
+                            filterQuality: FilterQuality.low,
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _AttachmentVisual extends StatelessWidget {
   const _AttachmentVisual({required this.attachment, required this.animate});
 
@@ -581,7 +1170,12 @@ class _AttachmentVisual extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (attachment.isImage && File(attachment.path).existsSync()) {
-      final image = Image.file(File(attachment.path), fit: BoxFit.cover);
+      final image = Image.file(
+        File(attachment.path),
+        fit: BoxFit.cover,
+        cacheWidth: thumbnailDecodeWidth(context),
+        filterQuality: FilterQuality.medium,
+      );
       if (!animate) return image;
       return TweenAnimationBuilder<double>(
         tween: Tween(begin: 0, end: 1),

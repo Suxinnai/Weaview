@@ -29,10 +29,15 @@ class _ImageAspect {
 }
 
 class _PreparedImageRequest {
-  const _PreparedImageRequest({required this.prompt, required this.size});
+  const _PreparedImageRequest({
+    required this.prompt,
+    required this.size,
+    this.aspectRatio,
+  });
 
   final String prompt;
   final String size;
+  final String? aspectRatio;
 }
 
 class _ComparisonTarget {
@@ -65,6 +70,9 @@ class BackupImportResult {
 }
 
 class WeaviewState extends ChangeNotifier {
+  static const int maxBackupArchiveBytes = 32 * 1024 * 1024;
+  static const int maxBackupJsonBytes = 16 * 1024 * 1024;
+
   static const MethodChannel _nativeMedia = MethodChannel(
     'weaview/native_media',
   );
@@ -96,7 +104,7 @@ class WeaviewState extends ChangeNotifier {
   List<WorkCard> workCards = [];
   List<TokenUsageRecord> tokenUsageRecords = [];
 
-  List<Color> accents = const [accentMint, accentGreen];
+  List<Color> get accents => [_theme.accentColor, _theme.secondaryAccent];
 
   // ── Backward-compatible getters/setters ──────────────────────────
 
@@ -235,6 +243,23 @@ class WeaviewState extends ChangeNotifier {
       prefs.loadChatSessions(),
     );
     _sessions.load(savedSessions);
+    final savedSessionId = prefs.lastSessionId;
+    final shouldResumeSession =
+        savedSessionId == null || savedSessionId.trim().isNotEmpty;
+    ChatSession? sessionToResume;
+    if (savedSessions.isNotEmpty && shouldResumeSession) {
+      sessionToResume = savedSessions.firstWhereOrNull(
+        (session) => session.id == savedSessionId,
+      );
+      sessionToResume ??= savedSessions.reduce(
+        (latest, session) =>
+            session.updatedAt > latest.updatedAt ? session : latest,
+      );
+    }
+    if (sessionToResume != null) {
+      _sessions.selectSession(sessionToResume, messages, suggestions);
+      prefs.saveLastSessionId(sessionToResume.id);
+    }
     workCards = prefs.loadWorkCards();
     tokenUsageRecords = prefs.loadTokenUsageRecords();
 
@@ -284,6 +309,11 @@ class WeaviewState extends ChangeNotifier {
 
   void setThemeModeValue(ThemeMode mode) {
     _theme.setThemeModeValue(mode, _prefs);
+    notifyListeners();
+  }
+
+  void setAccentColor(Color color) {
+    _theme.setAccentColor(color, _prefs);
     notifyListeners();
   }
 
@@ -576,11 +606,13 @@ class WeaviewState extends ChangeNotifier {
 
   void newSession() {
     _sessions.newSession(messages, suggestions);
+    _prefs?.saveLastSessionId(null);
     notifyListeners();
   }
 
   void selectSession(ChatSession session) {
     _sessions.selectSession(session, messages, suggestions);
+    _prefs?.saveLastSessionId(currentSessionId);
     notifyListeners();
   }
 
@@ -591,6 +623,7 @@ class WeaviewState extends ChangeNotifier {
 
   void deleteSession(String sessionId) {
     _sessions.deleteSession(sessionId, messages, suggestions, _prefs);
+    _prefs?.saveLastSessionId(currentSessionId);
     notifyListeners();
   }
 
@@ -612,6 +645,7 @@ class WeaviewState extends ChangeNotifier {
       suggestions: suggestions,
       prefs: _prefs,
     );
+    _prefs?.saveLastSessionId(currentSessionId);
     notifyListeners();
   }
 
@@ -622,6 +656,7 @@ class WeaviewState extends ChangeNotifier {
       suggestions: suggestions,
       prefs: _prefs,
     );
+    _prefs?.saveLastSessionId(currentSessionId);
     notifyListeners();
   }
 
@@ -638,6 +673,7 @@ class WeaviewState extends ChangeNotifier {
 
   void _persistCurrentSession() {
     _sessions.persistCurrentSession(messages: messages, prefs: _prefs);
+    _prefs?.saveLastSessionId(currentSessionId);
   }
 
   // ── Provider / config delegation ─────────────────────────────────
@@ -885,6 +921,7 @@ class WeaviewState extends ChangeNotifier {
         await _generateImageIntoCurrentResponse(
           prompt: prepared.prompt,
           size: prepared.size,
+          aspectRatio: prepared.aspectRatio,
           attachments: requestAttachments,
           runId: runId,
           sessionId: taskSessionId,
@@ -961,7 +998,7 @@ class WeaviewState extends ChangeNotifier {
     if (selectedModels.isEmpty) {
       targets.addAll(availableTargets.take(3));
     } else {
-      for (final selected in selectedModels.take(5)) {
+      for (final selected in selectedModels.take(3)) {
         final target = availableTargets.firstWhereOrNull(
           (candidate) =>
               candidate.assignment.provider == selected.provider &&
@@ -1132,6 +1169,7 @@ class WeaviewState extends ChangeNotifier {
   Future<void> submitImageGeneration(
     String value, {
     List<MessageAttachment> attachments = const [],
+    int imageCount = 1,
   }) async {
     final content = value.trim();
     if (content.isEmpty || isStreaming) return;
@@ -1147,7 +1185,12 @@ class WeaviewState extends ChangeNotifier {
     messages
       ..add(ChatMessage.user(content, attachments: requestAttachments))
       ..add(
-        ChatMessage.model('', isThinking: true, activity: 'imageGeneration'),
+        ChatMessage.model(
+          '',
+          isThinking: true,
+          activity: 'imageGeneration',
+          imageCount: imageCount.clamp(1, 4).toInt(),
+        ),
       );
     suggestions = [];
     isStreaming = true;
@@ -1163,6 +1206,8 @@ class WeaviewState extends ChangeNotifier {
       await _generateImageIntoCurrentResponse(
         prompt: prepared.prompt,
         size: prepared.size,
+        aspectRatio: prepared.aspectRatio,
+        outputCount: imageCount,
         attachments: requestAttachments,
         runId: runId,
         sessionId: taskSessionId,
@@ -1181,6 +1226,7 @@ class WeaviewState extends ChangeNotifier {
     int index,
     String value, {
     List<MessageAttachment> attachments = const [],
+    int imageCount = 1,
   }) async {
     if (index < 0 ||
         index >= messages.length ||
@@ -1196,7 +1242,11 @@ class WeaviewState extends ChangeNotifier {
               .toList()
         : attachments;
     messages.removeRange(index, messages.length);
-    await submitImageGeneration(content, attachments: preservedAttachments);
+    await submitImageGeneration(
+      content,
+      attachments: preservedAttachments,
+      imageCount: imageCount,
+    );
   }
 
   Future<void> resumeInterruptedImageGeneration({
@@ -1238,6 +1288,7 @@ class WeaviewState extends ChangeNotifier {
       imageAttachments: attachments,
       beforeIndex: userIndex,
     );
+    final outputCount = messages[targetIndex].imageCount;
 
     suggestions = [];
     isStreaming = true;
@@ -1251,6 +1302,8 @@ class WeaviewState extends ChangeNotifier {
       await _generateImageIntoCurrentResponse(
         prompt: prepared.prompt,
         size: prepared.size,
+        aspectRatio: prepared.aspectRatio,
+        outputCount: outputCount,
         attachments: attachments,
         runId: runId,
         sessionId: taskSessionId,
@@ -1269,6 +1322,8 @@ class WeaviewState extends ChangeNotifier {
   Future<void> _generateImageIntoCurrentResponse({
     required String prompt,
     required String size,
+    String? aspectRatio,
+    int outputCount = 1,
     List<MessageAttachment> attachments = const [],
     required int runId,
     String? sessionId,
@@ -1300,12 +1355,14 @@ class WeaviewState extends ChangeNotifier {
 
     _activeImageGenerationCount += 1;
     try {
-      final result = await AiGateway.generateImage(
+      final result = await AiGateway.generateImages(
         provider: imageProvider!,
         assignment: imageAssignment!,
         prompt: prompt,
         attachments: attachments,
         size: size,
+        aspectRatio: aspectRatio,
+        outputCount: outputCount,
       );
       if (_cancelledImageRuns.contains(runId)) {
         _mutateModelMessageInSession(
@@ -1320,17 +1377,23 @@ class WeaviewState extends ChangeNotifier {
         );
         return;
       }
-      final attachment = await _writeGeneratedImageAttachment(result);
+      final generatedAttachments = <MessageAttachment>[];
+      for (final image in result.images) {
+        generatedAttachments.add(await _writeGeneratedImageAttachment(image));
+      }
       final updated = _mutateModelMessageInSession(
         sessionId: sessionId,
         targetIndex: targetIndex,
         persist: true,
         mutate: (current) {
           current
-            ..content = ''
-            ..attachments = [attachment]
+            ..content = result.isPartial
+                ? '已生成 ${generatedAttachments.length}/${result.requestedCount} 张图片；部分请求未完成，可重试补充。'
+                : ''
+            ..attachments = generatedAttachments
             ..isThinking = false
-            ..activity = 'imageGeneration';
+            ..activity = 'imageGeneration'
+            ..imageCount = result.requestedCount;
         },
       );
       if (!updated) return;
@@ -1338,7 +1401,10 @@ class WeaviewState extends ChangeNotifier {
         await _refreshCurrentSessionTitle();
         unawaited(_refreshPersonalizationFromConversation());
       }
-      await _showNativeNotification(title: '织境生图完成', body: '图片已生成，回到织境查看结果。');
+      await _showNativeNotification(
+        title: '织境生图完成',
+        body: '${generatedAttachments.length} 张图片已生成，回到织境查看结果。',
+      );
     } catch (error) {
       if (_cancelledImageRuns.contains(runId)) {
         _mutateModelMessageInSession(
@@ -1421,6 +1487,7 @@ class WeaviewState extends ChangeNotifier {
     return _PreparedImageRequest(
       prompt: _imagePromptWithAspectHint(contextualPrompt, aspect),
       size: _imageSizeForAspect(aspect),
+      aspectRatio: aspect?.label,
     );
   }
 
@@ -1588,7 +1655,7 @@ $previousPrompt
     for (var i = end - 1; i >= 0; i--) {
       final message = messages[i];
       if (message.role != 'model') continue;
-      for (final attachment in message.attachments.reversed) {
+      for (final attachment in message.attachments) {
         if (!attachment.isImage) continue;
         if (attachment.path.isEmpty || !File(attachment.path).existsSync()) {
           continue;
@@ -2164,16 +2231,21 @@ $prompt
       'image/webp' => 'webp',
       _ => 'png',
     };
-    final name =
-        'weaview_image_${DateTime.now().millisecondsSinceEpoch}.$extension';
+    final name = _uniqueGeneratedImageName(
+      directory,
+      'weaview_image_${DateTime.now().microsecondsSinceEpoch}.$extension',
+    );
     final file = File('${directory.path}${Platform.pathSeparator}$name');
     await file.writeAsBytes(result.bytes, flush: true);
+    final dimensions = _imageDimensionsFromBytes(result.bytes);
     return MessageAttachment(
       path: file.path,
       name: name,
       mimeType: result.mimeType,
       kind: 'image',
       size: result.bytes.lengthInBytes,
+      pixelWidth: dimensions?.$1,
+      pixelHeight: dimensions?.$2,
     );
   }
 
@@ -2245,6 +2317,8 @@ $prompt
               mimeType: attachment.resolvedImageMimeType(),
               kind: 'image',
               size: attachment.size,
+              pixelWidth: attachment.pixelWidth,
+              pixelHeight: attachment.pixelHeight,
             ),
           );
           changed = true;
@@ -2329,6 +2403,7 @@ $prompt
     if (isStreaming || index < 0 || index >= messages.length) return;
     final retryAsImageGeneration =
         imageGeneration || _looksLikeImageGenerationRetry(index);
+    final retryImageCount = _imageGenerationCountForRetry(index);
     var userIndex = index;
     if (messages[userIndex].role != 'user') {
       userIndex = messages
@@ -2351,6 +2426,7 @@ $prompt
       await submitImageGeneration(
         original.content,
         attachments: original.attachments.map((item) => item.copy()).toList(),
+        imageCount: retryImageCount,
       );
       return;
     }
@@ -2372,6 +2448,17 @@ $prompt
       }
     }
     return false;
+  }
+
+  int _imageGenerationCountForRetry(int index) {
+    if (index < 0 || index >= messages.length) return 1;
+    final target = messages[index];
+    if (_isImageGenerationReply(target)) return target.imageCount;
+    if (target.role == 'user' && index + 1 < messages.length) {
+      final reply = messages[index + 1];
+      if (_isImageGenerationReply(reply)) return reply.imageCount;
+    }
+    return 1;
   }
 
   bool _isImageGenerationReply(ChatMessage message) {
@@ -2431,12 +2518,28 @@ $prompt
       'ai_search_config': searchConfig.safeJson(),
       'ai_active_tts_id': activeTtsId,
       'ai_tts_providers': ttsProviders.map((p) => p.safeJson()).toList(),
+      'system_prompt': systemPrompt,
+      'emotion_enabled': emotionEnabled,
+      'global_memory_enabled': globalMemoryEnabled,
+      'reference_history_enabled': referenceHistoryEnabled,
+      'assistant_avatar': assistantAvatar,
+      'user_avatar': userAvatar,
       'user_name': userName,
       'assistant_name': assistantName,
       'user_profile': userProfile,
       'theme_mode': themeMode.name,
+      'theme_background': _colorToHex(backgroundOverride),
+      'theme_text': _colorToHex(textOverride),
+      'theme_accent': _colorToHex(accents.first),
+      'theme_assistant_bubble': _colorToHex(assistantBubbleOverride),
+      'theme_user_bubble': _colorToHex(userBubbleOverride),
+      'theme_font_family': fontMood,
+      'theme_font_style': fontStyleMood,
+      'theme_font_weight': fontWeightMood,
       'theme_bubble_style': bubbleStyle,
       'theme_message_alignment': messageAlignment,
+      'theme_assistant_bubble_opacity': assistantBubbleOpacity,
+      'theme_user_bubble_opacity': userBubbleOpacity,
     });
   }
 
@@ -2450,7 +2553,7 @@ $prompt
       ZipEntryData(
         name: 'README.txt',
         bytes: utf8.encode(
-          'Weaview local data export\nExported at: $exportedAt\nFormat: UTF-8 JSON\n',
+          'Weaview local data export\nExported at: $exportedAt\nFormat: UTF-8 JSON\nNote: original attachment/image/audio files are not included in this backup.\n',
         ),
       ),
     ]);
@@ -2460,6 +2563,11 @@ $prompt
     Uint8List bytes, {
     String fileName = '',
   }) async {
+    if (bytes.length > maxBackupArchiveBytes) {
+      throw FormatException(
+        '备份文件超过 ${_formatBackupLimit(maxBackupArchiveBytes)} 限制。',
+      );
+    }
     final lowerName = fileName.toLowerCase();
     final isZip =
         lowerName.endsWith('.zip') ||
@@ -2469,7 +2577,16 @@ $prompt
             bytes[2] == 0x03 &&
             bytes[3] == 0x04);
     final text = isZip
-        ? readZipUtf8Entry(bytes, 'weaview-export.json')
+        ? readZipUtf8Entry(
+            bytes,
+            'weaview-export.json',
+            maxCompressedBytes: maxBackupJsonBytes,
+            maxUncompressedBytes: maxBackupJsonBytes,
+          )
+        : bytes.length > maxBackupJsonBytes
+        ? throw FormatException(
+            '备份 JSON 超过 ${_formatBackupLimit(maxBackupJsonBytes)} 限制。',
+          )
         : utf8.decode(bytes, allowMalformed: true);
     if (text == null || text.trim().isEmpty) {
       throw const FormatException('备份文件中未找到 weaview-export.json。');
@@ -2478,6 +2595,11 @@ $prompt
   }
 
   Future<BackupImportResult> importBackupJson(String text) async {
+    if (utf8.encode(text).length > maxBackupJsonBytes) {
+      throw FormatException(
+        '备份 JSON 超过 ${_formatBackupLimit(maxBackupJsonBytes)} 限制。',
+      );
+    }
     final decoded = jsonDecode(text);
     if (decoded is! Map) {
       throw const FormatException('备份 JSON 格式无效。');
@@ -2603,6 +2725,7 @@ $prompt
     textOverride = null;
     assistantBubbleOverride = null;
     userBubbleOverride = null;
+    _theme.accentColor = accentMint;
     fontMood = 'sans';
     fontStyleMood = 'normal';
     fontWeightMood = 'normal';
@@ -2833,6 +2956,37 @@ $prompt
   bool _isMaskedSecret(String value) => value.trim() == '***';
 
   void _applyImportedPreferences(Map<String, dynamic> data) {
+    final importedSystemPrompt = data['system_prompt']?.toString();
+    if (importedSystemPrompt != null &&
+        importedSystemPrompt.trim().isNotEmpty) {
+      systemPrompt = importedSystemPrompt;
+      _prefs?.saveSystemPrompt(systemPrompt);
+    }
+    final importedEmotionEnabled = data['emotion_enabled'];
+    if (importedEmotionEnabled is bool) {
+      emotionEnabled = importedEmotionEnabled;
+      _prefs?.saveEmotionEnabled(emotionEnabled);
+    }
+    final importedGlobalMemoryEnabled = data['global_memory_enabled'];
+    if (importedGlobalMemoryEnabled is bool) {
+      globalMemoryEnabled = importedGlobalMemoryEnabled;
+      _prefs?.saveGlobalMemoryEnabled(globalMemoryEnabled);
+    }
+    final importedReferenceHistoryEnabled = data['reference_history_enabled'];
+    if (importedReferenceHistoryEnabled is bool) {
+      referenceHistoryEnabled = importedReferenceHistoryEnabled;
+      _prefs?.saveReferenceHistoryEnabled(referenceHistoryEnabled);
+    }
+    final importedAssistantAvatar = data['assistant_avatar']?.toString().trim();
+    if (importedAssistantAvatar != null) {
+      assistantAvatar = importedAssistantAvatar;
+      _prefs?.saveAssistantAvatar(assistantAvatar);
+    }
+    final importedUserAvatar = data['user_avatar']?.toString().trim();
+    if (importedUserAvatar != null) {
+      userAvatar = importedUserAvatar;
+      _prefs?.saveUserAvatar(userAvatar);
+    }
     final importedUserName = data['user_name']?.toString().trim();
     if (importedUserName != null && importedUserName.isNotEmpty) {
       userName = importedUserName;
@@ -2856,6 +3010,52 @@ $prompt
       );
       _prefs?.saveThemeMode(themeMode);
     }
+    final importedThemeBackground = _decodeImportedColor(
+      data['theme_background'],
+    );
+    if (importedThemeBackground != null) {
+      backgroundOverride = importedThemeBackground;
+      _prefs?.saveThemeBackground(importedThemeBackground);
+    }
+    final importedThemeText = _decodeImportedColor(data['theme_text']);
+    if (importedThemeText != null) {
+      textOverride = importedThemeText;
+      _prefs?.saveThemeText(importedThemeText);
+    }
+    final importedThemeAccent = _decodeImportedColor(data['theme_accent']);
+    if (importedThemeAccent != null) {
+      _theme.setAccentColor(importedThemeAccent, _prefs);
+    }
+    final importedAssistantBubble = _decodeImportedColor(
+      data['theme_assistant_bubble'],
+    );
+    if (importedAssistantBubble != null) {
+      assistantBubbleOverride = importedAssistantBubble;
+      _prefs?.saveAssistantBubble(importedAssistantBubble);
+    }
+    final importedUserBubble = _decodeImportedColor(data['theme_user_bubble']);
+    if (importedUserBubble != null) {
+      userBubbleOverride = importedUserBubble;
+      _prefs?.saveUserBubble(importedUserBubble);
+    }
+    final importedFontFamily = data['theme_font_family']?.toString().trim();
+    if (importedFontFamily != null &&
+        ['sans', 'serif'].contains(importedFontFamily)) {
+      fontMood = importedFontFamily;
+      _prefs?.saveFontFamily(fontMood);
+    }
+    final importedFontStyle = data['theme_font_style']?.toString().trim();
+    if (importedFontStyle != null &&
+        ['normal', 'italic'].contains(importedFontStyle)) {
+      fontStyleMood = importedFontStyle;
+      _prefs?.saveFontStyle(fontStyleMood);
+    }
+    final importedFontWeight = data['theme_font_weight']?.toString().trim();
+    if (importedFontWeight != null &&
+        ['normal', 'medium', 'bold'].contains(importedFontWeight)) {
+      fontWeightMood = importedFontWeight;
+      _prefs?.saveFontWeight(fontWeightMood);
+    }
     final importedBubbleStyle = data['theme_bubble_style']?.toString().trim();
     if (importedBubbleStyle != null &&
         [
@@ -2868,6 +3068,20 @@ $prompt
       bubbleStyle = importedBubbleStyle;
       _prefs?.saveBubbleStyle(bubbleStyle);
     }
+    final importedAssistantBubbleOpacity = _decodeImportedOpacity(
+      data['theme_assistant_bubble_opacity'],
+    );
+    if (importedAssistantBubbleOpacity != null) {
+      assistantBubbleOpacity = importedAssistantBubbleOpacity;
+      _prefs?.saveAssistantBubbleOpacity(assistantBubbleOpacity);
+    }
+    final importedUserBubbleOpacity = _decodeImportedOpacity(
+      data['theme_user_bubble_opacity'],
+    );
+    if (importedUserBubbleOpacity != null) {
+      userBubbleOpacity = importedUserBubbleOpacity;
+      _prefs?.saveUserBubbleOpacity(userBubbleOpacity);
+    }
     final importedAlignment = data['theme_message_alignment']
         ?.toString()
         .trim();
@@ -2876,5 +3090,30 @@ $prompt
       messageAlignment = importedAlignment;
       _prefs?.saveMessageAlignment(messageAlignment);
     }
+  }
+
+  Color? _decodeImportedColor(dynamic value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) return null;
+    return colorFromHex(text);
+  }
+
+  double? _decodeImportedOpacity(dynamic value) {
+    final parsed = switch (value) {
+      num number => number.toDouble(),
+      String text => double.tryParse(text),
+      _ => null,
+    };
+    if (parsed == null || parsed.isNaN) return null;
+    return parsed.clamp(0.0, 1.0).toDouble();
+  }
+
+  String? _colorToHex(Color? color) => color == null ? null : colorToHex(color);
+
+  String _formatBackupLimit(int bytes) {
+    final megaBytes = bytes / (1024 * 1024);
+    return megaBytes == megaBytes.roundToDouble()
+        ? '${megaBytes.toInt()} MB'
+        : '${megaBytes.toStringAsFixed(1)} MB';
   }
 }

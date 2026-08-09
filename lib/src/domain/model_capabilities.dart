@@ -15,6 +15,60 @@ bool shouldUseResponsesImageTool(String modelId) {
   return _responsesImageNeedles.any(text.contains);
 }
 
+bool isPureImageGenerationModel({
+  required String id,
+  required String name,
+  Iterable<Object?> capabilities = const [],
+}) {
+  final explicitCaps = <String>{};
+  for (final capability in capabilities) {
+    explicitCaps.addAll(_capabilitiesFromValue(capability));
+  }
+  if (!looksLikeImageGenerationModel(
+    id: id,
+    name: name,
+    capabilities: explicitCaps,
+  )) {
+    return false;
+  }
+  return !explicitCaps.contains('chat') && !explicitCaps.contains('tool');
+}
+
+bool supportsModelRole({
+  required String role,
+  required String id,
+  required String name,
+  Iterable<Object?> capabilities = const [],
+}) {
+  final explicitCapabilities = capabilities.toList(growable: false);
+  final normalizedCaps = normalizeModelCapabilities(
+    explicitCapabilities,
+  ).toSet();
+  final pureImageModel = isPureImageGenerationModel(
+    id: id,
+    name: name,
+    capabilities: explicitCapabilities,
+  );
+  switch (role) {
+    case 'image':
+      return looksLikeImageGenerationModel(
+        id: id,
+        name: name,
+        capabilities: normalizedCaps,
+      );
+    case 'tool':
+      if (pureImageModel) return false;
+      return normalizedCaps.contains('tool') || normalizedCaps.contains('chat');
+    case 'chat':
+    case 'title':
+    case 'suggest':
+    case 'translate':
+      return normalizedCaps.contains('chat') && !pureImageModel;
+    default:
+      return normalizedCaps.contains('chat') && !pureImageModel;
+  }
+}
+
 List<String> guessModelCapabilities(
   String id, {
   String name = '',
@@ -297,6 +351,7 @@ const _imageModelNeedles = [
   'gemini 3 pro image',
   'gemini-3-pro-image',
   'gemini-3.1-flash-image',
+  'gemini-3.1-flash-lite-image',
   'gemini-3-flash-image',
   'gemini-2.5-flash-image',
   'flash-image-preview',

@@ -2,6 +2,34 @@
 
 本项目遵循简洁的变更记录格式。正式版本发布时会在这里记录用户可见变更、迁移提示和破坏性调整。
 
+## Unreleased
+
+## 2.0.0 - 2026-08-09
+
+### 中文
+
+- Gemini 提供商内置 Nano Banana 2 Lite、Nano Banana 2、Nano Banana Pro 与上一代 Nano Banana 四个稳定生图模型，并通过原生模型列表与连接测试接口管理。
+- 生图模式支持一次选择 1–4 张输出；Gemini 会解析同一响应中的全部最终图片，并在需要时补发并行请求，结果以可翻阅的成组画廊展示。
+- Gemini 原生生图请求支持正式 REST `responseFormat.image` 画幅与 2K/4K 配置，并过滤思考阶段临时图。
+- 生图提供商扩展到 OpenAI、Grok、Seedream 5/4、Recraft、Stability AI、FLUX.2/1.1、Ideogram，以及 Replicate 官方 Imagen、Qwen Image 等模型，并按各自官方协议路由。
+- 火山方舟和 FLUX.2 支持多参考图输入；所有已支持提供商继续支持一次请求 1–4 张结果。
+- 设置顶部精简为“通用 / 提供商 / 模型 / 更多”；辅助模型自动复用主对话模型，提供商按常用项渐进展开。
+- 修复强调色和昵称不可编辑的问题，加入强调色色板、昵称编辑器、主题切换过渡，并适配系统“减少动态效果”。
+- 优化启动状态与本地图片缓存边界，移除首次进入引导和首页冗余配置提示，降低长会话与多图场景的异常内存占用。
+- 增强备份导入的体积、条目与解压安全校验，并补充启动恢复、设置交互、生图、多图画廊和模型能力回归测试。
+
+### English
+
+- Added built-in Gemini image presets for Nano Banana 2 Lite, Nano Banana 2, Nano Banana Pro, and the legacy Nano Banana model, including native discovery and connection testing.
+- Image mode can request 1–4 outputs at once; Gemini collects all final images in a response and fills missing variants with parallel requests, then shows them as a browsable grouped gallery.
+- Gemini native image requests now use the official REST `responseFormat.image` aspect-ratio and 2K/4K fields while excluding interim thinking images.
+- Expanded image providers to OpenAI, Grok, Seedream 5/4, Recraft, Stability AI, FLUX.2/1.1, Ideogram, and official Replicate models such as Imagen and Qwen Image, routed through their native protocols.
+- Added multi-reference input for Ark and FLUX.2 while retaining 1–4 image outputs across supported providers.
+- Simplified settings to General, Providers, Models, and More; auxiliary roles reuse the chat model and provider presets expand progressively.
+- Fixed editable accent color and nickname controls, added smooth theme transitions, and respected the system reduced-motion preference.
+- Improved startup-state handling and bounded decoded-image caching, removed first-run onboarding and redundant home setup prompts, and reduced abnormal memory growth in long chats and multi-image workflows.
+- Hardened backup imports with archive-size, entry-count, and inflated-size limits, with additional regression coverage for startup restore, settings interactions, image generation, galleries, and model capabilities.
+
 ## 1.0.32 - 2026-06-18
 
 ### 中文
