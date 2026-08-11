@@ -161,6 +161,56 @@ class OpenAiImageClient {
     }
   }
 
+  Future<List<GeneratedImageResult>> generateChatImages({
+    required String apiKey,
+    required String baseUrl,
+    required String model,
+    required String prompt,
+    List<MessageAttachment> attachments = const [],
+    required Duration timeout,
+    int outputCount = 1,
+    String? aspectRatio,
+    String? imageSize,
+  }) async {
+    final requestedCount = outputCount.clamp(1, 4).toInt();
+    final first = await _generateChatImagesOnce(
+      apiKey: apiKey,
+      baseUrl: baseUrl,
+      model: model,
+      prompt: prompt,
+      attachments: attachments,
+      timeout: timeout,
+      aspectRatio: aspectRatio,
+      imageSize: imageSize,
+    );
+    if (first.length >= requestedCount) {
+      return first.take(requestedCount).toList();
+    }
+
+    final remaining = requestedCount - first.length;
+    final attempts = await Future.wait([
+      for (var index = 0; index < remaining; index++)
+        _generateChatImagesOnce(
+          apiKey: apiKey,
+          baseUrl: baseUrl,
+          model: model,
+          prompt: prompt,
+          attachments: attachments,
+          timeout: timeout,
+          aspectRatio: aspectRatio,
+          imageSize: imageSize,
+        ).then(
+          (images) => _OpenAiChatImageAttempt(images: images),
+          onError: (Object error, StackTrace _) =>
+              const _OpenAiChatImageAttempt(),
+        ),
+    ]);
+    return [
+      ...first,
+      for (final attempt in attempts) ...attempt.images,
+    ].take(requestedCount).toList();
+  }
+
   Future<String> testImageConnection({
     required String apiKey,
     required String baseUrl,
@@ -180,6 +230,255 @@ class OpenAiImageClient {
     );
     final elapsed = DateTime.now().difference(start).inMilliseconds;
     return '连接成功，生图接口响应正常：${result.route}（${elapsed}ms）';
+  }
+
+  Future<String> testChatImageConnection({
+    required String apiKey,
+    required String baseUrl,
+    required String imageModel,
+    required Duration timeout,
+  }) async {
+    final start = DateTime.now();
+    final results = await generateChatImages(
+      apiKey: apiKey,
+      baseUrl: baseUrl,
+      model: imageModel,
+      prompt: 'Generate a tiny clean app test image: one mint dot on white.',
+      timeout: timeout,
+    );
+    final elapsed = DateTime.now().difference(start).inMilliseconds;
+    return '连接成功，兼容图片消息响应正常：${results.first.route}（${elapsed}ms）';
+  }
+
+  Future<List<GeneratedImageResult>> _generateChatImagesOnce({
+    required String apiKey,
+    required String baseUrl,
+    required String model,
+    required String prompt,
+    required List<MessageAttachment> attachments,
+    required Duration timeout,
+    String? aspectRatio,
+    String? imageSize,
+  }) async {
+    final normalizedBaseUrl = app_utils.normalizeBaseUrl(baseUrl);
+    final uri = Uri.parse('$normalizedBaseUrl/chat/completions');
+    final content = <Map<String, dynamic>>[
+      {
+        'type': 'text',
+        'text': _chatImagePrompt(
+          prompt,
+          aspectRatio: aspectRatio,
+          imageSize: imageSize,
+        ),
+      },
+    ];
+    for (final attachment in attachments.where((item) => item.isImage)) {
+      final file = File(attachment.path);
+      if (!await file.exists()) continue;
+      final bytes = await file.readAsBytes();
+      final mimeType = attachment.resolvedImageMimeType(headerBytes: bytes);
+      content.add({
+        'type': 'image_url',
+        'image_url': {'url': 'data:$mimeType;base64,${base64Encode(bytes)}'},
+      });
+    }
+    final response = await http
+        .post(
+          uri,
+          headers: {
+            'Authorization': 'Bearer $apiKey',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode({
+            'model': model,
+            'messages': [
+              {
+                'role': 'user',
+                'content': content.length == 1
+                    ? content.first['text']
+                    : content,
+              },
+            ],
+          }),
+        )
+        .timeout(timeout);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Chat Completions image HTTP ${response.statusCode}: ${response.body}',
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map) {
+      throw Exception('Chat Completions image response is not a JSON object.');
+    }
+    final choices = decoded['choices'] as List? ?? const [];
+    if (choices.isEmpty || choices.first is! Map) {
+      throw Exception(
+        'Chat Completions image response did not include choices.',
+      );
+    }
+    final message = (choices.first as Map)['message'];
+    if (message is! Map) {
+      throw Exception(
+        'Chat Completions image response did not include a message.',
+      );
+    }
+    final revisedPrompt = _chatCompletionText(message['content']);
+    final nodes = <dynamic>[
+      ...?message['images'] as List?,
+      if (message['content'] is List) ...message['content'] as List,
+    ];
+    final seen = <String>{};
+    final images = <GeneratedImageResult>[];
+    for (final node in nodes) {
+      final source = _chatImageSource(node);
+      if (source == null || source.trim().isEmpty || !seen.add(source)) {
+        continue;
+      }
+      images.add(
+        await _chatImageResult(
+          source: source,
+          node: node,
+          apiKey: apiKey,
+          requestUri: uri,
+          timeout: timeout,
+          revisedPrompt: revisedPrompt,
+        ),
+      );
+    }
+    if (images.isEmpty) {
+      throw Exception(
+        'Chat Completions response did not include message.images image data.',
+      );
+    }
+    return images;
+  }
+
+  Future<GeneratedImageResult> _chatImageResult({
+    required String source,
+    required dynamic node,
+    required String apiKey,
+    required Uri requestUri,
+    required Duration timeout,
+    required String? revisedPrompt,
+  }) async {
+    if (source.startsWith('data:')) {
+      final comma = source.indexOf(',');
+      if (comma <= 5) throw Exception('Invalid image data URI.');
+      final metadata = source.substring(5, comma);
+      final mimeType = metadata.split(';').first.trim().isEmpty
+          ? 'image/png'
+          : metadata.split(';').first.trim();
+      final encoded = source.substring(comma + 1);
+      final bytes = metadata.toLowerCase().contains(';base64')
+          ? base64Decode(encoded.replaceAll(RegExp(r'\s+'), ''))
+          : utf8.encode(Uri.decodeComponent(encoded));
+      return GeneratedImageResult(
+        bytes: Uint8List.fromList(bytes),
+        mimeType: mimeType,
+        route: '/v1/chat/completions#message.images',
+        revisedPrompt: revisedPrompt,
+      );
+    }
+
+    if (_looksLikeBase64(source)) {
+      return GeneratedImageResult(
+        bytes: Uint8List.fromList(
+          base64Decode(source.replaceAll(RegExp(r'\s+'), '')),
+        ),
+        mimeType: _chatImageMimeType(node) ?? 'image/png',
+        route: '/v1/chat/completions#message.images',
+        revisedPrompt: revisedPrompt,
+      );
+    }
+
+    final imageUri = Uri.tryParse(source);
+    if (imageUri == null || !imageUri.hasScheme) {
+      throw Exception('Chat Completions image URL is invalid.');
+    }
+    final response = await http
+        .get(
+          imageUri,
+          headers: imageUri.host == requestUri.host
+              ? {'Authorization': 'Bearer $apiKey'}
+              : null,
+        )
+        .timeout(timeout);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Downloading chat image failed: HTTP ${response.statusCode}',
+      );
+    }
+    return GeneratedImageResult(
+      bytes: response.bodyBytes,
+      mimeType:
+          response.headers['content-type']?.split(';').first.trim() ??
+          _chatImageMimeType(node) ??
+          'image/png',
+      route: '/v1/chat/completions#message.images',
+      revisedPrompt: revisedPrompt,
+    );
+  }
+
+  static String _chatImagePrompt(
+    String prompt, {
+    String? aspectRatio,
+    String? imageSize,
+  }) {
+    final instructions = [
+      if (aspectRatio?.trim().isNotEmpty == true)
+        'Aspect ratio: ${aspectRatio!.trim()}.',
+      if (imageSize?.trim().isNotEmpty == true)
+        'Image size: ${imageSize!.trim()}.',
+    ];
+    return instructions.isEmpty
+        ? prompt
+        : '$prompt\n\n${instructions.join(' ')}';
+  }
+
+  static String? _chatImageSource(dynamic node) {
+    if (node is String) return node.trim();
+    if (node is! Map) return null;
+    final imageUrl = node['image_url'];
+    if (imageUrl is String) return imageUrl.trim();
+    if (imageUrl is Map) {
+      final url = imageUrl['url']?.toString().trim();
+      if (url?.isNotEmpty == true) return url;
+    }
+    for (final key in const ['url', 'b64_json', 'base64', 'data']) {
+      final value = node[key]?.toString().trim();
+      if (value?.isNotEmpty == true) return value;
+    }
+    return null;
+  }
+
+  static String? _chatImageMimeType(dynamic node) {
+    if (node is! Map) return null;
+    return (node['mime_type'] ?? node['mimeType'])?.toString().trim();
+  }
+
+  static String? _chatCompletionText(dynamic content) {
+    if (content is String) {
+      final text = content.trim();
+      return text.isEmpty ? null : text;
+    }
+    if (content is! List) return null;
+    final text = content
+        .whereType<Map>()
+        .where((item) => item['type'] == 'text')
+        .map((item) => item['text']?.toString().trim() ?? '')
+        .where((item) => item.isNotEmpty)
+        .join('\n');
+    return text.isEmpty ? null : text;
+  }
+
+  static bool _looksLikeBase64(String value) {
+    final compact = value.replaceAll(RegExp(r'\s+'), '');
+    return compact.length >= 16 &&
+        compact.length % 4 == 0 &&
+        RegExp(r'^[A-Za-z0-9+/]+={0,2}$').hasMatch(compact);
   }
 
   // ── Responses API ──────────────────────────────────────────────
@@ -972,4 +1271,10 @@ class _ResponsesToolChoiceCompatibilityException implements Exception {
 
   @override
   String toString() => message;
+}
+
+class _OpenAiChatImageAttempt {
+  const _OpenAiChatImageAttempt({this.images = const []});
+
+  final List<GeneratedImageResult> images;
 }

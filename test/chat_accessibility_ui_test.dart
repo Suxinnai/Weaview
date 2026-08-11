@@ -56,6 +56,15 @@ void main() {
 
     expect(find.byIcon(Icons.content_copy_rounded), findsOneWidget);
     expect(find.byIcon(Icons.more_vert_rounded), findsOneWidget);
+    final toggleSize = tester.getSize(
+      find.byKey(const ValueKey('message-action-toggle-user-0')),
+    );
+    final actionBarSize = tester.getSize(
+      find.byKey(const ValueKey('message-action-bar')),
+    );
+    expect(toggleSize.width, lessThanOrEqualTo(40));
+    expect(actionBarSize.width, lessThan(220));
+    expect(actionBarSize.height, lessThanOrEqualTo(44));
 
     state.dispose();
   });
@@ -104,6 +113,67 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.content_copy_rounded), findsOneWidget);
+    state.dispose();
+  });
+
+  testWidgets('request errors use a compact actionable card', (
+    WidgetTester tester,
+  ) async {
+    final state = WeaviewState();
+    await state.load();
+    var retried = false;
+    var choseModel = false;
+    const rawError =
+        '连接织线时出现了问题：HTTP 410: {"title":"Gone",'
+        '"detail":"The model \'deepseek-v4-flash\' has reached its end of life '
+        'and is no longer available."}\n\n请检查网络、API Key 或模型配置后重试。';
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ListView(
+            children: [
+              MessageBubble(
+                state: state,
+                message: ChatMessage.model(rawError, activity: 'requestError'),
+                index: 0,
+                assistantAvatar: '',
+                userAvatar: '',
+                onCopy: () {},
+                onRetry: () => retried = true,
+                onEdit: () {},
+                onTranslate: () {},
+                onBranch: () {},
+                onSaveCard: () {},
+                onDelete: () {},
+                onSpeak: () {},
+                onChooseModel: () => choseModel = true,
+                onDownloadAttachment: (_) {},
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('模型已停止服务'), findsOneWidget);
+    expect(find.textContaining('deepseek-v4-flash'), findsOneWidget);
+    expect(find.textContaining('HTTP 410'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('message-action-toggle-assistant-0')),
+      findsNothing,
+    );
+
+    await tester.tap(find.text('技术详情'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('HTTP 410'), findsOneWidget);
+
+    await tester.tap(find.text('切换模型'));
+    await tester.tap(find.text('重试'));
+    expect(choseModel, isTrue);
+    expect(retried, isTrue);
+
     state.dispose();
   });
 

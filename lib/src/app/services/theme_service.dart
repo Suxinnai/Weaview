@@ -105,6 +105,27 @@ class ThemeService {
     FontWeight weight = FontWeight.w400,
     double opacity = 1,
     double height = 1.35,
+  }) => TextStyle(
+    color: text(context).withValues(alpha: opacity),
+    fontSize: size,
+    fontWeight: weight,
+    fontStyle: FontStyle.normal,
+    height: height,
+    fontFamily: 'Inter',
+    fontFamilyFallback: const [
+      'PingFang SC',
+      'Microsoft YaHei',
+      'Noto Sans CJK SC',
+      'sans-serif',
+    ],
+  );
+
+  TextStyle personalizedTextStyle(
+    BuildContext context, {
+    double size = 14,
+    FontWeight weight = FontWeight.w400,
+    double opacity = 1,
+    double height = 1.35,
   }) {
     final effectiveWeight = switch (fontWeightMood) {
       'bold' when weight.value <= FontWeight.w500.value => FontWeight.w700,

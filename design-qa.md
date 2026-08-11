@@ -41,6 +41,16 @@
 - `.omx/audits/weaview-ui/simulator/fidelity-workboard.png`
 - `.omx/audits/weaview-ui/simulator/fidelity-branch.png`
 - `.omx/audits/weaview-ui/simulator/fidelity-usage.png`
+- `build/visual-qa/release-final-6s.png`
+- `build/visual-qa/home-reference-comparison.png`
+- `build/visual-qa/weaview-settings-restored.png`
+- `build/visual-qa/weaview-providers-restored.png`
+- `build/visual-qa/weaview-gemini-detail-restored.png`
+- `build/visual-qa/weaview-v2.0.1-empty-home.png`
+- `build/visual-qa/weaview-v2.0.1-home.png`
+- `build/visual-qa/weaview-v2.0.1-actions.png`
+- `build/visual-qa/weaview-v2.0.1-model-picker.png`
+- `build/visual-qa/weaview-v2.0.1-settings.png`
 
 ## Comparison history
 
@@ -50,9 +60,15 @@
 4. Provider rows were reduced from 108 px to 82 px, and redundant switch/status content was removed for unconfigured providers. The row remains fully tappable and exposes the details page.
 5. The comparison picker exposed an unbounded `Stack` at runtime. Its selected-model summary now has an explicit 36 px height and is protected by widget coverage.
 6. A provider-row interaction regression was caught after styling; the `InkWell` navigation target was restored and verified.
-7. The current simplification pass reduced the top-level settings navigation from six tabs to four, moved low-frequency pages under “更多”, and reduced visible model roles to chat and image generation.
+7. The current correction restores six direct settings destinations (`通用 / 提供商 / 默认模型 / 扩展服务 / 数据管理 / 关于织境`) and removes the ambiguous “更多” bucket and no-op header search action.
 8. Provider presets now use progressive disclosure: six general-purpose providers are visible initially and all 13 providers expand with a 240 ms ease-out size transition.
 9. Accent color and nickname controls were verified both with widget tests and on the emulator; the theme transition respects Android reduced-motion settings.
+10. The home screen was returned to its established branded hierarchy. The model selector, menu action and composer now use restrained translucent surfaces without adding onboarding copy or a competing new-session action.
+11. Assistant avatar editing and emotional-response controls were restored to the general settings page and are covered by interaction tests.
+12. Message action toggles are compact touch targets instead of full-width strips. HTTP failures are summarized in an actionable card, with raw payloads hidden under technical details.
+13. Message actions now expand as a single short translucent capsule (under 220 px wide and 44 px high in widget verification), with compact copy, retry, edit, read-aloud and overflow controls positioned directly below the selected message.
+14. Official Gemini image generation and connection testing use the native Interactions endpoint, while custom OpenAI-compatible Gemini gateways use `/chat/completions` and parse `message.images`; both routes retain the 1–4 image workflow.
+15. Startup preference and conversation restoration now begin after Flutter's first frame, then heavy conversation migration completes without blocking the native splash. The same release emulator improved from roughly 8–9 seconds to 5.6 seconds to the first rendered app frame.
 
 ## Final findings
 
@@ -69,13 +85,14 @@
 - Model search/filter tabs, provider grouping, management entry and role-aware selection.
 - Sidebar workspace shortcuts, history empty state, account/settings entry.
 - Settings tabs, editable theme accent, nickname dialog, provider list and provider detail/model subpage.
+- Assistant avatar picker and persisted emotional-response switch.
 - Gemini model list includes all four requested image-model API IDs; mainstream image presets include OpenAI, Grok, Seedream, Recraft, Stability AI, FLUX, Ideogram and Replicate official models.
 - Workboard, branch graph and usage-statistics navigation/back actions.
 - Multi-image generation count (1–4), multi-select gallery, save-selected and full-screen preview affordances.
-- Android debug build starts past the splash screen, returns cleanly from background, and showed no monotonic memory growth across settings/provider stress navigation and resume.
+- Android release build starts past the splash screen, restores local configuration, and returns to the home screen without clearing application data.
 
 ## Result
 
-The implemented UI preserves the prototype's hierarchy, cool neutral palette, teal interaction color, rounded-card system, compact navigation and bottom composer while remaining truthful to local data. All discovered P0–P2 visual or interaction issues were fixed and re-captured.
+The implemented UI preserves the app's original home identity, cool neutral palette, teal interaction color, rounded-card system, direct settings navigation and bottom composer while remaining truthful to local data. All discovered P0–P2 visual or interaction issues were fixed. The v2.0.1 empty-home comparison is captured in `build/visual-qa/home-reference-comparison.png`; the real-device message action state is captured in `build/visual-qa/weaview-v2.0.1-actions.png` and exposes five 38 dp targets in a single compact capsule. Static analysis is clean and the complete 185-test suite passes. Three signed release APKs were rebuilt as v2.0.1+44, verified as upgrade-compatible with v1.0.33/v2.0.0, and installed successfully on the Android emulator.
 
 final result: passed

@@ -238,10 +238,25 @@ class WeaviewState extends ChangeNotifier {
     _personal.load(prefs);
     _personal.syncUserNameIntoProfile(prefs: prefs);
     _theme.load(prefs);
+    _providers.load(prefs);
 
-    final savedSessions = await _migrateGeneratedImageAttachments(
-      prefs.loadChatSessions(),
-    );
+    // Provider and appearance settings are enough to render a functional
+    // home screen. Reveal it before parsing and migrating potentially large
+    // conversation archives so startup never appears frozen on the gate.
+    loaded = true;
+    notifyListeners();
+
+    final persistedSessions = prefs.loadChatSessions();
+    List<ChatSession> savedSessions;
+    try {
+      savedSessions = await _migrateGeneratedImageAttachments(
+        persistedSessions,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Generated image attachment migration skipped: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      savedSessions = persistedSessions;
+    }
     _sessions.load(savedSessions);
     final savedSessionId = prefs.lastSessionId;
     final shouldResumeSession =
@@ -263,9 +278,6 @@ class WeaviewState extends ChangeNotifier {
     workCards = prefs.loadWorkCards();
     tokenUsageRecords = prefs.loadTokenUsageRecords();
 
-    _providers.load(prefs);
-
-    loaded = true;
     notifyListeners();
     if (!_personal.hasProfileDetails && chatSessions.isNotEmpty) {
       unawaited(
@@ -300,6 +312,20 @@ class WeaviewState extends ChangeNotifier {
     double opacity = 1,
     double height = 1.35,
   }) => _theme.textStyle(
+    context,
+    size: size,
+    weight: weight,
+    opacity: opacity,
+    height: height,
+  );
+
+  TextStyle personalizedTextStyle(
+    BuildContext context, {
+    double size = 14,
+    FontWeight weight = FontWeight.w400,
+    double opacity = 1,
+    double height = 1.35,
+  }) => _theme.personalizedTextStyle(
     context,
     size: size,
     weight: weight,
@@ -971,7 +997,8 @@ class WeaviewState extends ChangeNotifier {
           current
             ..content =
                 '连接织线时出现了问题：${_friendlyAiError(error)}\n\n请检查网络、API Key 或模型配置后重试。'
-            ..isThinking = false;
+            ..isThinking = false
+            ..activity = 'requestError';
         },
       );
     } finally {

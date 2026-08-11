@@ -98,30 +98,29 @@ class ChatInputDock extends StatelessWidget {
     final canSubmit = imageGenerationMode
         ? hasText
         : hasText || pendingAttachments.isNotEmpty;
-    final radius = BorderRadius.circular(dockExpanded ? 22 : 28);
+    final radius = BorderRadius.circular(dockExpanded ? 22 : 26);
     final glassBase = dark ? Colors.black : Colors.white;
-    final textColor = state.text(context);
     final dockSurface = AnimatedContainer(
       duration: const Duration(milliseconds: 120),
       curve: Curves.easeOut,
       decoration: BoxDecoration(
-        color: glassBase.withValues(alpha: dark ? 0.24 : 0.30),
+        color: glassBase.withValues(alpha: dark ? 0.27 : 0.31),
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Colors.white.withValues(alpha: dark ? 0.05 : 0.26),
-            glassBase.withValues(alpha: dark ? 0.18 : 0.12),
+            Colors.white.withValues(alpha: dark ? 0.07 : 0.28),
+            glassBase.withValues(alpha: dark ? 0.19 : 0.12),
           ],
         ),
         borderRadius: radius,
         border: Border.all(
-          color: textColor.withValues(alpha: dark ? 0.08 : 0.10),
+          color: state.text(context).withValues(alpha: dark ? 0.1 : 0.11),
         ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: dark ? 0.18 : 0.065),
-            blurRadius: keyboardOpen ? 16 : 24,
+            blurRadius: keyboardOpen ? 14 : 20,
             spreadRadius: -9,
             offset: Offset(0, keyboardOpen ? 8 : 13),
           ),
@@ -231,6 +230,13 @@ class ChatInputDock extends StatelessWidget {
                         opacity: 0.38,
                       ),
                       border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      disabledBorder: InputBorder.none,
+                      errorBorder: InputBorder.none,
+                      focusedErrorBorder: InputBorder.none,
+                      filled: false,
+                      fillColor: Colors.transparent,
                       isDense: true,
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 9,
@@ -298,16 +304,19 @@ class ChatInputDock extends StatelessWidget {
         ),
       ),
     );
-    return AnimatedPadding(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOutCubic,
-      padding: EdgeInsets.only(bottom: keyboardInset),
-      child: Align(
-        alignment: Alignment.bottomCenter,
-        child: SafeArea(
-          top: false,
-          minimum: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-          child: Padding(padding: EdgeInsets.zero, child: dock),
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.25,
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.only(bottom: keyboardInset),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: SafeArea(
+            top: false,
+            minimum: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+            child: Padding(padding: EdgeInsets.zero, child: dock),
+          ),
         ),
       ),
     );

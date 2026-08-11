@@ -95,42 +95,45 @@ class ChatBody extends StatelessWidget {
                           child: Opacity(opacity: value, child: child),
                         );
                       },
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 20,
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              'WEAVIEW CREATIVE STUDIO',
-                              textAlign: TextAlign.center,
-                              style: state
-                                  .textStyle(
-                                    context,
-                                    size: 10.5,
-                                    weight: FontWeight.w700,
-                                    opacity: 0.48,
-                                  )
-                                  .copyWith(letterSpacing: 1.6),
-                            ),
-                            const SizedBox(height: 12),
-                            Semantics(
-                              header: true,
-                              child: Text(
-                                '今天，你想编织什么梦境？',
-                                textAlign: TextAlign.center,
-                                style: state.textStyle(
-                                  context,
-                                  size: 24,
-                                  weight: FontWeight.w600,
-                                  opacity: 0.9,
-                                  height: 1.25,
+                      child: Transform.translate(
+                        offset: const Offset(0, -54),
+                        child: MediaQuery.withClampedTextScaling(
+                          maxScaleFactor: 1.2,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'WEAVIEW CREATIVE STUDIO',
+                                  textAlign: TextAlign.center,
+                                  style: state
+                                      .textStyle(
+                                        context,
+                                        size: 10,
+                                        weight: FontWeight.w700,
+                                        opacity: 0.42,
+                                      )
+                                      .copyWith(letterSpacing: 1.8),
                                 ),
-                              ),
+                                const SizedBox(height: 13),
+                                Semantics(
+                                  header: true,
+                                  child: Text(
+                                    '今天，你想编织什么梦境？',
+                                    textAlign: TextAlign.center,
+                                    style: state.textStyle(
+                                      context,
+                                      size: 23,
+                                      weight: FontWeight.w600,
+                                      opacity: 0.88,
+                                      height: 1.25,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
@@ -158,6 +161,7 @@ class ChatBody extends StatelessWidget {
                       onSaveCard: () => onSaveCardMessage(index),
                       onDelete: () => onDeleteMessage(index),
                       onSpeak: () => onSpeakMessage(message),
+                      onChooseModel: onChooseModel,
                       onDownloadAttachment: onDownloadAttachment,
                     );
                   },

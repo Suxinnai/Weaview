@@ -4,6 +4,28 @@
 
 ## Unreleased
 
+## 2.0.1 - 2026-08-11
+
+### 中文
+
+- 恢复首页原有的菜单、模型选择、中央品牌标题与底部单层输入框排版，去除干扰主任务的冗余引导与卡片。
+- 重新整理对话消息的头像、气泡、正文行距与操作区；点击消息后以紧凑的半透明胶囊显示复制、重试、编辑、朗读和更多操作，不再出现横贯页面的省略号空白条。
+- 将原始 HTTP 错误收纳为可操作的错误卡片，优先提供切换模型和重试，并把技术详情默认折叠。
+- Gemini 官方接口继续使用原生 Interactions 生图；自定义 OpenAI 兼容网关会自动使用 `/chat/completions`，解析 `message.images` 中的图片并支持一次生成 1–4 张。
+- 修复自定义 Gemini 文本模型忽略 Base URL、手动模型 ID 被替换以及模型列表认证方式不匹配的问题。
+- 恢复设置中的直接分类、助手头像与情绪回应控制，并继续保留主题、强调色和昵称编辑能力。
+- 优化首帧加载、会话恢复和图片缓存边界，降低启动卡住以及长会话、多图片场景的异常内存占用。
+
+### English
+
+- Restored the established home composition: menu, model selector, centered brand statement, and a single-layer bottom composer, without redundant onboarding cards.
+- Refined avatar, bubble, typography, and spacing in conversations. Tapping a message now reveals copy, retry, edit, read-aloud, and more actions in one compact translucent capsule instead of a full-width ellipsis strip.
+- Replaced raw HTTP payloads with actionable error cards that prioritize switching models and retrying while keeping technical details collapsed.
+- Official Gemini image generation continues to use the native Interactions API. Custom OpenAI-compatible gateways automatically use `/chat/completions`, parse images from `message.images`, and support 1–4 outputs.
+- Fixed custom Gemini text models ignoring Base URL, manual model IDs being replaced, and incompatible model-list authentication.
+- Restored direct settings categories, assistant avatar controls, and emotional responses while retaining editable theme, accent color, and nickname controls.
+- Improved first-frame loading, conversation restoration, and image-cache bounds to reduce startup stalls and abnormal memory growth in long or image-heavy sessions.
+
 ## 2.0.0 - 2026-08-09
 
 ### 中文

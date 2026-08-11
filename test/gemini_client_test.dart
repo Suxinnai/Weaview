@@ -61,7 +61,7 @@ void main() {
   });
 
   group('GeminiClient image generation', () {
-    test('posts native generateContent image requests', () async {
+    test('posts native Interactions image requests', () async {
       String? requestPath;
       String? apiKeyHeader;
       Map<String, dynamic>? requestBody;
@@ -80,19 +80,17 @@ void main() {
           ..headers.contentType = ContentType.json
           ..write(
             jsonEncode({
-              'candidates': [
+              'steps': [
                 {
-                  'content': {
-                    'parts': [
-                      {'text': 'refined prompt'},
-                      {
-                        'inlineData': {
-                          'mimeType': 'image/png',
-                          'data': 'ZmFrZS1pbWFnZQ==',
-                        },
-                      },
-                    ],
-                  },
+                  'type': 'model_output',
+                  'content': [
+                    {'type': 'text', 'text': 'refined prompt'},
+                    {
+                      'type': 'image',
+                      'mime_type': 'image/png',
+                      'data': 'ZmFrZS1pbWFnZQ==',
+                    },
+                  ],
                 },
               ],
             }),
@@ -104,7 +102,7 @@ void main() {
         final result = await const GeminiClient().generateImage(
           apiKey: 'test-key',
           baseUrl: 'http://127.0.0.1:${server.port}',
-          model: 'gemini-3.1-flash-image-preview',
+          model: 'gemini-3.1-flash-image',
           prompt: 'a tiny glass planet',
           attachments: [
             MessageAttachment(
@@ -118,24 +116,19 @@ void main() {
           timeout: const Duration(seconds: 5),
         );
 
-        expect(
-          requestPath,
-          '/v1beta/models/gemini-3.1-flash-image-preview:generateContent',
-        );
+        expect(requestPath, '/v1beta/interactions');
         expect(apiKeyHeader, 'test-key');
-        expect(requestBody?['generationConfig']?['responseModalities'], [
-          'TEXT',
-          'IMAGE',
-        ]);
-        final parts =
-            ((requestBody?['contents'] as List).single['parts'] as List);
+        expect(requestBody?['model'], 'gemini-3.1-flash-image');
+        expect(requestBody?['response_format'], {'type': 'image'});
+        final parts = requestBody?['input'] as List;
         expect(parts, hasLength(2));
-        expect(parts.last['inlineData']?['mimeType'], 'image/png');
+        expect(parts.last['type'], 'image');
+        expect(parts.last['mime_type'], 'image/png');
         expect(
-          parts.last['inlineData']?['data'],
+          parts.last['data'],
           base64Encode(utf8.encode('reference-image')),
         );
-        expect(result.route, contains('gemini-3.1-flash-image-preview'));
+        expect(result.route, '/v1beta/interactions');
         expect(result.revisedPrompt, 'refined prompt');
         expect(result.bytes, utf8.encode('fake-image'));
       } finally {
@@ -159,32 +152,32 @@ void main() {
           ..headers.contentType = ContentType.json
           ..write(
             jsonEncode({
-              'candidates': [
+              'steps': [
                 {
-                  'content': {
-                    'parts': [
-                      {
-                        'thought': true,
-                        'inlineData': {
-                          'mimeType': 'image/png',
-                          'data': base64Encode(utf8.encode('draft-image')),
-                        },
-                      },
-                      {'text': 'final variants'},
-                      {
-                        'inlineData': {
-                          'mimeType': 'image/png',
-                          'data': base64Encode(utf8.encode('image-one')),
-                        },
-                      },
-                      {
-                        'inline_data': {
-                          'mime_type': 'image/webp',
-                          'data': base64Encode(utf8.encode('image-two')),
-                        },
-                      },
-                    ],
-                  },
+                  'type': 'thought',
+                  'summary': [
+                    {
+                      'type': 'image',
+                      'mime_type': 'image/png',
+                      'data': base64Encode(utf8.encode('draft-image')),
+                    },
+                  ],
+                },
+                {
+                  'type': 'model_output',
+                  'content': [
+                    {'type': 'text', 'text': 'final variants'},
+                    {
+                      'type': 'image',
+                      'mime_type': 'image/png',
+                      'data': base64Encode(utf8.encode('image-one')),
+                    },
+                    {
+                      'type': 'image',
+                      'mime_type': 'image/webp',
+                      'data': base64Encode(utf8.encode('image-two')),
+                    },
+                  ],
                 },
               ],
             }),
@@ -211,11 +204,11 @@ void main() {
           'image-two',
         ]);
         expect(results.last.mimeType, 'image/webp');
-        expect(requestBody?['generationConfig']?['responseFormat']?['image'], {
-          'aspectRatio': '16:9',
-          'imageSize': '2K',
+        expect(requestBody?['response_format'], {
+          'type': 'image',
+          'aspect_ratio': '16:9',
+          'image_size': '2K',
         });
-        expect(requestBody?['generationConfig']?['imageConfig'], isNull);
       } finally {
         await serving.cancel();
         await server.close(force: true);
@@ -235,20 +228,18 @@ void main() {
             ..headers.contentType = ContentType.json
             ..write(
               jsonEncode({
-                'candidates': [
+                'steps': [
                   {
-                    'content': {
-                      'parts': [
-                        {
-                          'inlineData': {
-                            'mimeType': 'image/png',
-                            'data': base64Encode(
-                              utf8.encode('image-$requestCount'),
-                            ),
-                          },
-                        },
-                      ],
-                    },
+                    'type': 'model_output',
+                    'content': [
+                      {
+                        'type': 'image',
+                        'mime_type': 'image/png',
+                        'data': base64Encode(
+                          utf8.encode('image-$requestCount'),
+                        ),
+                      },
+                    ],
                   },
                 ],
               }),

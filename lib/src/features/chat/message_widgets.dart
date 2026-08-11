@@ -31,6 +31,7 @@ class MessageBubble extends StatefulWidget {
     required this.onDelete,
     required this.onSpeak,
     required this.onDownloadAttachment,
+    this.onChooseModel,
   });
 
   final WeaviewState state;
@@ -47,6 +48,7 @@ class MessageBubble extends StatefulWidget {
   final VoidCallback onDelete;
   final VoidCallback onSpeak;
   final ValueChanged<MessageAttachment> onDownloadAttachment;
+  final VoidCallback? onChooseModel;
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
@@ -113,6 +115,8 @@ class _MessageBubbleState extends State<MessageBubble> {
     final hasActionText =
         message.content.trim().isNotEmpty ||
         message.comparisonResults.any((result) => result.hasText);
+    final conversationError = _ConversationError.fromMessage(message);
+    final showMessageActions = hasActionText && conversationError == null;
     final width = MediaQuery.sizeOf(context).width;
     final maxWidth = isUser ? width * 0.82 : width - 58;
     final textAlign = _messageTextAlign(state);
@@ -145,7 +149,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               child: Semantics(
                 container: true,
                 label: '用户消息',
-                hint: hasActionText ? '可通过下方操作按钮打开消息操作' : null,
+                hint: hasActionText ? '轻触消息可以打开消息操作' : null,
                 child: _StyledMessageSurface(
                   state: state,
                   isUser: true,
@@ -166,7 +170,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                         Text(
                           message.content,
                           textAlign: textAlign,
-                          style: state.textStyle(
+                          style: state.personalizedTextStyle(
                             context,
                             size: 14.5,
                             height: 1.55,
@@ -242,7 +246,7 @@ class _MessageBubbleState extends State<MessageBubble> {
       child: Semantics(
         container: true,
         label: '助手消息',
-        hint: hasActionText ? '可通过下方操作按钮打开消息操作' : null,
+        hint: showMessageActions ? '轻触消息可以打开消息操作' : null,
         child: Column(
           crossAxisAlignment: _messageColumnAlignment(state),
           children: [
@@ -288,6 +292,13 @@ class _MessageBubbleState extends State<MessageBubble> {
                           ModelComparisonPanel(
                             state: state,
                             results: message.comparisonResults,
+                          )
+                        else if (conversationError != null)
+                          _AssistantErrorCard(
+                            state: state,
+                            error: conversationError,
+                            onRetry: widget.onRetry,
+                            onChooseModel: widget.onChooseModel,
                           )
                         else if (message.attachments.isNotEmpty ||
                             message.content.trim().isNotEmpty ||
@@ -351,7 +362,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                       ],
                     ),
             ),
-            if (hasActionText)
+            if (showMessageActions)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
                 child: _MessageActionToggle(
@@ -365,7 +376,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               ),
             _ActionReveal(
               key: _actionsKey,
-              visible: _actionsVisible,
+              visible: _actionsVisible && showMessageActions,
               child: MessageActionBar(
                 state: state,
                 isModel: true,
@@ -427,9 +438,6 @@ class _MessageActionToggle extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = visible ? '收起操作' : '显示操作';
     final text = state.text(context);
-    final background = state
-        .layer(context)
-        .withValues(alpha: state.isDark(context) ? 0.34 : 0.54);
     return Align(
       alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
       child: Semantics(
@@ -438,28 +446,34 @@ class _MessageActionToggle extends StatelessWidget {
         child: Tooltip(
           message: label,
           child: Material(
-            color: background,
-            borderRadius: BorderRadius.circular(999),
+            color: Colors.transparent,
+            shape: const CircleBorder(),
             child: InkWell(
               key: ValueKey('message-action-toggle-$keyValue'),
               borderRadius: BorderRadius.circular(999),
               onTap: onTap,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              child: SizedBox(
+                width: 40,
+                height: 38,
                 child: Center(
                   child: Container(
-                    width: 30,
-                    height: 30,
+                    width: 28,
+                    height: 28,
                     decoration: BoxDecoration(
-                      color: text.withValues(alpha: 0.05),
+                      color: state
+                          .layer(context)
+                          .withValues(
+                            alpha: state.isDark(context) ? 0.34 : 0.58,
+                          ),
                       borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: text.withValues(alpha: 0.055)),
                     ),
                     child: Icon(
                       visible
                           ? Icons.keyboard_arrow_up_rounded
                           : Icons.more_horiz_rounded,
-                      size: 18,
-                      color: text.withValues(alpha: 0.58),
+                      size: 17,
+                      color: text.withValues(alpha: 0.54),
                     ),
                   ),
                 ),
@@ -468,6 +482,242 @@ class _MessageActionToggle extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AssistantErrorCard extends StatefulWidget {
+  const _AssistantErrorCard({
+    required this.state,
+    required this.error,
+    required this.onRetry,
+    this.onChooseModel,
+  });
+
+  final WeaviewState state;
+  final _ConversationError error;
+  final VoidCallback onRetry;
+  final VoidCallback? onChooseModel;
+
+  @override
+  State<_AssistantErrorCard> createState() => _AssistantErrorCardState();
+}
+
+class _AssistantErrorCardState extends State<_AssistantErrorCard> {
+  bool _detailsVisible = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = widget.state;
+    final text = state.text(context);
+    final dark = state.isDark(context);
+    final accent = state.accents[0];
+    return Container(
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.sizeOf(context).width - 58,
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
+      decoration: BoxDecoration(
+        color: state.layer(context).withValues(alpha: dark ? 0.50 : 0.68),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: text.withValues(alpha: 0.075)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: dark ? 0.12 : 0.045),
+            blurRadius: 18,
+            spreadRadius: -8,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: dark ? 0.16 : 0.11),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(widget.error.icon, size: 19, color: accent),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.error.title,
+                      style: state.textStyle(
+                        context,
+                        size: 14.5,
+                        weight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      widget.error.summary,
+                      style: state.textStyle(
+                        context,
+                        size: 13,
+                        height: 1.5,
+                        opacity: 0.66,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 13),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (widget.onChooseModel != null)
+                OutlinedButton.icon(
+                  onPressed: widget.onChooseModel,
+                  icon: const Icon(Icons.swap_horiz_rounded, size: 17),
+                  label: const Text('切换模型'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: text.withValues(alpha: 0.82),
+                    side: BorderSide(color: text.withValues(alpha: 0.10)),
+                    minimumSize: const Size(0, 40),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                  ),
+                ),
+              FilledButton.icon(
+                onPressed: widget.onRetry,
+                icon: const Icon(Icons.refresh_rounded, size: 17),
+                label: const Text('重试'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: accent,
+                  minimumSize: const Size(0, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: () =>
+                    setState(() => _detailsVisible = !_detailsVisible),
+                icon: Icon(
+                  _detailsVisible
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                ),
+                label: Text(_detailsVisible ? '收起详情' : '技术详情'),
+                style: TextButton.styleFrom(
+                  foregroundColor: text.withValues(alpha: 0.52),
+                  minimumSize: const Size(0, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                ),
+              ),
+            ],
+          ),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOutCubic,
+            child: _detailsVisible
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: text.withValues(alpha: dark ? 0.055 : 0.035),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: SelectableText(
+                        widget.error.raw,
+                        style: state.textStyle(
+                          context,
+                          size: 11,
+                          height: 1.45,
+                          opacity: 0.54,
+                        ),
+                      ),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConversationError {
+  const _ConversationError({
+    required this.title,
+    required this.summary,
+    required this.raw,
+    required this.icon,
+  });
+
+  final String title;
+  final String summary;
+  final String raw;
+  final IconData icon;
+
+  static _ConversationError? fromMessage(ChatMessage message) {
+    final raw = message.content.trim();
+    final isError =
+        message.activity == 'requestError' ||
+        raw.startsWith('连接织线时出现了问题：') ||
+        raw.startsWith('生图失败：');
+    if (!isError || raw.isEmpty) return null;
+
+    final lower = raw.toLowerCase();
+    final model = RegExp(
+      r'''model\s+['"]([^'"]+)['"]''',
+      caseSensitive: false,
+    ).firstMatch(raw)?.group(1);
+    if (lower.contains('http 410') ||
+        lower.contains('end of life') ||
+        lower.contains('no longer available')) {
+      return _ConversationError(
+        title: '模型已停止服务',
+        summary: model == null
+            ? '当前模型已被提供商下线，请切换到可用模型后重试。'
+            : '“$model” 已被提供商下线，请切换到可用模型后重试。',
+        raw: raw,
+        icon: Icons.swap_horiz_rounded,
+      );
+    }
+    if (lower.contains('http 401') || lower.contains('http 403')) {
+      return _ConversationError(
+        title: '身份验证失败',
+        summary: 'API Key 无效、已过期或没有访问当前模型的权限。',
+        raw: raw,
+        icon: Icons.key_off_outlined,
+      );
+    }
+    if (lower.contains('http 429') || lower.contains('rate limit')) {
+      return _ConversationError(
+        title: '请求过于频繁',
+        summary: '提供商暂时限制了请求，请稍后重试或切换模型。',
+        raw: raw,
+        icon: Icons.hourglass_top_rounded,
+      );
+    }
+    if (lower.contains('timeout') || raw.contains('请求超时')) {
+      return _ConversationError(
+        title: '请求超时',
+        summary: '模型在限定时间内没有响应，请检查网络后重试。',
+        raw: raw,
+        icon: Icons.schedule_rounded,
+      );
+    }
+    return _ConversationError(
+      title: raw.startsWith('生图失败：') ? '图片生成失败' : '请求失败',
+      summary: '请检查网络、API Key 和模型配置，或切换模型后重试。',
+      raw: raw,
+      icon: Icons.error_outline_rounded,
     );
   }
 }
@@ -912,7 +1162,7 @@ class _ActionReveal extends StatelessWidget {
                   ? Alignment.centerRight
                   : Alignment.centerLeft,
               child: Padding(
-                padding: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.only(top: 5),
                 child: child,
               ),
             )
@@ -1101,10 +1351,14 @@ class _InlineModelEditor extends StatelessWidget {
           maxLines: 14,
           keyboardType: TextInputType.multiline,
           textInputAction: TextInputAction.newline,
-          style: state.textStyle(context, size: 14.5, height: 1.55),
+          style: state.personalizedTextStyle(context, size: 14.5, height: 1.55),
           decoration: InputDecoration(
             hintText: '编辑 AI 回复内容',
-            hintStyle: state.textStyle(context, size: 14.5, opacity: 0.42),
+            hintStyle: state.personalizedTextStyle(
+              context,
+              size: 14.5,
+              opacity: 0.42,
+            ),
             filled: true,
             fillColor: text.withValues(alpha: dark ? 0.08 : 0.035),
             contentPadding: const EdgeInsets.all(13),

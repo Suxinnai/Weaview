@@ -188,6 +188,43 @@ extension SettingsTabs on SettingsSheetState {
             DividerLine(state: state),
             SettingsRow(
               state: state,
+              title: '助手头像',
+              subtitle: '自定义 AI 伙伴的形象',
+              showChevron: false,
+              onTap: () => widget.onPickAvatar(false),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (state.assistantAvatar.isNotEmpty)
+                    TinyIcon(
+                      icon: Icons.delete_outline_rounded,
+                      color: Colors.red,
+                      onTap: () => state.updateAssistantAvatar(''),
+                    ),
+                  TinyIcon(
+                    icon: Icons.edit_outlined,
+                    color: state.text(context),
+                    onTap: () => widget.onPickAvatar(false),
+                  ),
+                ],
+              ),
+            ),
+            DividerLine(state: state),
+            SettingsRow(
+              state: state,
+              title: '情绪化回应',
+              subtitle: '控制回应中的感性表达',
+              showChevron: false,
+              onTap: () => state.setEmotionEnabled(!state.emotionEnabled),
+              trailing: WeaveSwitch(
+                state: state,
+                value: state.emotionEnabled,
+                onChanged: state.setEmotionEnabled,
+              ),
+            ),
+            DividerLine(state: state),
+            SettingsRow(
+              state: state,
               title: '记忆管理',
               subtitle: '查看或清除AI长效记忆',
               showChevron: true,

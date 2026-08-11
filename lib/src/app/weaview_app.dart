@@ -19,7 +19,12 @@ class _WeaviewAppState extends State<WeaviewApp> {
   void initState() {
     super.initState();
     state = WeaviewState();
-    _loadState();
+    // Let Flutter paint the startup surface before platform preferences are
+    // opened. Large conversation archives can make SharedPreferences warm-up
+    // slow on older devices; deferring it keeps the native splash responsive.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _loadState();
+    });
   }
 
   @override
