@@ -78,7 +78,7 @@ class AiGateway {
         provider: provider,
         assignment: assignment,
         apiKey: provider.apiKey,
-        baseUrl: '',
+        baseUrl: provider.baseUrl,
         modelId: _geminiModelId(assignment, provider),
       );
     }
@@ -129,6 +129,18 @@ class AiGateway {
     }
     _assertApiKey(route);
 
+    if (_usesOpenAiCompatibilityForGemini(route)) {
+      return _openAiClient.generate(
+        apiKey: route.apiKey,
+        baseUrl: route.baseUrl,
+        model: route.modelId,
+        messages: messages,
+        systemInstruction: systemInstruction,
+        onThemeUpdate: onThemeUpdate,
+        timeout: chatRequestTimeout,
+      );
+    }
+
     return switch (route.type) {
       _ProviderType.gemini => _geminiClient.generate(
         apiKey: route.apiKey,
@@ -170,7 +182,8 @@ class AiGateway {
   }) async {
     final route = _resolveRoute(provider: provider, assignment: assignment);
 
-    if (route.type == _ProviderType.gemini) {
+    if (route.type == _ProviderType.gemini &&
+        !_usesOpenAiCompatibilityForGemini(route)) {
       final text = await generate(
         messages: messages,
         systemInstruction: systemInstruction,
@@ -295,6 +308,24 @@ class AiGateway {
         failedCount: requestedCount - images.length,
       );
     }
+    if (_usesOpenAiCompatibilityForGemini(route)) {
+      final images = await _openAiClient.generateChatImages(
+        apiKey: route.apiKey,
+        baseUrl: route.baseUrl,
+        model: route.modelId,
+        prompt: guardedPrompt,
+        attachments: attachments,
+        timeout: imageRequestTimeout,
+        outputCount: requestedCount,
+        aspectRatio: _geminiAspectRatio(aspectRatio, size),
+        imageSize: _geminiImageSize(route.modelId, guardedPrompt),
+      );
+      return GeneratedImageBatchResult(
+        images: images,
+        requestedCount: requestedCount,
+        failedCount: requestedCount - images.length,
+      );
+    }
     if (_shouldUseNativeGeminiImage(route)) {
       final images = await _geminiClient.generateImages(
         apiKey: route.apiKey,
@@ -371,7 +402,7 @@ class AiGateway {
     if (preset != null && _usesNativeImageClient(preset.imageApi)) {
       return preset.models;
     }
-    if (_isGeminiProvider(providerName)) {
+    if (_isGeminiProvider(providerName) && _usesNativeGeminiApi(baseUrl)) {
       final fetched = await _geminiClient.fetchModels(
         apiKey: apiKey,
         baseUrl: baseUrl,
@@ -418,11 +449,19 @@ class AiGateway {
         );
         return '连接成功，生图接口响应正常：${result.first.route}';
       }
-      if (_isGeminiProvider(providerName)) {
+      if (_isGeminiProvider(providerName) && _usesNativeGeminiApi(baseUrl)) {
         return _geminiClient.testImageConnection(
           apiKey: apiKey,
           baseUrl: baseUrl,
           model: model,
+          timeout: imageRequestTimeout,
+        );
+      }
+      if (_isGeminiProvider(providerName)) {
+        return _openAiClient.testChatImageConnection(
+          apiKey: apiKey,
+          baseUrl: baseUrl,
+          imageModel: model,
           timeout: imageRequestTimeout,
         );
       }
@@ -478,7 +517,7 @@ class AiGateway {
       final matched = provider.models.firstWhereOrNull(
         (m) => m.name == assignment.model || m.id == assignment.model,
       );
-      if (matched != null) return matched.id;
+      return matched?.id ?? assignment.model;
     }
     return 'gemini-2.5-pro';
   }
@@ -522,7 +561,10 @@ class AiGateway {
   }
 
   static bool _shouldUseNativeGeminiImage(_ResolvedRoute route) {
-    if (route.type != _ProviderType.gemini) return false;
+    if (route.type != _ProviderType.gemini ||
+        _usesOpenAiCompatibilityForGemini(route)) {
+      return false;
+    }
     return looksLikeImageGenerationModel(
       id: route.modelId,
       name: route.modelId,
@@ -544,6 +586,18 @@ class AiGateway {
         kind == ImageApiKind.bfl ||
         kind == ImageApiKind.ideogram ||
         kind == ImageApiKind.replicate;
+  }
+
+  static bool _usesOpenAiCompatibilityForGemini(_ResolvedRoute route) {
+    return route.type == _ProviderType.gemini &&
+        !_usesNativeGeminiApi(route.baseUrl);
+  }
+
+  static bool _usesNativeGeminiApi(String baseUrl) {
+    final trimmed = baseUrl.trim();
+    if (trimmed.isEmpty) return true;
+    final uri = Uri.tryParse(trimmed);
+    return uri?.host.toLowerCase() == 'generativelanguage.googleapis.com';
   }
 
   static AiProvider? _providerPreset(String providerName) {

@@ -263,19 +263,25 @@ class GeminiClient {
     String? aspectRatio,
     String? imageSize,
   }) async {
-    final uri = _generateContentUri(baseUrl: baseUrl, model: model);
-    final imageParts = <Map<String, dynamic>>[];
+    final uri = _interactionsUri(baseUrl: baseUrl);
+    final input = <Map<String, dynamic>>[
+      {'type': 'text', 'text': prompt},
+    ];
     for (final attachment in attachments.where((item) => item.isImage)) {
       final file = File(attachment.path);
       if (!await file.exists()) continue;
       final bytes = await file.readAsBytes();
-      imageParts.add({
-        'inlineData': {
-          'mimeType': attachment.resolvedImageMimeType(headerBytes: bytes),
-          'data': base64Encode(bytes),
-        },
+      input.add({
+        'type': 'image',
+        'mime_type': attachment.resolvedImageMimeType(headerBytes: bytes),
+        'data': base64Encode(bytes),
       });
     }
+    final responseFormat = <String, dynamic>{
+      'type': 'image',
+      'aspect_ratio': ?aspectRatio,
+      'image_size': ?imageSize,
+    };
     final response = await http
         .post(
           uri,
@@ -285,37 +291,21 @@ class GeminiClient {
             'x-goog-api-key': apiKey,
           },
           body: jsonEncode({
-            'contents': [
-              {
-                'role': 'user',
-                'parts': [
-                  {'text': prompt},
-                  ...imageParts,
-                ],
-              },
-            ],
-            'generationConfig': {
-              'responseModalities': ['TEXT', 'IMAGE'],
-              if (aspectRatio != null || imageSize != null)
-                'responseFormat': {
-                  'image': {
-                    'aspectRatio': ?aspectRatio,
-                    'imageSize': ?imageSize,
-                  },
-                },
-            },
+            'model': _normalizeGeminiModel(model),
+            'input': input,
+            'response_format': responseFormat,
           }),
         )
         .timeout(timeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
-        'Gemini image HTTP ${response.statusCode}: ${response.body}',
+        'Gemini Interactions image HTTP ${response.statusCode}: ${response.body}',
       );
     }
-    final parsed = _parseGeminiImageResponse(jsonDecode(response.body));
+    final parsed = _parseGeminiInteractionResponse(jsonDecode(response.body));
     if (parsed.isEmpty) {
       throw Exception(
-        'Gemini image response did not include inline image data.',
+        'Gemini Interactions response did not include inline image data.',
       );
     }
     return [
@@ -323,21 +313,14 @@ class GeminiClient {
         GeneratedImageResult(
           bytes: image.bytes,
           mimeType: image.mimeType,
-          route:
-              '/v1beta/models/${_normalizeGeminiModel(model)}:generateContent',
+          route: '/v1beta/interactions',
           revisedPrompt: image.text.trim().isEmpty ? null : image.text.trim(),
         ),
     ];
   }
 
-  static Uri _generateContentUri({
-    required String baseUrl,
-    required String model,
-  }) {
-    return _nativeGeminiUri(
-      baseUrl: baseUrl,
-      resourcePath: '/models/${_normalizeGeminiModel(model)}:generateContent',
-    );
+  static Uri _interactionsUri({required String baseUrl}) {
+    return _nativeGeminiUri(baseUrl: baseUrl, resourcePath: '/interactions');
   }
 
   static Uri _nativeGeminiUri({
@@ -364,33 +347,32 @@ class GeminiClient {
     );
   }
 
-  static List<_GeminiImagePayload> _parseGeminiImageResponse(dynamic decoded) {
+  static List<_GeminiImagePayload> _parseGeminiInteractionResponse(
+    dynamic decoded,
+  ) {
     final map = decoded as Map<String, dynamic>;
-    final candidates = map['candidates'] as List? ?? [];
+    final steps = map['steps'] as List? ?? const [];
     final images = <_GeminiImagePayload>[];
     final text = StringBuffer();
-    for (final candidate in candidates) {
-      if (candidate is! Map) continue;
-      final parts =
-          (candidate['content'] as Map?)?['parts'] as List? ?? const [];
-      for (final part in parts) {
-        if (part is! Map || part['thought'] == true) continue;
-        final textPart = part['text']?.toString();
-        if (textPart != null) text.write(textPart);
-        final inlineData = part['inlineData'] ?? part['inline_data'];
-        if (inlineData is! Map) continue;
-        final data = inlineData['data']?.toString();
+    for (final step in steps) {
+      if (step is! Map || step['type'] != 'model_output') continue;
+      final content = step['content'] as List? ?? const [];
+      for (final block in content) {
+        if (block is! Map) continue;
+        if (block['type'] == 'text') {
+          final value = block['text']?.toString();
+          if (value != null && value.isNotEmpty) text.write(value);
+          continue;
+        }
+        if (block['type'] != 'image') continue;
+        final data = block['data']?.toString();
         if (data == null || data.trim().isEmpty) continue;
-        final mimeType =
-            inlineData['mimeType']?.toString() ??
-            inlineData['mime_type']?.toString() ??
-            'image/png';
         images.add(
           _GeminiImagePayload(
             bytes: Uint8List.fromList(
               base64Decode(data.replaceAll(RegExp(r'\s+'), '')),
             ),
-            mimeType: mimeType,
+            mimeType: block['mime_type']?.toString() ?? 'image/png',
             text: text.toString(),
           ),
         );

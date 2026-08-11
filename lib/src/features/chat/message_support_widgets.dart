@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
@@ -47,7 +48,7 @@ class TranslationBlock extends StatelessWidget {
           const SizedBox(height: 5),
           Text(
             text.trim(),
-            style: state.textStyle(context, size: 13, height: 1.5),
+            style: state.personalizedTextStyle(context, size: 13, height: 1.5),
           ),
         ],
       ),
@@ -86,43 +87,61 @@ class MessageActionBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!hasText) return const SizedBox.shrink();
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      alignment: isModel ? WrapAlignment.start : WrapAlignment.end,
-      children: [
-        _MessageIconAction(
-          state: state,
-          icon: Icons.content_copy_rounded,
-          tooltip: '复制',
-          onTap: onCopy,
+    final dark = state.isDark(context);
+    final text = state.text(context);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(999),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Material(
+          key: const ValueKey('message-action-bar'),
+          color: state.layer(context).withValues(alpha: dark ? 0.54 : 0.70),
+          shape: StadiumBorder(
+            side: BorderSide(color: text.withValues(alpha: dark ? 0.10 : 0.07)),
+          ),
+          elevation: dark ? 0 : 2,
+          shadowColor: Colors.black.withValues(alpha: 0.06),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 2),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _MessageIconAction(
+                  state: state,
+                  icon: Icons.content_copy_rounded,
+                  tooltip: '复制',
+                  onTap: onCopy,
+                ),
+                _MessageIconAction(
+                  state: state,
+                  icon: Icons.refresh_rounded,
+                  tooltip: '重试',
+                  onTap: onRetry,
+                ),
+                _MessageIconAction(
+                  state: state,
+                  icon: Icons.edit_outlined,
+                  tooltip: '编辑',
+                  onTap: onEdit,
+                ),
+                _MessageIconAction(
+                  state: state,
+                  icon: Icons.volume_up_outlined,
+                  tooltip: '朗读',
+                  onTap: onSpeak,
+                ),
+                _MessageMoreAction(
+                  state: state,
+                  onTranslate: onTranslate,
+                  onBranch: onBranch,
+                  onSaveCard: onSaveCard,
+                  onDelete: onDelete,
+                ),
+              ],
+            ),
+          ),
         ),
-        _MessageIconAction(
-          state: state,
-          icon: Icons.refresh_rounded,
-          tooltip: '重试',
-          onTap: onRetry,
-        ),
-        _MessageIconAction(
-          state: state,
-          icon: Icons.edit_outlined,
-          tooltip: '编辑',
-          onTap: onEdit,
-        ),
-        _MessageIconAction(
-          state: state,
-          icon: Icons.volume_up_outlined,
-          tooltip: '朗读',
-          onTap: onSpeak,
-        ),
-        _MessageMoreAction(
-          state: state,
-          onTranslate: onTranslate,
-          onBranch: onBranch,
-          onSaveCard: onSaveCard,
-          onDelete: onDelete,
-        ),
-      ],
+      ),
     );
   }
 }
@@ -142,7 +161,6 @@ class _MessageIconAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = state.isDark(context);
     final text = state.text(context);
     return Semantics(
       button: true,
@@ -150,17 +168,15 @@ class _MessageIconAction extends StatelessWidget {
       child: Tooltip(
         message: tooltip,
         child: Material(
-          color: state.layer(context).withValues(alpha: dark ? 0.62 : 0.74),
+          color: Colors.transparent,
           shape: const CircleBorder(),
-          elevation: dark ? 0 : 4,
-          shadowColor: Colors.black.withValues(alpha: 0.08),
           child: InkWell(
             customBorder: const CircleBorder(),
             onTap: onTap,
             child: SizedBox(
-              width: 44,
-              height: 44,
-              child: Icon(icon, size: 18, color: text.withValues(alpha: 0.62)),
+              width: 38,
+              height: 38,
+              child: Icon(icon, size: 17, color: text.withValues(alpha: 0.64)),
             ),
           ),
         ),
@@ -204,8 +220,13 @@ class _MessageMoreAction extends StatelessWidget {
         final selected = await showMenu<String>(
           context: context,
           color: state.layer(context),
+          elevation: 10,
+          shadowColor: Colors.black.withValues(alpha: 0.10),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(18),
+            side: BorderSide(
+              color: state.text(context).withValues(alpha: 0.07),
+            ),
           ),
           position: RelativeRect.fromRect(
             Rect.fromPoints(topLeft, bottomRight),

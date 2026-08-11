@@ -78,8 +78,10 @@ class SettingsSheetState extends State<SettingsSheet> {
   static const settingsTabs = [
     ('general', '通用', Icons.settings_outlined),
     ('providers', '提供商', Icons.cloud_outlined),
-    ('models', '模型', Icons.memory_outlined),
-    ('more', '更多', Icons.tune_rounded),
+    ('models', '默认模型', Icons.memory_outlined),
+    ('services', '扩展服务', Icons.layers_outlined),
+    ('data', '数据管理', Icons.storage_outlined),
+    ('about', '关于织境', Icons.info_outline_rounded),
   ];
 
   static const settingsRoles = {
@@ -166,24 +168,7 @@ class SettingsSheetState extends State<SettingsSheet> {
   }
 
   Widget _headerTrailingSpacer() {
-    if (subView != 'main') {
-      return const SizedBox(width: 96, height: 44);
-    }
-    return SizedBox(
-      width: 96,
-      height: 44,
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: IconCircleButton(
-          icon: Icons.search_rounded,
-          onTap: () => setState(() => activeTab = 'providers'),
-          color: widget.state.text(context),
-          size: 40,
-          opacity: 0.76,
-          background: widget.state.text(context).withValues(alpha: 0.045),
-        ),
-      ),
-    );
+    return const SizedBox(width: 96, height: 44);
   }
 
   Widget _settingsTabButton((String, String, IconData) tab) {
@@ -197,26 +182,13 @@ class SettingsSheetState extends State<SettingsSheet> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(12),
           onTap: () => setState(() => activeTab = tab.$1),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
             curve: Curves.easeOutCubic,
-            constraints: const BoxConstraints(minHeight: 44),
-            padding: const EdgeInsets.fromLTRB(14, 8, 14, 6),
-            decoration: BoxDecoration(
-              color: active
-                  ? state.accents[0].withValues(
-                      alpha: state.isDark(context) ? 0.18 : 0.14,
-                    )
-                  : state.text(context).withValues(alpha: 0.035),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: active
-                    ? state.accents[0].withValues(alpha: 0.30)
-                    : state.text(context).withValues(alpha: 0.04),
-              ),
-            ),
+            constraints: const BoxConstraints(minWidth: 58, minHeight: 38),
+            padding: const EdgeInsets.fromLTRB(8, 5, 8, 3),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -225,19 +197,19 @@ class SettingsSheetState extends State<SettingsSheet> {
                   style: state
                       .textStyle(
                         context,
-                        size: 15,
-                        weight: active ? FontWeight.w700 : FontWeight.w600,
-                        opacity: active ? 0.96 : 0.66,
+                        size: 12.5,
+                        weight: active ? FontWeight.w700 : FontWeight.w500,
+                        opacity: active ? 0.96 : 0.58,
                       )
                       .copyWith(
                         color: active ? activeColor : _headerMutedColor,
                       ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
-                  width: active ? 26 : 0,
-                  height: 3,
+                  width: active ? 20 : 0,
+                  height: 2,
                   decoration: BoxDecoration(
                     color: activeColor,
                     borderRadius: BorderRadius.circular(999),
@@ -286,73 +258,73 @@ class SettingsSheetState extends State<SettingsSheet> {
       'search_engine_config' => '搜索服务配置',
       'tts_config' => '语音服务配置',
       'feedback_form' => '报告问题 / 提供反馈',
-      'more_services' => '联网与语音',
-      'more_data' => '数据与备份',
-      'more_about' => '关于与反馈',
       _ => '设置',
     };
-    return SafeArea(
-      bottom: false,
-      child: Container(
-        decoration: BoxDecoration(
-          color: state.background(context),
-          border: Border(
-            bottom: BorderSide(
-              color: state.text(context).withValues(alpha: 0.08),
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.2,
+      child: SafeArea(
+        bottom: false,
+        child: Container(
+          decoration: BoxDecoration(
+            color: state.background(context),
+            border: Border(
+              bottom: BorderSide(
+                color: state.text(context).withValues(alpha: 0.08),
+              ),
             ),
           ),
-        ),
-        child: Column(
-          children: [
-            SizedBox(
-              height: 62,
-              child: Row(
-                children: [
-                  const SizedBox(width: 10),
-                  _headerLeadingAction(
-                    icon: subView == 'main'
-                        ? Icons.close_rounded
-                        : Icons.arrow_back_rounded,
-                    label: subView == 'main' ? '关闭' : '返回',
-                    onTap: subView == 'main' ? closeSheet : goBack,
-                  ),
-                  Expanded(
-                    child: Center(
-                      child: Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: state.textStyle(
-                          context,
-                          size: subView == 'main' ? 20 : 17,
-                          weight: FontWeight.w700,
+          child: Column(
+            children: [
+              SizedBox(
+                height: 62,
+                child: Row(
+                  children: [
+                    const SizedBox(width: 10),
+                    _headerLeadingAction(
+                      icon: subView == 'main'
+                          ? Icons.close_rounded
+                          : Icons.arrow_back_rounded,
+                      label: subView == 'main' ? '关闭' : '返回',
+                      onTap: subView == 'main' ? closeSheet : goBack,
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: state.textStyle(
+                            context,
+                            size: subView == 'main' ? 20 : 17,
+                            weight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  _headerTrailingSpacer(),
-                ],
-              ),
-            ),
-            if (subView == 'main')
-              SizedBox(
-                height: 58,
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 6,
-                  ),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: SettingsSheetState.settingsTabs.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) {
-                    return _settingsTabButton(
-                      SettingsSheetState.settingsTabs[index],
-                    );
-                  },
+                    _headerTrailingSpacer(),
+                  ],
                 ),
               ),
-          ],
+              if (subView == 'main')
+                SizedBox(
+                  height: 48,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 4,
+                    ),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: SettingsSheetState.settingsTabs.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 3),
+                    itemBuilder: (context, index) {
+                      return _settingsTabButton(
+                        SettingsSheetState.settingsTabs[index],
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -402,9 +374,6 @@ class SettingsSheetState extends State<SettingsSheet> {
               'search_engine_config' => searchConfigView(),
               'tts_config' => ttsConfigView(),
               'feedback_form' => feedbackView(),
-              'more_services' => servicesTab(),
-              'more_data' => dataTab(),
-              'more_about' => aboutTab(),
               _ => const SizedBox.shrink(),
             },
     );
@@ -415,7 +384,9 @@ class SettingsSheetState extends State<SettingsSheet> {
       'general' => generalTab(),
       'providers' => providersTab(),
       'models' => modelsTab(),
-      'more' => moreTab(),
+      'services' => servicesTab(),
+      'data' => dataTab(),
+      'about' => aboutTab(),
       _ => const SizedBox.shrink(),
     };
   }

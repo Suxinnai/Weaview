@@ -49,16 +49,19 @@ class SendButton extends StatelessWidget {
           onTap: enabled ? onTap : null,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 180),
-            constraints: const BoxConstraints(minHeight: 44),
-            padding: const EdgeInsets.symmetric(horizontal: 20),
+            constraints: const BoxConstraints(minHeight: 42),
+            padding: const EdgeInsets.symmetric(horizontal: 17),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: enabled
                   ? streaming
                         ? const Color(0xFFF97316)
                         : sendGreen
-                  : state.text(context).withValues(alpha: 0.07),
+                  : state.accents[0].withValues(alpha: 0.11),
               borderRadius: BorderRadius.circular(999),
+              border: enabled
+                  ? null
+                  : Border.all(color: state.accents[0].withValues(alpha: 0.16)),
               boxShadow: enabled
                   ? [
                       BoxShadow(
@@ -75,9 +78,9 @@ class SendButton extends StatelessWidget {
               style: state
                   .textStyle(
                     context,
-                    size: 14,
+                    size: 13,
                     weight: FontWeight.w600,
-                    opacity: enabled ? 1 : 0.34,
+                    opacity: enabled ? 1 : 0.62,
                   )
                   .copyWith(
                     color: enabled ? Colors.white : state.text(context),
