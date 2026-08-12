@@ -226,15 +226,10 @@ testWidgets('assistant action tap opens actions without double toggling', (
         find.byKey(const ValueKey('generated-image-gallery')),
         findsOneWidget,
       );
-      expect(find.text('已生成 3 张'), findsOneWidget);
-      expect(find.text('已选 1 张'), findsOneWidget);
-      expect(find.text('保存所选'), findsOneWidget);
-      expect(find.text('查看大图'), findsWidgets);
-
-      await tester.tap(find.bySemanticsLabel('选择图片 2，共 3 张'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('已选 2 张'), findsOneWidget);
+      expect(find.text('1/3'), findsOneWidget);
+      expect(find.text('已生成 3 张'), findsNothing);
+      expect(find.text('保存所选'), findsNothing);
+      expect(find.text('查看大图'), findsNothing);
 
       state.dispose();
     },

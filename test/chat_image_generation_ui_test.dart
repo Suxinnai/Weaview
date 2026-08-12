@@ -169,7 +169,8 @@ void main() {
       find.byKey(const ValueKey('generated-image-gallery')),
       findsOneWidget,
     );
-    expect(find.text('已生成 3 张'), findsOneWidget);
+    expect(find.text('1/3'), findsOneWidget);
+    expect(find.text('已生成 3 张'), findsNothing);
     expect(
       find.byKey(const ValueKey('message-attachment-grid')),
       findsOneWidget,

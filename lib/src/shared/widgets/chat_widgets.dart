@@ -388,8 +388,6 @@ class GeneratedImageGallery extends StatefulWidget {
 }
 
 class _GeneratedImageGalleryState extends State<GeneratedImageGallery> {
-  final Set<int> _selectedIndices = {0};
-
   @override
   Widget build(BuildContext context) {
     final state = widget.state;
@@ -399,210 +397,379 @@ class _GeneratedImageGalleryState extends State<GeneratedImageGallery> {
     if (images.isEmpty) {
       return const SizedBox.shrink();
     }
-    final dark = state.isDark(context);
-    final columns = images.length == 1 ? 1 : 2;
     final single = images.length == 1;
-    return Container(
-      key: const ValueKey('generated-image-gallery'),
-      width: double.infinity,
-      padding: EdgeInsets.all(single ? 4 : 12),
-      decoration: BoxDecoration(
-        color: state.layer(context).withValues(alpha: dark ? 0.48 : 0.72),
-        borderRadius: BorderRadius.circular(single ? 18 : 20),
-        border: Border.all(
-          color: state.text(context).withValues(alpha: dark ? 0.08 : 0.07),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (!single)
-            Row(
-              children: [
-                Icon(
-                  Icons.auto_awesome_rounded,
-                  size: 18,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '已生成 ${images.length} 张',
-                    style: state.textStyle(
-                      context,
-                      size: 14,
-                      weight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                Text(
-                  _selectedIndices.isEmpty
-                      ? '点按选择'
-                      : '已选 ${_selectedIndices.length} 张',
-                  style: state.textStyle(context, size: 11.5, opacity: 0.52),
-                ),
-              ],
-            ),
-          if (!single) const SizedBox(height: 12),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final spacing = 10.0;
-              final tileWidth = columns == 1
-                  ? constraints.maxWidth
-                  : (constraints.maxWidth - spacing) / 2;
-              return Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: [
-                  for (var index = 0; index < images.length; index++)
-                    _GeneratedGridTile(
-                      state: state,
-                      attachments: images,
-                      attachment: images[index],
-                      index: index,
-                      width: tileWidth,
-                      selected: single || _selectedIndices.contains(index),
-                      single: single,
-                      animateImages: widget.animateImages,
-                      onToggleSelected: single
-                          ? () => _openImagePreview(
-                              context,
-                              state,
-                              attachments: images,
-                              initialIndex: index,
-                              onDownload: widget.onDownload,
-                            )
-                          : () {
-                              setState(() {
-                                if (!_selectedIndices.add(index)) {
-                                  _selectedIndices.remove(index);
-                                }
-                              });
-                            },
-                      onPreview: () => _openImagePreview(
-                        context,
-                        state,
-                        attachments: images,
-                        initialIndex: index,
-                        onDownload: widget.onDownload,
-                      ),
-                    ),
-                ],
-              );
-            },
+    if (single) {
+      return Container(
+        key: const ValueKey('generated-image-gallery'),
+        width: double.infinity,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: state.layer(context).withValues(
+            alpha: state.isDark(context) ? 0.48 : 0.72,
           ),
-          if (!single) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _GalleryActionButton(
-                    state: state,
-                    icon: Icons.download_rounded,
-                    label: '保存所选',
-                    enabled: widget.onDownload != null &&
-                        _selectedIndices.isNotEmpty,
-                    onTap: () {
-                      for (final index in _selectedIndices) {
-                        widget.onDownload?.call(images[index]);
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _GalleryActionButton(
-                    state: state,
-                    icon: Icons.open_in_full_rounded,
-                    label: '查看大图',
-                    enabled: _selectedIndices.isNotEmpty,
-                    emphasized: true,
-                    onTap: () {
-                      final index = _selectedIndices.isEmpty
-                          ? 0
-                          : _selectedIndices.first;
-                      _openImagePreview(
-                        context,
-                        state,
-                        attachments: images,
-                        initialIndex: index,
-                        onDownload: widget.onDownload,
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: state
+                .text(context)
+                .withValues(alpha: state.isDark(context) ? 0.08 : 0.07),
+          ),
+        ),
+        child: _GeneratedGridTile(
+          state: state,
+          attachments: images,
+          attachment: images.first,
+          index: 0,
+          width: double.infinity,
+          selected: true,
+          single: true,
+          animateImages: widget.animateImages,
+          onToggleSelected: () => _openImagePreview(
+            context,
+            state,
+            attachments: images,
+            initialIndex: 0,
+            onDownload: widget.onDownload,
+          ),
+          onPreview: () => _openImagePreview(
+            context,
+            state,
+            attachments: images,
+            initialIndex: 0,
+            onDownload: widget.onDownload,
+          ),
+        ),
+      );
+    }
+    return _StackedPhotoCard(
+      key: const ValueKey('generated-image-gallery'),
+      state: state,
+      images: images,
+      onTapImage: (index) => _openImagePreview(
+        context,
+        state,
+        attachments: images,
+        initialIndex: index,
+        onDownload: widget.onDownload,
       ),
     );
   }
 }
 
-class _GalleryActionButton extends StatelessWidget {
-  const _GalleryActionButton({
+class _StackedPhotoCard extends StatefulWidget {
+  const _StackedPhotoCard({
+    super.key,
     required this.state,
-    required this.icon,
-    required this.label,
-    required this.enabled,
-    required this.onTap,
-    this.emphasized = false,
+    required this.images,
+    required this.onTapImage,
   });
 
   final WeaviewState state;
-  final IconData icon;
-  final String label;
-  final bool enabled;
-  final VoidCallback onTap;
-  final bool emphasized;
+  final List<MessageAttachment> images;
+  final ValueChanged<int> onTapImage;
 
   @override
-  Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.primary;
-    return Semantics(
-      button: true,
-      enabled: enabled,
-      label: label,
-      child: Material(
-        color: emphasized
-            ? color.withValues(alpha: enabled ? 0.12 : 0.05)
-            : state.text(context).withValues(alpha: enabled ? 0.05 : 0.025),
-        borderRadius: BorderRadius.circular(14),
-        child: InkWell(
-          onTap: enabled ? onTap : null,
-          borderRadius: BorderRadius.circular(14),
-          child: SizedBox(
-            height: 44,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 18,
-                  color: emphasized
-                      ? color.withValues(alpha: enabled ? 1 : 0.35)
-                      : state
-                            .text(context)
-                            .withValues(alpha: enabled ? 0.68 : 0.28),
-                ),
-                const SizedBox(width: 7),
-                Text(
-                  label,
-                  style: state.textStyle(
-                    context,
-                    size: 12.5,
-                    weight: FontWeight.w600,
-                    opacity: enabled ? 0.78 : 0.32,
-                  ),
-                ),
-              ],
-            ),
+  State<_StackedPhotoCard> createState() => _StackedPhotoCardState();
+}
+
+class _StackedPhotoCardState extends State<_StackedPhotoCard>
+    with SingleTickerProviderStateMixin {
+  static const double _cardWidth = 236;
+  static const double _cardHeight = 172;
+  static const double _peek = 13;
+  static const double _peekStep = 10;
+  static const double _rotStep = 2.4;
+  static const double _scaleStep = 0.07;
+  static const double _edgeBounce = 24;
+  static const double _flingVelocity = 400;
+
+  int _index = 0;
+  double _drag = 0;
+  double _velocity = 0;
+  bool _dragging = false;
+  int _flipDirection = 0;
+  DateTime? _lastDragUpdate;
+  late final AnimationController _controller;
+
+  List<MessageAttachment> get _images => widget.images;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 340),
+    )
+      ..addListener(() => setState(() {}))
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          setState(() {
+            _index = (_index + _flipDirection).clamp(0, _images.length - 1);
+            _drag = 0;
+            _flipDirection = 0;
+          });
+          _controller.reset();
+        }
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  double get _progress => Curves.easeOutCubic.transform(_controller.value);
+
+  void _handleDragStart(DragStartDetails details) {
+    _dragging = true;
+    _velocity = 0;
+    _lastDragUpdate = null;
+  }
+
+  void _handleDragUpdate(DragUpdateDetails details) {
+    if (!_dragging) return;
+    final now = DateTime.now();
+    final last = _lastDragUpdate;
+    if (last != null) {
+      final dt = now.difference(last).inMicroseconds / 1e6;
+      if (dt > 0) _velocity = details.delta.dx / dt;
+    }
+    _lastDragUpdate = now;
+    var next = _drag + details.delta.dx;
+    final atStart = _index == 0 && next > 0;
+    final atEnd = _index == _images.length - 1 && next < 0;
+    if (atStart || atEnd) {
+      next = next.clamp(-_edgeBounce, _edgeBounce);
+    }
+    setState(() => _drag = next);
+  }
+
+  void _handleDragEnd(DragEndDetails details) {
+    if (!_dragging) return;
+    _dragging = false;
+    _velocity = details.primaryVelocity ?? _velocity;
+    final atStart = _index == 0 && _drag > 0;
+    final atEnd = _index == _images.length - 1 && _drag < 0;
+    if (atStart || atEnd) {
+      _controller.animateBack(
+        0,
+        duration: const Duration(milliseconds: 240),
+      );
+      return;
+    }
+    final fling = _velocity.abs() > _flingVelocity &&
+        (_velocity > 0) == (_drag > 0) &&
+        _drag.abs() > 10;
+    final threshold = _drag.abs() > _cardWidth * 0.28;
+    if ((fling || threshold) && _drag != 0) {
+      _flipDirection = _drag > 0 ? -1 : 1;
+      _controller.forward(from: 0);
+    } else {
+      _controller.animateBack(
+        0,
+        duration: const Duration(milliseconds: 240),
+      );
+    }
+  }
+
+  Widget _card(MessageAttachment attachment, int cacheWidth, double radius) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: Image.file(
+        File(attachment.path),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+        cacheWidth: cacheWidth,
+        filterQuality: FilterQuality.medium,
+        errorBuilder: (_, _, _) => Container(
+          color: const Color(0xFF2A3442),
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.broken_image_outlined,
+            size: 28,
+            color: Colors.white.withValues(alpha: 0.4),
           ),
         ),
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = _images.length;
+    final flipping = _flipDirection != 0;
+    final dir = _flipDirection;
+    final p = flipping ? _progress : 0.0;
+    final rightPeek = _peek + _peekStep;
+    final rightPeek2 = _peek + _peekStep * 2;
+
+    final slots = <({
+      MessageAttachment image,
+      double dx,
+      double rot,
+      double scale,
+      int z,
+    })>[];
+    void add(int index, double dx, double rot, double scale, int z) {
+      if (index < 0 || index >= count) return;
+      slots.add((
+        image: _images[index],
+        dx: dx,
+        rot: rot,
+        scale: scale,
+        z: z,
+      ));
+    }
+
+    if (!flipping) {
+      final i = _index;
+      add(i + 1, rightPeek, _rotStep, 1 - _scaleStep, 1);
+      if (i == 0) {
+        add(i + 2, rightPeek2, _rotStep * 2, 1 - _scaleStep * 2, 0);
+      }
+      add(i - 1, -rightPeek, -_rotStep, 1 - _scaleStep, 1);
+      if (i == count - 1) {
+        add(i - 2, -rightPeek2, -_rotStep * 2, 1 - _scaleStep * 2, 0);
+      }
+      add(i, _drag, _drag * 0.05, 1, 2);
+    } else {
+      final peak = _cardWidth * 0.62;
+      final frontPhase = p < 0.55 ? p / 0.55 : 1.0;
+      final settle = p < 0.55 ? 0.0 : (p - 0.55) / 0.45;
+      final frontDx = _drag +
+          dir *
+              (p < 0.55
+                  ? peak * Curves.easeOutCubic.transform(frontPhase)
+                  : peak -
+                      (peak + rightPeek) *
+                          Curves.easeInCubic.transform(settle));
+      add(
+        _index,
+        frontDx,
+        _lerp(dir * 3.5, -dir * _rotStep, settle),
+        _lerp(1, 1 - _scaleStep, settle),
+        2,
+      );
+      add(
+        _index + dir,
+        _lerp(-dir * rightPeek, 0, p),
+        _lerp(-dir * _rotStep, 0, p),
+        _lerp(1 - _scaleStep, 1, p),
+        1,
+      );
+      add(
+        _index + 2 * dir,
+        _lerp(dir * rightPeek2, dir * rightPeek, p),
+        _lerp(dir * _rotStep * 2, dir * _rotStep, p),
+        _lerp(1 - _scaleStep * 2, 1 - _scaleStep, p),
+        0,
+      );
+      add(
+        _index - dir,
+        _lerp(-dir * rightPeek, -dir * rightPeek2, p),
+        _lerp(-dir * _rotStep, -dir * _rotStep * 2, p),
+        _lerp(1 - _scaleStep, 1 - _scaleStep * 2, p),
+        0,
+      );
+    }
+    slots.sort((a, b) => a.z.compareTo(b.z));
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = _cardWidth.clamp(0, constraints.maxWidth).toDouble();
+        final height = width * (_cardHeight / _cardWidth);
+        return Center(
+          child: SizedBox(
+            width: width,
+            height: height + 22,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => widget.onTapImage(_index),
+              onHorizontalDragStart: _handleDragStart,
+              onHorizontalDragUpdate: _handleDragUpdate,
+              onHorizontalDragEnd: _handleDragEnd,
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.topCenter,
+                children: [
+                  for (final slot in slots)
+                    Positioned(
+                      left: width * 0.2,
+                      right: width * 0.2,
+                      top: 4,
+                      height: height,
+                      child: Transform.translate(
+                        offset: Offset(slot.dx, 0),
+                        child: Transform.rotate(
+                          angle: slot.rot * 3.14159265 / 180,
+                          child: Transform.scale(
+                            scale: slot.scale,
+                            child: slot.z == 2
+                                ? Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(
+                                          alpha: 0.24,
+                                        ),
+                                        width: 1.2,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.18,
+                                          ),
+                                          blurRadius: 16,
+                                          offset: const Offset(0, 6),
+                                        ),
+                                      ],
+                                    ),
+                                    child: _card(
+                                      slot.image,
+                                      360,
+                                      14,
+                                    ),
+                                  )
+                                : _card(slot.image, 180, 12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  Positioned(
+                    right: 10,
+                    bottom: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.38),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '${_index + 1}/$count',
+                        style: widget.state
+                            .textStyle(
+                              context,
+                              size: 11,
+                              weight: FontWeight.w700,
+                            )
+                            .copyWith(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  static double _lerp(double a, double b, double t) => a + (b - a) * t;
 }
 
 class _GeneratedGridTile extends StatelessWidget {
