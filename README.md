@@ -53,6 +53,7 @@ English summary:
 - Markdown: `flutter_markdown_plus`
 - Media/File: `image_picker`, `file_picker`, `mime`
 - TTS: Android system TTS plus OpenAI-compatible remote speech providers
+- Font: 内置霞鹜文楷（LXGW WenKai）子集用于诗意标题，正文使用系统无衬线字体
 - Test: `flutter_test`
 
 ## 环境要求

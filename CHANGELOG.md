@@ -4,6 +4,24 @@
 
 ## Unreleased
 
+### 中文
+
+- 移除工作台、分支图谱与作品卡入口，对话回归单一专注的聊天流；作品卡数据模型与本地存储一并清理。
+- 用量统计统一保留在侧边栏入口，移除设置页中的重复入口。
+- 主页模型选择器改为单行磨砂胶囊，菜单按钮加入高斯模糊背景，整体占用更小、质感更通透。
+- 提供商卡片重新设计：连接状态改为胶囊化展示，卡片表面更柔和，移除冗余箭头与多余控件。
+- 设置界面统一字体规范：页头、分组标题、空状态与品牌文案改用诗意的楷体（霞鹜文楷子集，GB2312 常用字），正文保持系统无衬线字体以保证清晰度。
+- 设置页按钮与顶部 Tab 增加按压缩放动效，并遵循系统「减少动态效果」偏好。
+
+### English
+
+- Removed the workboard, branch graph, and work-card surfaces so chat returns to a single focused conversation stream; the work-card model and local storage were cleaned up with them.
+- Usage statistics now live only in the sidebar entry; the duplicate settings route was removed.
+- The home model selector became a compact single-line frosted capsule, the menu button gained a Gaussian-blur backdrop, and the header takes less space with a more translucent feel.
+- Provider cards were redesigned: connection state is now a pill, surfaces are softer, and redundant chevrons and controls were removed.
+- Settings typography now follows one spec: page headers, section labels, empty states, and brand copy use a poetic kai-style font (a GB2312-subset of LXGW WenKai), while body text keeps the system sans-serif for readability.
+- Settings buttons and header tabs gained press-scale motion, respecting the system reduced-motion preference.
+
 ## 2.0.1 - 2026-08-11
 
 ### 中文

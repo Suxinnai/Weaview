@@ -172,54 +172,12 @@ class SettingsSheetState extends State<SettingsSheet> {
   }
 
   Widget _settingsTabButton((String, String, IconData) tab) {
-    final state = widget.state;
-    final active = activeTab == tab.$1;
-    final activeColor = state.isDark(context) ? accentMint : sendGreen;
-    return Semantics(
-      button: true,
-      selected: active,
-      label: tab.$2,
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => setState(() => activeTab = tab.$1),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeOutCubic,
-            constraints: const BoxConstraints(minWidth: 58, minHeight: 38),
-            padding: const EdgeInsets.fromLTRB(8, 5, 8, 3),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  tab.$2,
-                  style: state
-                      .textStyle(
-                        context,
-                        size: 12.5,
-                        weight: active ? FontWeight.w700 : FontWeight.w500,
-                        opacity: active ? 0.96 : 0.58,
-                      )
-                      .copyWith(
-                        color: active ? activeColor : _headerMutedColor,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  width: active ? 20 : 0,
-                  height: 2,
-                  decoration: BoxDecoration(
-                    color: activeColor,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+    return _SettingsTabButton(
+      tab: tab,
+      active: activeTab == tab.$1,
+      mutedColor: _headerMutedColor,
+      onTap: () => setState(() => activeTab = tab.$1),
+      state: widget.state,
     );
   }
 
@@ -293,10 +251,10 @@ class SettingsSheetState extends State<SettingsSheet> {
                           title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: state.textStyle(
+                          style: state.poeticTextStyle(
                             context,
-                            size: subView == 'main' ? 20 : 17,
-                            weight: FontWeight.w700,
+                            size: subView == 'main' ? 19 : 16.5,
+                            weight: FontWeight.w500,
                           ),
                         ),
                       ),
@@ -899,5 +857,94 @@ ${feedbackContactController.text.trim().isEmpty ? '未填写' : feedbackContactC
       );
       await openExternalUrl(githubReleasesUrl);
     }
+  }
+}
+
+class _SettingsTabButton extends StatefulWidget {
+  const _SettingsTabButton({
+    required this.tab,
+    required this.active,
+    required this.mutedColor,
+    required this.onTap,
+    required this.state,
+  });
+
+  final (String, String, IconData) tab;
+  final bool active;
+  final Color mutedColor;
+  final VoidCallback onTap;
+  final WeaviewState state;
+
+  @override
+  State<_SettingsTabButton> createState() => _SettingsTabButtonState();
+}
+
+class _SettingsTabButtonState extends State<_SettingsTabButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = widget.state;
+    final activeColor = state.isDark(context) ? accentMint : sendGreen;
+    return Semantics(
+      button: true,
+      selected: widget.active,
+      label: widget.tab.$2,
+      child: Listener(
+        onPointerDown: (_) => setState(() => _pressed = true),
+        onPointerUp: (_) => setState(() => _pressed = false),
+        onPointerCancel: (_) => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.94 : 1,
+          duration: const Duration(milliseconds: 110),
+          curve: Curves.easeOutCubic,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: widget.onTap,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                constraints: const BoxConstraints(minWidth: 58, minHeight: 38),
+                padding: const EdgeInsets.fromLTRB(8, 5, 8, 3),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      widget.tab.$2,
+                      style: state
+                          .textStyle(
+                            context,
+                            size: 12.5,
+                            weight: widget.active
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            opacity: widget.active ? 0.96 : 0.58,
+                          )
+                          .copyWith(
+                            color: widget.active
+                                ? activeColor
+                                : widget.mutedColor,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      width: widget.active ? 20 : 0,
+                      height: 2,
+                      decoration: BoxDecoration(
+                        color: activeColor,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

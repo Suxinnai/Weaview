@@ -52,20 +52,17 @@ class BackupImportResult {
     required this.sessions,
     required this.memories,
     required this.providers,
-    this.workCards = 0,
     this.tokenUsageRecords = 0,
   });
 
   final int sessions;
   final int memories;
   final int providers;
-  final int workCards;
   final int tokenUsageRecords;
 
   String get summary {
-    final cardText = workCards > 0 ? '、$workCards 张作品卡' : '';
     final usageText = tokenUsageRecords > 0 ? '、$tokenUsageRecords 条用量记录' : '';
-    return '已合并 $sessions 个会话、$memories 条记忆、$providers 个提供商$cardText$usageText。';
+    return '已合并 $sessions 个会话、$memories 条记忆、$providers 个提供商$usageText。';
   }
 }
 
@@ -101,7 +98,6 @@ class WeaviewState extends ChangeNotifier {
   // Chat state
   final List<ChatMessage> messages = [];
   List<String> suggestions = [];
-  List<WorkCard> workCards = [];
   List<TokenUsageRecord> tokenUsageRecords = [];
 
   List<Color> get accents => [_theme.accentColor, _theme.secondaryAccent];
@@ -168,15 +164,6 @@ class WeaviewState extends ChangeNotifier {
           .firstWhereOrNull((session) => session.id == currentSessionId)
           ?.title ??
       '';
-
-  List<WorkCard> get sortedWorkCards {
-    final cards = [...workCards];
-    cards.sort((a, b) {
-      if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-      return b.updatedAt.compareTo(a.updatedAt);
-    });
-    return cards;
-  }
 
   List<TokenUsageRecord> get sortedTokenUsageRecords {
     final records = [...tokenUsageRecords];
@@ -275,7 +262,6 @@ class WeaviewState extends ChangeNotifier {
       _sessions.selectSession(sessionToResume, messages, suggestions);
       prefs.saveLastSessionId(sessionToResume.id);
     }
-    workCards = prefs.loadWorkCards();
     tokenUsageRecords = prefs.loadTokenUsageRecords();
 
     notifyListeners();
@@ -331,6 +317,22 @@ class WeaviewState extends ChangeNotifier {
     weight: weight,
     opacity: opacity,
     height: height,
+  );
+
+  TextStyle poeticTextStyle(
+    BuildContext context, {
+    double size = 22,
+    FontWeight weight = FontWeight.w500,
+    double opacity = 1,
+    double height = 1.32,
+    double letterSpacing = 0.8,
+  }) => _theme.poeticTextStyle(
+    context,
+    size: size,
+    weight: weight,
+    opacity: opacity,
+    height: height,
+    letterSpacing: letterSpacing,
   );
 
   void setThemeModeValue(ThemeMode mode) {
@@ -434,69 +436,6 @@ class WeaviewState extends ChangeNotifier {
   void clearMemories() {
     _personal.clearMemories(_prefs);
     notifyListeners();
-  }
-
-  void saveWorkCard(WorkCard card) {
-    final key = card.id;
-    final existingIndex = workCards.indexWhere((item) => item.id == key);
-    if (existingIndex >= 0) {
-      workCards[existingIndex] = card.copyWith(touch: true);
-    } else {
-      workCards = [card, ...workCards];
-    }
-    _prefs?.saveWorkCards(workCards);
-    notifyListeners();
-  }
-
-  void toggleWorkCardPinned(String id) {
-    workCards = [
-      for (final card in workCards)
-        if (card.id == id)
-          card.copyWith(pinned: !card.pinned, touch: true)
-        else
-          card,
-    ];
-    _prefs?.saveWorkCards(workCards);
-    notifyListeners();
-  }
-
-  void deleteWorkCard(String id) {
-    workCards = [
-      for (final card in workCards)
-        if (card.id != id) card,
-    ];
-    _prefs?.saveWorkCards(workCards);
-    notifyListeners();
-  }
-
-  void createWorkCardFromMessage(int index) {
-    if (index < 0 || index >= messages.length) return;
-    final message = messages[index];
-    final body = [
-      if (message.content.trim().isNotEmpty) message.content.trim(),
-      if (message.comparisonResults.isNotEmpty)
-        for (final result in message.comparisonResults)
-          if (result.content.trim().isNotEmpty)
-            '[${result.provider}/${result.model}]\n${result.content.trim()}',
-    ].join('\n\n');
-    if (body.trim().isEmpty) return;
-    final sourceMessageIndex = messages
-        .take(index)
-        .toList()
-        .lastIndexWhere((item) => item.role == 'user');
-    final sourceTitle = sourceMessageIndex >= 0
-        ? messages[sourceMessageIndex].content.trim()
-        : currentSessionTitle;
-    final title = body.trim().split(RegExp(r'\r?\n')).first.trim();
-    saveWorkCard(
-      WorkCard.create(
-        title: title.isEmpty ? '未命名作品' : title,
-        body: body,
-        kind: message.isModelComparison ? 'comparison' : 'text',
-        sourceSessionId: currentSessionId ?? '',
-        sourceSessionTitle: sourceTitle,
-      ),
-    );
   }
 
   void clearTokenUsageRecords() {
@@ -2538,7 +2477,6 @@ $prompt
       ),
       'ai_memories': memories,
       'ai_memory_items': memoryItems.map((item) => item.toJson()).toList(),
-      'work_cards': workCards.map((item) => item.toJson()).toList(),
       'token_usage_records': tokenUsageRecords
           .map((item) => item.toJson())
           .toList(),
@@ -2645,10 +2583,6 @@ $prompt
       data['ai_providers'],
       AiProvider.fromJson,
     );
-    final importedWorkCards = _decodeImportList(
-      data['work_cards'],
-      WorkCard.fromJson,
-    );
     final importedTokenUsageRecords = _decodeImportList(
       data['token_usage_records'],
       TokenUsageRecord.fromJson,
@@ -2659,7 +2593,6 @@ $prompt
       importedMemoryItems,
     );
     final mergedProviders = _mergeProviders(providers, importedProviders);
-    final mergedWorkCards = _mergeWorkCards(workCards, importedWorkCards);
     final mergedTokenUsageRecords = _mergeTokenUsageRecords(
       tokenUsageRecords,
       importedTokenUsageRecords,
@@ -2669,7 +2602,6 @@ $prompt
       ..clear()
       ..addAll(mergedSessions);
     memoryItems = mergedMemoryItems;
-    workCards = mergedWorkCards;
     tokenUsageRecords = mergedTokenUsageRecords;
     _providers.saveProviders(mergedProviders, _prefs);
 
@@ -2710,7 +2642,6 @@ $prompt
     if (prefs != null) {
       prefs.saveChatSessions(chatSessions);
       prefs.saveMemoryItems(memoryItems);
-      prefs.saveWorkCards(workCards);
       prefs.saveTokenUsageRecords(tokenUsageRecords);
     }
     notifyListeners();
@@ -2719,7 +2650,6 @@ $prompt
       sessions: importedSessions.length,
       memories: importedMemoryItems.length,
       providers: importedProviders.length,
-      workCards: importedWorkCards.length,
       tokenUsageRecords: importedTokenUsageRecords.length,
     );
   }
@@ -2742,7 +2672,6 @@ $prompt
     providers = AiProvider.defaults();
     modelAssignments = ModelAssignment.defaults();
     memoryItems = [];
-    workCards = [];
     tokenUsageRecords = [];
     searchConfig = const SearchConfig(active: 'tavily', keys: {});
     activeTtsId = '';
@@ -2851,26 +2780,6 @@ $prompt
       }
     }
     final items = byContent.values.toList()
-      ..sort((a, b) {
-        if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
-        return b.updatedAt.compareTo(a.updatedAt);
-      });
-    return items;
-  }
-
-  List<WorkCard> _mergeWorkCards(
-    List<WorkCard> current,
-    List<WorkCard> imported,
-  ) {
-    final byId = {for (final item in current) item.id: item};
-    for (final item in imported) {
-      if (item.body.trim().isEmpty) continue;
-      final existing = byId[item.id];
-      if (existing == null || item.updatedAt >= existing.updatedAt) {
-        byId[item.id] = item;
-      }
-    }
-    final items = byId.values.toList()
       ..sort((a, b) {
         if (a.pinned != b.pinned) return a.pinned ? -1 : 1;
         return b.updatedAt.compareTo(a.updatedAt);

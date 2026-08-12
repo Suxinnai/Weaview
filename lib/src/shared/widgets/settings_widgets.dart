@@ -49,13 +49,13 @@ class SectionLabel extends StatelessWidget {
           Text(
             label,
             style: state
-                .textStyle(
+                .poeticTextStyle(
                   context,
-                  size: 15.5,
-                  weight: FontWeight.w700,
+                  size: 15,
+                  weight: FontWeight.w500,
                   opacity: 0.68,
                 )
-                .copyWith(height: 1.15),
+                .copyWith(height: 1.15, letterSpacing: 1.2),
           ),
         ],
       ),
@@ -490,8 +490,9 @@ class ModelBadge extends StatelessWidget {
   }
 }
 
-class SoftButton extends StatelessWidget {
+class SoftButton extends StatefulWidget {
   const SoftButton({
+    super.key,
     required this.state,
     required this.label,
     required this.onTap,
@@ -508,73 +509,94 @@ class SoftButton extends StatelessWidget {
   final bool danger;
 
   @override
+  State<SoftButton> createState() => _SoftButtonState();
+}
+
+class _SoftButtonState extends State<SoftButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    final bg = danger
+    final state = widget.state;
+    final bg = widget.danger
         ? Colors.red.withValues(alpha: 0.09)
-        : accent
+        : widget.accent
         ? state.accents[0]
         : state.isDark(context)
         ? Colors.white.withValues(alpha: 0.065)
         : Colors.white;
-    final borderColor = danger
+    final borderColor = widget.danger
         ? Colors.red.withValues(alpha: 0.18)
-        : accent
+        : widget.accent
         ? Colors.transparent
         : _settingsBorderColor(state, context);
-    final fg = danger
+    final fg = widget.danger
         ? Colors.red
-        : accent
+        : widget.accent
         ? Colors.white
         : state.text(context);
     return Semantics(
       button: true,
       enabled: true,
-      child: Material(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          enableFeedback: true,
-          onTap: onTap,
-          child: Container(
-            constraints: const BoxConstraints(minHeight: 52),
-            decoration: BoxDecoration(
+      child: Listener(
+        onPointerDown: (_) => setState(() => _pressed = true),
+        onPointerUp: (_) => setState(() => _pressed = false),
+        onPointerCancel: (_) => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed ? 0.965 : 1,
+          duration: const Duration(milliseconds: 110),
+          curve: Curves.easeOutCubic,
+          child: Material(
+            color: bg,
+            borderRadius: BorderRadius.circular(16),
+            child: InkWell(
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: borderColor),
-              boxShadow: accent
-                  ? [
-                      BoxShadow(
-                        color: state.accents[0].withValues(alpha: 0.16),
-                        blurRadius: 18,
-                        offset: const Offset(0, 8),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (icon != null) ...[
-                    Icon(icon, size: 18, color: fg),
-                    const SizedBox(width: 6),
-                  ],
-                  Flexible(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: state
-                          .textStyle(
-                            context,
-                            size: 14.5,
-                            weight: FontWeight.w600,
-                          )
-                          .copyWith(color: fg),
-                    ),
+              enableFeedback: true,
+              onTap: widget.onTap,
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 52),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: borderColor),
+                  boxShadow: widget.accent
+                      ? [
+                          BoxShadow(
+                            color: state.accents[0].withValues(alpha: 0.16),
+                            blurRadius: 18,
+                            offset: const Offset(0, 8),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
                   ),
-                ],
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      if (widget.icon != null) ...[
+                        Icon(widget.icon, size: 18, color: fg),
+                        const SizedBox(width: 6),
+                      ],
+                      Flexible(
+                        child: Text(
+                          widget.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: state
+                              .textStyle(
+                                context,
+                                size: 14.5,
+                                weight: FontWeight.w600,
+                              )
+                              .copyWith(color: fg),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),

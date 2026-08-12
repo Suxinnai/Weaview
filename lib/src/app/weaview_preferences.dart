@@ -118,10 +118,6 @@ class WeaviewPreferences {
     }
   }
 
-  List<WorkCard> loadWorkCards() {
-    return decodeList(_prefs.getString(_PrefsKey.workCards), WorkCard.fromJson);
-  }
-
   List<TokenUsageRecord> loadTokenUsageRecords() {
     return decodeList(
       _prefs.getString(_PrefsKey.tokenUsageRecords),
@@ -295,13 +291,6 @@ class WeaviewPreferences {
     );
   }
 
-  void saveWorkCards(List<WorkCard> cards) {
-    _prefs.setString(
-      _PrefsKey.workCards,
-      jsonEncode(cards.map((item) => item.toJson()).toList()),
-    );
-  }
-
   void saveTokenUsageRecords(List<TokenUsageRecord> records) {
     _prefs.setString(
       _PrefsKey.tokenUsageRecords,
@@ -381,7 +370,6 @@ abstract final class _PrefsKey {
   static const aiProviders = 'ai_providers';
   static const aiModelAssignments = 'ai_model_assignments';
   static const aiMemories = 'ai_memories';
-  static const workCards = 'work_cards';
   static const tokenUsageRecords = 'token_usage_records';
   static const aiSearchConfig = 'ai_search_config';
   static const aiActiveTtsId = 'ai_active_tts_id';

@@ -67,7 +67,6 @@ class MessageActionBar extends StatelessWidget {
     required this.onEdit,
     required this.onTranslate,
     required this.onBranch,
-    required this.onSaveCard,
     required this.onDelete,
     required this.onSpeak,
   });
@@ -80,7 +79,6 @@ class MessageActionBar extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onTranslate;
   final VoidCallback onBranch;
-  final VoidCallback onSaveCard;
   final VoidCallback onDelete;
   final VoidCallback onSpeak;
 
@@ -134,7 +132,6 @@ class MessageActionBar extends StatelessWidget {
                   state: state,
                   onTranslate: onTranslate,
                   onBranch: onBranch,
-                  onSaveCard: onSaveCard,
                   onDelete: onDelete,
                 ),
               ],
@@ -174,9 +171,9 @@ class _MessageIconAction extends StatelessWidget {
             customBorder: const CircleBorder(),
             onTap: onTap,
             child: SizedBox(
-              width: 38,
-              height: 38,
-              child: Icon(icon, size: 17, color: text.withValues(alpha: 0.64)),
+              width: 34,
+              height: 34,
+              child: Icon(icon, size: 16, color: text.withValues(alpha: 0.62)),
             ),
           ),
         ),
@@ -190,14 +187,12 @@ class _MessageMoreAction extends StatelessWidget {
     required this.state,
     required this.onTranslate,
     required this.onBranch,
-    required this.onSaveCard,
     required this.onDelete,
   });
 
   final WeaviewState state;
   final VoidCallback onTranslate;
   final VoidCallback onBranch;
-  final VoidCallback onSaveCard;
   final VoidCallback onDelete;
 
   @override
@@ -254,16 +249,6 @@ class _MessageMoreAction extends StatelessWidget {
               ),
             ),
             PopupMenuItem(
-              value: 'save_card',
-              child: Row(
-                children: [
-                  Icon(Icons.workspace_premium_outlined, size: 18),
-                  SizedBox(width: 10),
-                  Text('存为作品卡'),
-                ],
-              ),
-            ),
-            PopupMenuItem(
               value: 'delete',
               child: Row(
                 children: [
@@ -277,7 +262,6 @@ class _MessageMoreAction extends StatelessWidget {
         );
         if (selected == 'translate') onTranslate();
         if (selected == 'branch') onBranch();
-        if (selected == 'save_card') onSaveCard();
         if (selected == 'delete') onDelete();
       },
     );

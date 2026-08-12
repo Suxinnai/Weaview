@@ -24,7 +24,6 @@ class ChatBody extends StatelessWidget {
     required this.onEditMessage,
     required this.onTranslateMessage,
     required this.onBranchMessage,
-    required this.onSaveCardMessage,
     required this.onDeleteMessage,
     required this.onSpeakMessage,
     required this.onDownloadAttachment,
@@ -45,7 +44,6 @@ class ChatBody extends StatelessWidget {
   final Future<void> Function(int index) onEditMessage;
   final Future<void> Function(int index) onTranslateMessage;
   final void Function(int index) onBranchMessage;
-  final void Function(int index) onSaveCardMessage;
   final Future<void> Function(int index) onDeleteMessage;
   final Future<void> Function(ChatMessage message) onSpeakMessage;
   final Future<void> Function(MessageAttachment attachment)
@@ -87,7 +85,7 @@ class ChatBody extends StatelessWidget {
                       tween: Tween(begin: 0, end: 1),
                       duration: MediaQuery.disableAnimationsOf(context)
                           ? Duration.zero
-                          : const Duration(milliseconds: 650),
+                          : const Duration(milliseconds: 1000),
                       curve: Curves.easeOutCubic,
                       builder: (context, value, child) {
                         return Transform.translate(
@@ -95,44 +93,42 @@ class ChatBody extends StatelessWidget {
                           child: Opacity(opacity: value, child: child),
                         );
                       },
-                      child: Transform.translate(
-                        offset: const Offset(0, -54),
-                        child: MediaQuery.withClampedTextScaling(
-                          maxScaleFactor: 1.2,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'WEAVIEW CREATIVE STUDIO',
+                      child: MediaQuery.withClampedTextScaling(
+                        maxScaleFactor: 1.2,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Semantics(
+                                header: true,
+                                child: Text(
+                                  '今天，你想编织什么梦境？',
                                   textAlign: TextAlign.center,
                                   style: state
-                                      .textStyle(
+                                      .poeticTextStyle(
                                         context,
-                                        size: 10,
-                                        weight: FontWeight.w700,
-                                        opacity: 0.42,
+                                        size: 18,
+                                        weight: FontWeight.w400,
+                                        opacity: 0.85,
                                       )
-                                      .copyWith(letterSpacing: 1.8),
+                                      .copyWith(letterSpacing: 1.6),
                                 ),
-                                const SizedBox(height: 13),
-                                Semantics(
-                                  header: true,
-                                  child: Text(
-                                    '今天，你想编织什么梦境？',
-                                    textAlign: TextAlign.center,
-                                    style: state.textStyle(
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'What dream shall we weave today?',
+                                textAlign: TextAlign.center,
+                                style: state
+                                    .textStyle(
                                       context,
-                                      size: 23,
-                                      weight: FontWeight.w600,
-                                      opacity: 0.88,
-                                      height: 1.25,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                                      size: 12,
+                                      weight: FontWeight.w400,
+                                      opacity: 0.38,
+                                    )
+                                    .copyWith(letterSpacing: 0.7),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -158,7 +154,6 @@ class ChatBody extends StatelessWidget {
                       onEdit: () => onEditMessage(index),
                       onTranslate: () => onTranslateMessage(index),
                       onBranch: () => onBranchMessage(index),
-                      onSaveCard: () => onSaveCardMessage(index),
                       onDelete: () => onDeleteMessage(index),
                       onSpeak: () => onSpeakMessage(message),
                       onChooseModel: onChooseModel,

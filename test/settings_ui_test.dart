@@ -31,7 +31,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('跟随系统'), findsOneWidget);
+    expect(find.text('跟随'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.tap(find.text('提供商'));

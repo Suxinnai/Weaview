@@ -42,8 +42,6 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
   bool _imageGenerationMode = false;
   bool _comparisonMode = false;
   List<ModelAssignment> _comparisonModels = [];
-  bool _workBoardOpen = false;
-  bool _branchGraphOpen = false;
   bool _usageStatsOpen = false;
   int? _editingUserMessageIndex;
   bool _editingImageGenerationMessage = false;
@@ -452,11 +450,6 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
     }
   }
 
-  void _saveCardMessage(int index) {
-    widget.state.createWorkCardFromMessage(index);
-    _snack('已存入编织板。');
-  }
-
   bool _isPcm16StreamingTts(TtsProviderConfig provider) {
     final lower = '${provider.type} ${provider.name} ${provider.baseUrl}'
         .toLowerCase();
@@ -694,8 +687,6 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
               if (_modelDropdownOpen ||
                   _dockExpanded ||
                   _sidebarOpen ||
-                  _workBoardOpen ||
-                  _branchGraphOpen ||
                   _usageStatsOpen) {
                 setState(() {
                   if (_modelDropdownOpen) {
@@ -704,10 +695,6 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
                     _dockExpanded = false;
                   } else if (_sidebarOpen) {
                     _sidebarOpen = false;
-                  } else if (_workBoardOpen) {
-                    _workBoardOpen = false;
-                  } else if (_branchGraphOpen) {
-                    _branchGraphOpen = false;
                   } else if (_usageStatsOpen) {
                     _usageStatsOpen = false;
                   }
@@ -759,7 +746,6 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
                     onEditMessage: _editMessage,
                     onTranslateMessage: _translateMessage,
                     onBranchMessage: _branchMessage,
-                    onSaveCardMessage: _saveCardMessage,
                     onDeleteMessage: _deleteMessage,
                     onSpeakMessage: _speakMessage,
                     onDownloadAttachment: _downloadAttachment,
@@ -855,28 +841,10 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
                       setState(() => _sidebarOpen = false);
                       _openSettings();
                     },
-                    onBranchGraph: () => setState(() {
-                      _sidebarOpen = false;
-                      _branchGraphOpen = true;
-                    }),
-                    onWorkBoard: () => setState(() {
-                      _sidebarOpen = false;
-                      _workBoardOpen = true;
-                    }),
                     onUsageStats: () => setState(() {
                       _sidebarOpen = false;
                       _usageStatsOpen = true;
                     }),
-                  ),
-                  BranchGraphOverlay(
-                    state: state,
-                    open: _branchGraphOpen,
-                    onClose: () => setState(() => _branchGraphOpen = false),
-                  ),
-                  WorkBoardOverlay(
-                    state: state,
-                    open: _workBoardOpen,
-                    onClose: () => setState(() => _workBoardOpen = false),
                   ),
                   UsageStatsOverlay(
                     state: state,

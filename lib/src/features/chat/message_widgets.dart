@@ -27,7 +27,6 @@ class MessageBubble extends StatefulWidget {
     required this.onEdit,
     required this.onTranslate,
     required this.onBranch,
-    required this.onSaveCard,
     required this.onDelete,
     required this.onSpeak,
     required this.onDownloadAttachment,
@@ -44,7 +43,6 @@ class MessageBubble extends StatefulWidget {
   final VoidCallback onEdit;
   final VoidCallback onTranslate;
   final VoidCallback onBranch;
-  final VoidCallback onSaveCard;
   final VoidCallback onDelete;
   final VoidCallback onSpeak;
   final ValueChanged<MessageAttachment> onDownloadAttachment;
@@ -172,8 +170,8 @@ class _MessageBubbleState extends State<MessageBubble> {
                           textAlign: textAlign,
                           style: state.personalizedTextStyle(
                             context,
-                            size: 14.5,
-                            height: 1.55,
+                            size: 14,
+                            height: 1.58,
                           ),
                         ),
                     ],
@@ -205,7 +203,6 @@ class _MessageBubbleState extends State<MessageBubble> {
                 onEdit: widget.onEdit,
                 onTranslate: widget.onTranslate,
                 onBranch: widget.onBranch,
-                onSaveCard: widget.onSaveCard,
                 onDelete: widget.onDelete,
                 onSpeak: widget.onSpeak,
               ),
@@ -386,7 +383,6 @@ class _MessageBubbleState extends State<MessageBubble> {
                 onEdit: _startInlineEdit,
                 onTranslate: widget.onTranslate,
                 onBranch: widget.onBranch,
-                onSaveCard: widget.onSaveCard,
                 onDelete: widget.onDelete,
                 onSpeak: widget.onSpeak,
               ),
@@ -450,30 +446,22 @@ class _MessageActionToggle extends StatelessWidget {
             shape: const CircleBorder(),
             child: InkWell(
               key: ValueKey('message-action-toggle-$keyValue'),
-              borderRadius: BorderRadius.circular(999),
+              customBorder: const CircleBorder(),
               onTap: onTap,
               child: SizedBox(
-                width: 40,
-                height: 38,
-                child: Center(
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: state
-                          .layer(context)
-                          .withValues(
-                            alpha: state.isDark(context) ? 0.34 : 0.58,
-                          ),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: text.withValues(alpha: 0.055)),
-                    ),
+                width: 34,
+                height: 26,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 260),
+                  curve: Curves.easeOut,
+                  opacity: visible ? 1 : 0.5,
+                  child: Center(
                     child: Icon(
                       visible
                           ? Icons.keyboard_arrow_up_rounded
                           : Icons.more_horiz_rounded,
-                      size: 17,
-                      color: text.withValues(alpha: 0.54),
+                      size: 20,
+                      color: text.withValues(alpha: 0.3),
                     ),
                   ),
                 ),
@@ -1210,7 +1198,7 @@ WrapAlignment _markdownWrapAlignment(TextAlign align) {
 EdgeInsets _messageBubblePadding(WeaviewState state) {
   return state.bubbleStyle == 'none'
       ? const EdgeInsets.symmetric(horizontal: 2, vertical: 2)
-      : const EdgeInsets.symmetric(horizontal: 18, vertical: 13);
+      : const EdgeInsets.symmetric(horizontal: 18, vertical: 12);
 }
 
 BorderRadius _messageBubbleRadius(bool isUser) {
@@ -1892,25 +1880,25 @@ MarkdownStyleSheet _aiMarkdownStyle(
 
   return MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
     a: type(
-      14.2,
-      height: 1.66,
-      weight: FontWeight.w600,
+      14,
+      height: 1.64,
+      weight: FontWeight.w500,
     ).copyWith(color: sendGreen),
-    p: type(14.2, height: 1.66),
-    pPadding: const EdgeInsets.only(bottom: 5),
-    h1: type(16.8, height: 1.34, weight: FontWeight.w600),
-    h1Padding: const EdgeInsets.only(top: 9, bottom: 5),
-    h2: type(15.8, height: 1.4, weight: FontWeight.w600),
-    h2Padding: const EdgeInsets.only(top: 8, bottom: 4),
-    h3: type(15.0, height: 1.45, weight: FontWeight.w600),
-    h3Padding: const EdgeInsets.only(top: 7, bottom: 3),
-    h4: type(14.4, height: 1.5, weight: FontWeight.w600),
-    h4Padding: const EdgeInsets.only(top: 6, bottom: 3),
-    h5: type(14.0, height: 1.52, weight: FontWeight.w600),
-    h6: type(13.6, height: 1.52, weight: FontWeight.w600, opacity: 0.72),
-    strong: type(14.2, height: 1.66, weight: FontWeight.w600),
-    em: type(14.2, height: 1.66).copyWith(fontStyle: FontStyle.italic),
-    blockSpacing: 8,
+    p: type(14, height: 1.64),
+    pPadding: const EdgeInsets.only(bottom: 4),
+    h1: type(15.8, height: 1.4, weight: FontWeight.w500),
+    h1Padding: const EdgeInsets.only(top: 8, bottom: 4),
+    h2: type(15.2, height: 1.44, weight: FontWeight.w500),
+    h2Padding: const EdgeInsets.only(top: 7, bottom: 3),
+    h3: type(14.6, height: 1.48, weight: FontWeight.w500),
+    h3Padding: const EdgeInsets.only(top: 6, bottom: 3),
+    h4: type(14.2, height: 1.52, weight: FontWeight.w500),
+    h4Padding: const EdgeInsets.only(top: 5, bottom: 2),
+    h5: type(13.8, height: 1.54, weight: FontWeight.w500),
+    h6: type(13.4, height: 1.54, weight: FontWeight.w500, opacity: 0.72),
+    strong: type(14, height: 1.64, weight: FontWeight.w500),
+    em: type(14, height: 1.64).copyWith(fontStyle: FontStyle.italic),
+    blockSpacing: 7,
     textAlign: wrapAlign,
     h1Align: wrapAlign,
     h2Align: wrapAlign,
@@ -1923,9 +1911,9 @@ MarkdownStyleSheet _aiMarkdownStyle(
     orderedListAlign: wrapAlign,
     codeblockAlign: wrapAlign,
     listIndent: 18,
-    listBullet: type(14.0, height: 1.58),
+    listBullet: type(13.8, height: 1.58),
     listBulletPadding: const EdgeInsets.only(right: 6),
-    code: type(13.2, height: 1.45).copyWith(
+    code: type(13, height: 1.45).copyWith(
       backgroundColor: state.text(context).withValues(alpha: 0.075),
       fontFamily: 'monospace',
       fontStyle: FontStyle.normal,
@@ -1937,7 +1925,7 @@ MarkdownStyleSheet _aiMarkdownStyle(
       borderRadius: BorderRadius.circular(14),
       border: Border.all(color: text.withValues(alpha: 0.08)),
     ),
-    blockquote: type(13.8, height: 1.58, opacity: 0.82),
+    blockquote: type(13.6, height: 1.6, opacity: 0.8),
     blockquotePadding: const EdgeInsets.fromLTRB(13, 10, 13, 10),
     blockquoteDecoration: BoxDecoration(
       color: state.accents[0].withValues(alpha: dark ? 0.10 : 0.16),
@@ -1950,8 +1938,8 @@ MarkdownStyleSheet _aiMarkdownStyle(
       ),
     ),
     tableColumnWidth: const IntrinsicColumnWidth(),
-    tableHead: type(13, weight: FontWeight.w600, height: 1.42),
-    tableBody: type(13, height: 1.48),
+    tableHead: type(12.8, weight: FontWeight.w500, height: 1.42),
+    tableBody: type(12.8, height: 1.48),
     tableHeadAlign: textAlign,
     tablePadding: const EdgeInsets.symmetric(vertical: 6),
     tableBorder: TableBorder.all(

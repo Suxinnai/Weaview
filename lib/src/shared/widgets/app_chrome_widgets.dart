@@ -167,12 +167,12 @@ class GlassPanel extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
         child: Container(
           decoration: BoxDecoration(
             color: state
                 .layer(context)
-                .withValues(alpha: state.isDark(context) ? 0.9 : 0.94),
+                .withValues(alpha: state.isDark(context) ? 0.88 : 0.92),
             borderRadius: BorderRadius.circular(radius),
             border: Border.all(
               color: state.text(context).withValues(alpha: 0.06),

@@ -105,20 +105,59 @@ class ThemeService {
     FontWeight weight = FontWeight.w400,
     double opacity = 1,
     double height = 1.35,
-  }) => TextStyle(
-    color: text(context).withValues(alpha: opacity),
-    fontSize: size,
-    fontWeight: weight,
-    fontStyle: FontStyle.normal,
-    height: height,
-    fontFamily: 'Inter',
-    fontFamilyFallback: const [
-      'PingFang SC',
-      'Microsoft YaHei',
-      'Noto Sans CJK SC',
-      'sans-serif',
-    ],
-  );
+  }) {
+    final effectiveWeight = switch (fontWeightMood) {
+      'bold' when weight.value <= FontWeight.w500.value => FontWeight.w600,
+      'medium' when weight.value <= FontWeight.w400.value => FontWeight.w500,
+      _ => weight,
+    };
+    return TextStyle(
+      color: text(context).withValues(alpha: opacity),
+      fontSize: size,
+      fontWeight: effectiveWeight,
+      fontStyle: fontStyleMood == 'italic' ? FontStyle.italic : null,
+      height: height,
+      fontFamily: fontMood == 'serif' ? 'LXGW WenKai' : 'Inter',
+      fontFamilyFallback: const [
+        'PingFang SC',
+        'Microsoft YaHei',
+        'Noto Sans CJK SC',
+        'Songti SC',
+        'sans-serif',
+      ],
+    );
+  }
+
+  TextStyle poeticTextStyle(
+    BuildContext context, {
+    double size = 22,
+    FontWeight weight = FontWeight.w500,
+    double opacity = 1,
+    double height = 1.32,
+    double letterSpacing = 0.8,
+  }) {
+    final effectiveWeight = switch (fontWeightMood) {
+      'bold' when weight.value <= FontWeight.w500.value => FontWeight.w600,
+      'medium' when weight.value <= FontWeight.w400.value => FontWeight.w500,
+      _ => weight,
+    };
+    return TextStyle(
+      color: text(context).withValues(alpha: opacity),
+      fontSize: size,
+      fontWeight: effectiveWeight,
+      fontStyle: fontStyleMood == 'italic' ? FontStyle.italic : null,
+      height: height,
+      letterSpacing: letterSpacing,
+      fontFamily: 'LXGW WenKai',
+      fontFamilyFallback: const [
+        'Noto Serif SC',
+        'Songti SC',
+        'PingFang SC',
+        'Microsoft YaHei',
+        'sans-serif',
+      ],
+    );
+  }
 
   TextStyle personalizedTextStyle(
     BuildContext context, {
@@ -138,7 +177,7 @@ class ThemeService {
       fontWeight: effectiveWeight,
       fontStyle: fontStyleMood == 'italic' ? FontStyle.italic : null,
       height: height,
-      fontFamily: fontMood == 'serif' ? 'Noto Serif SC' : 'Inter',
+      fontFamily: fontMood == 'serif' ? 'LXGW WenKai' : 'Inter',
       fontFamilyFallback: const [
         'PingFang SC',
         'Microsoft YaHei',

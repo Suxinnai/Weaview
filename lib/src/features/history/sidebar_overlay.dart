@@ -15,8 +15,6 @@ class SidebarOverlay extends StatelessWidget {
     required this.open,
     required this.onClose,
     required this.onSettings,
-    required this.onBranchGraph,
-    required this.onWorkBoard,
     required this.onUsageStats,
   });
 
@@ -24,8 +22,6 @@ class SidebarOverlay extends StatelessWidget {
   final bool open;
   final VoidCallback onClose;
   final VoidCallback onSettings;
-  final VoidCallback onBranchGraph;
-  final VoidCallback onWorkBoard;
   final VoidCallback onUsageStats;
 
   @override
@@ -109,13 +105,13 @@ class SidebarOverlay extends StatelessWidget {
                               Text(
                                 '织境',
                                 style: state
-                                    .textStyle(
+                                    .poeticTextStyle(
                                       context,
-                                      size: 13,
-                                      weight: FontWeight.w600,
-                                      opacity: 0.82,
+                                      size: 15,
+                                      weight: FontWeight.w500,
+                                      opacity: 0.86,
                                     )
-                                    .copyWith(letterSpacing: 3),
+                                    .copyWith(letterSpacing: 4),
                               ),
                               const Spacer(),
                               IconCircleButton(
@@ -150,38 +146,24 @@ class SidebarOverlay extends StatelessWidget {
                         ),
                         Padding(
                           padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: _SidebarModeButton(
-                                  state: state,
-                                  icon: Icons.account_tree_outlined,
-                                  label: '分支图谱',
-                                  onTap: onBranchGraph,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _SidebarModeButton(
-                                  state: state,
-                                  icon: Icons.dashboard_customize_outlined,
-                                  label: '编织板',
-                                  onTap: onWorkBoard,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: _SidebarModeButton(
-                                  state: state,
-                                  icon: Icons.payments_outlined,
-                                  label: '用量',
-                                  subtitle: _formatSidebarCost(
-                                    state.totalEstimatedCostUsd,
-                                  ),
-                                  onTap: onUsageStats,
-                                ),
-                              ),
-                            ],
+                          child: _SidebarModeButton(
+                            state: state,
+                            icon: Icons.payments_outlined,
+                            label: '用量统计',
+                            subtitle: _formatSidebarCost(
+                              state.totalEstimatedCostUsd,
+                            ),
+                            onTap: onUsageStats,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+                          child: _SidebarModeButton(
+                            state: state,
+                            icon: Icons.settings_outlined,
+                            label: '设置',
+                            subtitle: '提供商、模型与偏好',
+                            onTap: onSettings,
                           ),
                         ),
                         Expanded(
@@ -512,52 +494,53 @@ class _SidebarModeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final text = state.text(context);
     return Material(
-      color: state.text(context).withValues(alpha: 0.055),
-      borderRadius: BorderRadius.circular(18),
+      color: text.withValues(alpha: 0.045),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 68),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icon,
-                  size: 18,
-                  color: state.text(context).withValues(alpha: 0.66),
-                ),
-                const SizedBox(height: 6),
-                Text(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 11, 12, 11),
+          child: Row(
+            children: [
+              Icon(icon, size: 17, color: text.withValues(alpha: 0.62)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: state.textStyle(
                     context,
-                    size: 11,
-                    weight: FontWeight.w700,
-                    opacity: 0.74,
+                    size: 13,
+                    weight: FontWeight.w500,
+                    opacity: 0.8,
                   ),
                 ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: state.textStyle(
-                      context,
-                      size: 9.5,
-                      weight: FontWeight.w600,
-                      opacity: 0.38,
-                    ),
+              ),
+              if (subtitle != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  subtitle!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: state.textStyle(
+                    context,
+                    size: 11,
+                    weight: FontWeight.w500,
+                    opacity: 0.4,
                   ),
-                ],
+                ),
               ],
-            ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 17,
+                color: text.withValues(alpha: 0.32),
+              ),
+            ],
           ),
         ),
       ),

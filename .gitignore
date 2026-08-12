@@ -6,6 +6,9 @@ node_modules/
 
 # Local agent/workspace state
 .omx/
+.agents/
+.claude/
+skills-lock.json
 
 # IDE/local workspace files
 .idea/

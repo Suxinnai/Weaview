@@ -414,10 +414,10 @@ extension SettingsTabs on SettingsSheetState {
                 children: [
                   Text(
                     '模型提供商',
-                    style: state.textStyle(
+                    style: state.poeticTextStyle(
                       context,
-                      size: 24,
-                      weight: FontWeight.w700,
+                      size: 23,
+                      weight: FontWeight.w500,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -462,16 +462,23 @@ extension SettingsTabs on SettingsSheetState {
               : const Duration(milliseconds: 240),
           curve: Curves.easeOutCubic,
           alignment: Alignment.topCenter,
-          child: CardShell(
-            state: state,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
             child: Column(
               children: [
                 if (visibleProviders.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(22),
-                    child: Text(
-                      '没有匹配的提供商',
-                      style: state.textStyle(context, size: 14, opacity: 0.56),
+                  CardShell(
+                    state: state,
+                    child: Padding(
+                      padding: const EdgeInsets.all(22),
+                      child: Text(
+                        '没有匹配的提供商',
+                        style: state.textStyle(
+                          context,
+                          size: 14,
+                          opacity: 0.56,
+                        ),
+                      ),
                     ),
                   ),
                 for (
@@ -479,7 +486,6 @@ extension SettingsTabs on SettingsSheetState {
                   index < visibleProviders.length;
                   index++
                 ) ...[
-                  if (index > 0) DividerLine(state: state),
                   Builder(
                     key: ValueKey('provider_${visibleProviders[index].name}'),
                     builder: (context) {
@@ -502,68 +508,71 @@ extension SettingsTabs on SettingsSheetState {
                           : null;
                       final controlsVisible =
                           providerDeleteTarget == provider.name;
-                      return DragTarget<String>(
-                        onWillAcceptWithDetails: (details) =>
-                            details.data != provider.name,
-                        onAcceptWithDetails: (details) {
-                          dropProviderOn(details.data, actualIndex);
-                          updateSheet(() {
-                            draggingProviderName = null;
-                          });
-                        },
-                        builder: (context, candidateData, rejectedData) {
-                          final hovering = candidateData.isNotEmpty;
-                          final row = _ProviderGridCard(
-                            state: state,
-                            provider: provider,
-                            active: active,
-                            activeLabel: activeLabel,
-                            controlsVisible: controlsVisible,
-                            highlighted: hovering,
-                            onEdit: () => openProviderConfig(provider),
-                            onDelete: () =>
-                                confirmDeleteProvider(provider.name),
-                            onToggle: (value) =>
-                                state.setProviderEnabled(provider.name, value),
-                          );
-                          return LongPressDraggable<String>(
-                            data: provider.name,
-                            delay: const Duration(milliseconds: 320),
-                            dragAnchorStrategy: pointerDragAnchorStrategy,
-                            rootOverlay: true,
-                            feedback: SizedBox(
-                              width: 420,
-                              child: Material(
-                                color: Colors.transparent,
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: DragTarget<String>(
+                          onWillAcceptWithDetails: (details) =>
+                              details.data != provider.name,
+                          onAcceptWithDetails: (details) {
+                            dropProviderOn(details.data, actualIndex);
+                            updateSheet(() {
+                              draggingProviderName = null;
+                            });
+                          },
+                          builder: (context, candidateData, rejectedData) {
+                            final hovering = candidateData.isNotEmpty;
+                            final row = _ProviderGridCard(
+                              state: state,
+                              provider: provider,
+                              active: active,
+                              activeLabel: activeLabel,
+                              controlsVisible: controlsVisible,
+                              highlighted: hovering,
+                              onEdit: () => openProviderConfig(provider),
+                              onDelete: () =>
+                                  confirmDeleteProvider(provider.name),
+                              onToggle: (value) =>
+                                  state.setProviderEnabled(provider.name, value),
+                            );
+                            return LongPressDraggable<String>(
+                              data: provider.name,
+                              delay: const Duration(milliseconds: 320),
+                              dragAnchorStrategy: pointerDragAnchorStrategy,
+                              rootOverlay: true,
+                              feedback: SizedBox(
+                                width: 420,
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: row,
+                                ),
+                              ),
+                              childWhenDragging: Opacity(
+                                opacity: 0.46,
                                 child: row,
                               ),
-                            ),
-                            childWhenDragging: Opacity(
-                              opacity: 0.46,
-                              child: row,
-                            ),
-                            onDragStarted: () => updateSheet(() {
-                              providerDeleteTarget = provider.name;
-                              draggingProviderName = provider.name;
-                            }),
-                            onDraggableCanceled: (_, _) => updateSheet(() {
-                              draggingProviderName = null;
-                            }),
-                            onDragEnd: (_) => updateSheet(() {
-                              draggingProviderName = null;
-                            }),
-                            child: AnimatedScale(
-                              duration: const Duration(milliseconds: 140),
-                              curve: Curves.easeOutCubic,
-                              scale: draggingProviderName == provider.name
-                                  ? 0.98
-                                  : hovering
-                                  ? 0.992
-                                  : 1,
-                              child: row,
-                            ),
-                          );
-                        },
+                              onDragStarted: () => updateSheet(() {
+                                providerDeleteTarget = provider.name;
+                                draggingProviderName = provider.name;
+                              }),
+                              onDraggableCanceled: (_, _) => updateSheet(() {
+                                draggingProviderName = null;
+                              }),
+                              onDragEnd: (_) => updateSheet(() {
+                                draggingProviderName = null;
+                              }),
+                              child: AnimatedScale(
+                                duration: const Duration(milliseconds: 140),
+                                curve: Curves.easeOutCubic,
+                                scale: draggingProviderName == provider.name
+                                    ? 0.98
+                                    : hovering
+                                    ? 0.992
+                                    : 1,
+                                child: row,
+                              ),
+                            );
+                          },
+                        ),
                       );
                     },
                   ),
@@ -619,9 +628,6 @@ extension SettingsTabs on SettingsSheetState {
 
   Widget modelsTab() {
     final state = widget.state;
-    final groups = <({String label, List<String> roles})>[
-      (label: '常用模型', roles: const ['chat', 'image']),
-    ];
     return scrollContent([
       Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -634,14 +640,14 @@ extension SettingsTabs on SettingsSheetState {
                   '默认模型',
                   style: state.textStyle(
                     context,
-                    size: 24,
-                    weight: FontWeight.w700,
+                    size: 23,
+                    weight: FontWeight.w600,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 5),
                 Text(
-                  '只保留日常最常用的两项',
-                  style: state.textStyle(context, size: 14, opacity: 0.56),
+                  '设置主对话与生图模型',
+                  style: state.textStyle(context, size: 13, opacity: 0.56),
                 ),
               ],
             ),
@@ -681,65 +687,77 @@ extension SettingsTabs on SettingsSheetState {
         ),
       ),
       const SizedBox(height: 24),
-      for (final group in groups) ...[
-        SectionLabel(state: state, label: group.label),
-        CardShell(
-          state: state,
-          child: Column(
-            children: [
-              for (var index = 0; index < group.roles.length; index++) ...[
-                if (index > 0) DividerLine(state: state),
-                Builder(
-                  builder: (context) {
-                    final role = group.roles[index];
-                    final entry = SettingsSheetState.settingsRoles[role]!;
-                    final assignment = state.modelAssignments[role]!;
-                    return SettingsRow(
+      SectionLabel(state: state, label: '常用模型'),
+      CardShell(
+        state: state,
+        child: Column(
+          children: [
+            for (var index = 0; index < 2; index++) ...[
+              if (index > 0) DividerLine(state: state),
+              Builder(
+                builder: (context) {
+                  final role = index == 0 ? 'chat' : 'image';
+                  final entry = SettingsSheetState.settingsRoles[role]!;
+                  final assignment = state.modelAssignments[role]!;
+                  return SettingsRow(
+                    state: state,
+                    title: entry.$1,
+                    subtitle: assignment.model.trim().isEmpty
+                        ? entry.$2
+                        : _assignmentSubtitle(assignment),
+                    leading: _SettingsIconBadge(
                       state: state,
-                      title: entry.$1,
-                      subtitle: assignment.model.trim().isEmpty
-                          ? entry.$2
-                          : _assignmentSubtitle(assignment),
-                      leading: _SettingsIconBadge(
-                        state: state,
-                        icon: _roleIcon(role),
-                      ),
-                      showChevron: true,
-                      trailing: _ModelAssignmentBadge(
-                        state: state,
-                        provider: assignment.provider,
-                        model: assignment.model,
-                      ),
-                      onTap: () {
-                        updateSheet(() {
-                          editingRole = role;
-                          roleDraft = assignment;
-                          subView = 'model_role_config';
-                        });
-                      },
-                    );
-                  },
-                ),
-              ],
+                      icon: _roleIcon(role),
+                    ),
+                    showChevron: true,
+                    trailing: _ModelAssignmentBadge(
+                      state: state,
+                      provider: assignment.provider,
+                      model: assignment.model,
+                    ),
+                    onTap: () {
+                      updateSheet(() {
+                        editingRole = role;
+                        roleDraft = assignment;
+                        subView = 'model_role_config';
+                      });
+                    },
+                  );
+                },
+              ),
             ],
-          ),
+          ],
         ),
-        const SizedBox(height: 24),
-      ],
+      ),
     ]);
   }
 
   Widget moreTab() {
     final state = widget.state;
     return scrollContent([
-      Text(
-        '更多设置',
-        style: state.textStyle(context, size: 24, weight: FontWeight.w700),
-      ),
-      const SizedBox(height: 6),
-      Text(
-        '低频选项集中在这里，需要时再进入。',
-        style: state.textStyle(context, size: 14, opacity: 0.56),
+      Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '更多',
+                  style: state.textStyle(
+                    context,
+                    size: 23,
+                    weight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '常用之外的一切',
+                  style: state.textStyle(context, size: 13, opacity: 0.56),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
       const SizedBox(height: 18),
       CardShell(
@@ -937,11 +955,6 @@ extension SettingsTabs on SettingsSheetState {
           jsonEncode(state.memoryItems.map((item) => item.toJson()).toList()),
         )
         .length;
-    final workCardBytes = utf8
-        .encode(
-          jsonEncode(state.workCards.map((item) => item.toJson()).toList()),
-        )
-        .length;
     final tokenUsageBytes = utf8
         .encode(
           jsonEncode(
@@ -973,7 +986,6 @@ extension SettingsTabs on SettingsSheetState {
         sessionBytes +
         providerBytes +
         memoryBytes +
-        workCardBytes +
         tokenUsageBytes +
         configBytes;
     int segmentFlex(int bytes) {
@@ -1005,7 +1017,7 @@ extension SettingsTabs on SettingsSheetState {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '本地保存对话、记忆、作品卡、用量与配置摘要',
+                        '本地保存对话、记忆、用量与配置摘要',
                         style: state.textStyle(context, size: 12, opacity: 0.5),
                       ),
                     ],
@@ -1032,10 +1044,6 @@ extension SettingsTabs on SettingsSheetState {
                     Expanded(
                       flex: segmentFlex(memoryBytes),
                       child: Container(color: state.accents[0]),
-                    ),
-                    Expanded(
-                      flex: segmentFlex(workCardBytes),
-                      child: Container(color: const Color(0xFF74D9CF)),
                     ),
                     Expanded(
                       flex: segmentFlex(tokenUsageBytes),
@@ -1069,14 +1077,6 @@ extension SettingsTabs on SettingsSheetState {
               color: state.accents[0],
               bytes: memoryBytes,
               ratio: total == 0 ? 0 : memoryBytes / total,
-            ),
-            StorageRow(
-              state: state,
-              label: '作品卡与编织板',
-              description: '沉淀的作品内容与工作数据',
-              color: const Color(0xFF74D9CF),
-              bytes: workCardBytes,
-              ratio: total == 0 ? 0 : workCardBytes / total,
             ),
             StorageRow(
               state: state,
@@ -1189,12 +1189,6 @@ extension SettingsTabs on SettingsSheetState {
               icon: Icons.auto_awesome_rounded,
               title: '记忆与画像',
               body: '用于个性化回复的长期记忆、人物画像和相关开关状态。',
-            ),
-            _DataInfoLine(
-              state: state,
-              icon: Icons.dashboard_customize_outlined,
-              title: '作品卡与编织板',
-              body: '保存从对话沉淀的作品卡、来源会话、作品类型和置顶状态。',
             ),
             _DataInfoLine(
               state: state,
@@ -1539,14 +1533,15 @@ class _ThemeSegmentedControl extends StatelessWidget {
         color: state.isDark(context)
             ? Colors.white.withValues(alpha: 0.06)
             : state.text(context).withValues(alpha: 0.035),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: state.text(context).withValues(alpha: 0.08)),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: state.text(context).withValues(alpha: 0.07)),
       ),
       child: Row(
         children: [
           Expanded(
             child: _ThemeSegmentButton(
               state: state,
+              icon: Icons.light_mode_outlined,
               label: '浅色',
               selected: current == ThemeMode.light,
               onTap: () => onSelected(ThemeMode.light),
@@ -1555,16 +1550,17 @@ class _ThemeSegmentedControl extends StatelessWidget {
           Expanded(
             child: _ThemeSegmentButton(
               state: state,
+              icon: Icons.dark_mode_outlined,
               label: '深色',
               selected: current == ThemeMode.dark,
               onTap: () => onSelected(ThemeMode.dark),
             ),
           ),
           Expanded(
-            flex: 2,
             child: _ThemeSegmentButton(
               state: state,
-              label: '跟随系统',
+              icon: Icons.brightness_auto_outlined,
+              label: '跟随',
               selected: current == ThemeMode.system,
               onTap: () => onSelected(ThemeMode.system),
             ),
@@ -1578,40 +1574,60 @@ class _ThemeSegmentedControl extends StatelessWidget {
 class _ThemeSegmentButton extends StatelessWidget {
   const _ThemeSegmentButton({
     required this.state,
+    required this.icon,
     required this.label,
     required this.selected,
     required this.onTap,
   });
 
   final WeaviewState state;
+  final IconData icon;
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected
-          ? state.accents[0].withValues(
-              alpha: state.isDark(context) ? 0.24 : 0.18,
-            )
-          : Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: SizedBox(
-          height: 40,
-          child: Center(
-            child: Text(
-              label,
-              maxLines: 1,
-              style: state.textStyle(
-                context,
-                size: 12,
-                weight: FontWeight.w600,
-                opacity: selected ? 0.96 : 0.58,
-              ),
+    final accent = state.accents[0];
+    return AnimatedContainer(
+      duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero
+          : const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      decoration: BoxDecoration(
+        color: selected ? accent.withValues(alpha: 0.20) : Colors.transparent,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            height: 38,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 15,
+                  color: state.text(context).withValues(
+                        alpha: selected ? 0.96 : 0.5,
+                      ),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  label,
+                  maxLines: 1,
+                  style: state.textStyle(
+                    context,
+                    size: 12,
+                    weight: FontWeight.w500,
+                    opacity: selected ? 0.96 : 0.56,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -1957,6 +1973,41 @@ bool _isProviderConfigured(AiProvider provider) {
       provider.status == '使用中';
 }
 
+class _ActivePill extends StatelessWidget {
+  const _ActivePill({
+    required this.state,
+    required this.label,
+    required this.color,
+  });
+
+  final WeaviewState state;
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+      decoration: BoxDecoration(
+        color: color.withValues(
+          alpha: state.isDark(context) ? 0.16 : 0.10,
+        ),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: state
+            .textStyle(
+              context,
+              size: 10,
+              weight: FontWeight.w600,
+            )
+            .copyWith(color: color, letterSpacing: 0.6),
+      ),
+    );
+  }
+}
+
 class _ProviderGridCard extends StatelessWidget {
   const _ProviderGridCard({
     required this.state,
@@ -1986,10 +2037,28 @@ class _ProviderGridCard extends StatelessWidget {
     final connected = provider.enabled && configured;
     final showWaveBorder = controlsVisible;
     final solidBorderColor = active
-        ? state.accents[0].withValues(alpha: 0.48)
+        ? state.accents[0].withValues(alpha: 0.46)
         : highlighted
         ? provider.color.withValues(alpha: 0.38)
-        : state.text(context).withValues(alpha: 0.06);
+        : state.text(context).withValues(alpha: 0.07);
+    final cardFill = state.isDark(context)
+        ? (active
+              ? Colors.white.withValues(alpha: 0.10)
+              : Colors.white.withValues(alpha: 0.055))
+        : (active
+              ? Colors.white.withValues(alpha: 0.96)
+              : Colors.white.withValues(alpha: 0.78));
+    final statusPillBg = connected
+        ? sendGreen.withValues(alpha: state.isDark(context) ? 0.16 : 0.10)
+        : state.text(context).withValues(alpha: 0.05);
+    final statusPillFg = connected
+        ? sendGreen
+        : state.text(context).withValues(alpha: 0.5);
+    final statusText = !configured
+        ? '未配置'
+        : !provider.enabled
+        ? '已禁用 · ${provider.models.length} 个模型'
+        : '已连接 · ${provider.models.length} 个模型';
     return Material(
       color: Colors.transparent,
       child: Stack(
@@ -1997,31 +2066,25 @@ class _ProviderGridCard extends StatelessWidget {
         children: [
           InkWell(
             onTap: onEdit,
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(20),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
-              height: 82,
-              padding: const EdgeInsets.fromLTRB(14, 10, 12, 10),
+              height: 80,
+              padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
               decoration: BoxDecoration(
-                color: active
-                    ? (state.isDark(context)
-                          ? Colors.white.withValues(alpha: 0.10)
-                          : Colors.white.withValues(alpha: 0.88))
-                    : (state.isDark(context)
-                          ? Colors.white.withValues(alpha: 0.055)
-                          : Colors.white.withValues(alpha: 0.70)),
-                borderRadius: BorderRadius.circular(22),
+                color: cardFill,
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: showWaveBorder ? Colors.transparent : solidBorderColor,
-                  width: active || highlighted ? 1.35 : 1,
+                  width: active || highlighted ? 1.15 : 0.8,
                 ),
                 boxShadow: [
                   BoxShadow(
                     color: active
-                        ? state.accents[0].withValues(alpha: 0.16)
-                        : Colors.black.withValues(alpha: 0.025),
-                    blurRadius: active ? 24 : 14,
-                    offset: const Offset(0, 8),
+                        ? state.accents[0].withValues(alpha: 0.14)
+                        : Colors.black.withValues(alpha: 0.02),
+                    blurRadius: active ? 22 : 10,
+                    offset: const Offset(0, 6),
                   ),
                 ],
               ),
@@ -2029,11 +2092,11 @@ class _ProviderGridCard extends StatelessWidget {
                 children: [
                   BrandIcon.provider(
                     provider: provider,
-                    size: 44,
+                    size: 46,
                     radius: 15,
                     padding: 6,
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 13),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2048,59 +2111,57 @@ class _ProviderGridCard extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: state.textStyle(
                                   context,
-                                  size: 17,
+                                  size: 16.5,
                                   weight: FontWeight.w600,
+                                  height: 1.2,
                                 ),
                               ),
                             ),
                             if (activeLabel != null && !controlsVisible) ...[
                               const SizedBox(width: 8),
-                              Text(
-                                activeLabel!,
-                                style: state
-                                    .textStyle(
-                                      context,
-                                      size: 10,
-                                      weight: FontWeight.w800,
-                                    )
-                                    .copyWith(
-                                      color: state.accents[0].withValues(
-                                        alpha: 0.6,
-                                      ),
-                                      letterSpacing: 0.8,
-                                    ),
+                              _ActivePill(
+                                state: state,
+                                label: activeLabel!,
+                                color: state.accents[0],
                               ),
                             ],
                           ],
                         ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: connected ? sendGreen : Colors.grey,
-                                shape: BoxShape.circle,
+                        const SizedBox(height: 7),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: statusPillBg,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 5,
+                                height: 5,
+                                decoration: BoxDecoration(
+                                  color: connected ? sendGreen : Colors.grey,
+                                  shape: BoxShape.circle,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                configured
-                                    ? '${provider.enabled ? provider.status : '已禁用'} · ${provider.models.length} 个模型'
-                                    : '未配置',
+                              const SizedBox(width: 5),
+                              Text(
+                                statusText,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: state.textStyle(
                                   context,
-                                  size: 12,
-                                  opacity: 0.58,
-                                  weight: FontWeight.w600,
-                                ),
+                                  size: 10.5,
+                                  weight: FontWeight.w500,
+                                  height: 1.1,
+                                ).copyWith(color: statusPillFg),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -2115,7 +2176,7 @@ class _ProviderGridCard extends StatelessWidget {
                           value: provider.enabled,
                           onChanged: onToggle,
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 2),
                       ],
                       PopupMenuButton<String>(
                         key: ValueKey('provider_menu_${provider.name}'),
@@ -2123,9 +2184,9 @@ class _ProviderGridCard extends StatelessWidget {
                         padding: EdgeInsets.zero,
                         splashRadius: 18,
                         icon: Icon(
-                          Icons.more_vert_rounded,
-                          size: 20,
-                          color: state.text(context).withValues(alpha: 0.56),
+                          Icons.more_horiz_rounded,
+                          size: 22,
+                          color: state.text(context).withValues(alpha: 0.5),
                         ),
                         onSelected: (value) {
                           if (value == 'edit') {
@@ -2158,12 +2219,7 @@ class _ProviderGridCard extends StatelessWidget {
                           ),
                         ],
                       ),
-                      const SizedBox(width: 2),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        size: 22,
-                        color: state.text(context).withValues(alpha: 0.34),
-                      ),
+                      const SizedBox(width: 6),
                     ],
                   ),
                 ],

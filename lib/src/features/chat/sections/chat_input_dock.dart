@@ -144,9 +144,8 @@ class ChatInputDock extends StatelessWidget {
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
             child: imageGenerationMode
-                ? _ImageGenerationControls(
+                ? _ImageModeStrip(
                     state: state,
-                    pendingAttachments: pendingAttachments,
                     imageCount: imageCount.clamp(1, 4),
                     onImageCountChanged: onImageCountChanged,
                   )
@@ -278,7 +277,6 @@ class ChatInputDock extends StatelessWidget {
             child: dockExpanded
                 ? _DockActionSheet(
                     state: state,
-                    imageGenerationMode: imageGenerationMode,
                     webSearchEnabled: webSearchEnabled,
                     comparisonMode: comparisonMode,
                     imageAttachmentCount: imageAttachmentCount,
@@ -436,192 +434,49 @@ class ChatInputDock extends StatelessWidget {
   }
 }
 
-class _ImageGenerationControls extends StatelessWidget {
-  const _ImageGenerationControls({
+class _ImageModeStrip extends StatelessWidget {
+  const _ImageModeStrip({
     required this.state,
-    required this.pendingAttachments,
     required this.imageCount,
     required this.onImageCountChanged,
   });
 
   final WeaviewState state;
-  final List<MessageAttachment> pendingAttachments;
   final int imageCount;
   final ValueChanged<int>? onImageCountChanged;
 
   @override
   Widget build(BuildContext context) {
-    final assignment = state.modelAssignments['image'];
-    final providerName = assignment?.provider.trim() ?? '';
-    final modelName = assignment?.model.trim() ?? '';
-    final hasModel = providerName.isNotEmpty || modelName.isNotEmpty;
-    final imageAttachments = pendingAttachments
-        .where((item) => item.isImage)
-        .length;
-    final fileAttachments = pendingAttachments.length - imageAttachments;
-    final base = state.text(context);
     return Container(
-      key: const ValueKey('image-generation-controls'),
-      margin: const EdgeInsets.fromLTRB(10, 10, 10, 4),
-      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      key: const ValueKey('image-mode-strip'),
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 2),
+      padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
       decoration: BoxDecoration(
-        color: sendGreen.withValues(alpha: state.isDark(context) ? 0.12 : 0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: sendGreen.withValues(alpha: 0.20)),
+        color: sendGreen.withValues(
+          alpha: state.isDark(context) ? 0.10 : 0.06,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: sendGreen.withValues(alpha: 0.16)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.68),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const Icon(
-                  Icons.auto_awesome_rounded,
-                  size: 20,
-                  color: sendGreen,
-                ),
-              ),
-              const SizedBox(width: 11),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '图片生成模式',
-                      style: state.textStyle(
-                        context,
-                        size: 13.5,
-                        weight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      imageAttachments > 0
-                          ? '已附加 $imageAttachments 张参考图'
-                          : '可添加多张参考图进行生成或修改',
-                      style: state.textStyle(
-                        context,
-                        size: 11.5,
-                        opacity: 0.56,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              _DockStatusPill(
-                state: state,
-                label: '输出 $imageCount 张',
-                selected: true,
-              ),
-            ],
+          Icon(
+            Icons.auto_awesome_rounded,
+            size: 15,
+            color: sendGreen.withValues(alpha: 0.9),
           ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(
-                alpha: state.isDark(context) ? 0.06 : 0.48,
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              '图片生成',
+              style: state.textStyle(
+                context,
+                size: 12.5,
+                weight: FontWeight.w500,
+                opacity: 0.72,
               ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: base.withValues(alpha: 0.08)),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: sendGreen.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Icons.image_search_rounded,
-                    size: 20,
-                    color: sendGreen,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        hasModel ? modelName : '未选择生图模型',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: state.textStyle(
-                          context,
-                          size: 13,
-                          weight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        hasModel
-                            ? '${providerName.isEmpty ? '当前模型' : providerName} · 当前用于生图'
-                            : '请先从顶部模型选择中切换到支持生图的模型',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: state.textStyle(
-                          context,
-                          size: 11.5,
-                          opacity: 0.54,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
             ),
           ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _DockStatusPill(state: state, label: '图片生成模式', selected: true),
-              _DockStatusPill(
-                state: state,
-                label: imageAttachments > 0
-                    ? '参考图 $imageAttachments 张'
-                    : '未添加参考图',
-                selected: imageAttachments > 0,
-              ),
-              if (fileAttachments > 0)
-                _DockStatusPill(state: state, label: '文件 $fileAttachments 个'),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Text(
-                '输出数量',
-                style: state.textStyle(
-                  context,
-                  size: 11.5,
-                  weight: FontWeight.w700,
-                  opacity: 0.62,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '一次输出 $imageCount 张',
-                style: state.textStyle(
-                  context,
-                  size: 11.5,
-                  weight: FontWeight.w600,
-                  opacity: 0.58,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 9),
           _ImageCountSelector(
             state: state,
             value: imageCount,
@@ -652,11 +507,11 @@ class _ImageCountSelector extends StatelessWidget {
       message: '输出张数',
       child: Container(
         key: const ValueKey('image-count-selector'),
-        height: 42,
+        height: 34,
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
           color: base.withValues(alpha: dark ? 0.085 : 0.06),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           border: Border.all(color: base.withValues(alpha: 0.08)),
         ),
         child: Row(
@@ -671,24 +526,24 @@ class _ImageCountSelector extends StatelessWidget {
                   label: '输出 $option 张图片',
                   child: Material(
                     color: option == value ? sendGreen : Colors.transparent,
-                    borderRadius: BorderRadius.circular(13),
+                    borderRadius: BorderRadius.circular(9),
                     child: InkWell(
                       key: ValueKey('image-count-option-$option'),
-                      borderRadius: BorderRadius.circular(13),
+                      borderRadius: BorderRadius.circular(9),
                       onTap: onChanged == null
                           ? null
                           : () => onChanged!(option),
                       child: SizedBox(
-                        width: 54,
+                        width: 36,
                         child: Center(
                           child: Text(
-                            '$option 张',
+                            '$option',
                             style: state
                                 .textStyle(
                                   context,
-                                  size: 11.5,
-                                  weight: FontWeight.w700,
-                                  opacity: option == value ? 1 : 0.62,
+                                  size: 12,
+                                  weight: FontWeight.w500,
+                                  opacity: option == value ? 1 : 0.6,
                                 )
                                 .copyWith(
                                   color: option == value ? Colors.white : base,
@@ -710,7 +565,6 @@ class _ImageCountSelector extends StatelessWidget {
 class _DockActionSheet extends StatelessWidget {
   const _DockActionSheet({
     required this.state,
-    required this.imageGenerationMode,
     required this.webSearchEnabled,
     required this.comparisonMode,
     required this.imageAttachmentCount,
@@ -723,7 +577,6 @@ class _DockActionSheet extends StatelessWidget {
   });
 
   final WeaviewState state;
-  final bool imageGenerationMode;
   final bool webSearchEnabled;
   final bool comparisonMode;
   final int imageAttachmentCount;
@@ -781,17 +634,6 @@ class _DockActionSheet extends StatelessWidget {
             selected: webSearchEnabled,
             statusLabel: webSearchEnabled ? '已开启' : '未开启',
             onTap: onToggleWebSearch,
-          ),
-          const SizedBox(height: 10),
-          _DockActionRow(
-            state: state,
-            icon: Icons.auto_awesome_rounded,
-            title: '图片生成',
-            subtitle: imageGenerationMode
-                ? '当前输入将用于图片生成或修改'
-                : '切换顶部模型到生图模型后自动进入',
-            selected: imageGenerationMode,
-            statusLabel: imageGenerationMode ? '进行中' : '模型切换',
           ),
           const SizedBox(height: 10),
           _DockActionRow(

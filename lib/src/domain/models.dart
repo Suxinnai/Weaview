@@ -12,4 +12,3 @@ export 'model_assignment.dart';
 export 'search_config.dart';
 export 'token_usage_record.dart';
 export 'tts_provider_config.dart';
-export 'work_card.dart';

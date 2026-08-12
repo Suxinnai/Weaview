@@ -293,7 +293,7 @@ $$E = mc^2$$
     expect(restored.comparisonResults.last.error, '模型不可用');
   });
 
-  test('saves comparison replies as exportable work cards', () async {
+  test('exports backup without removed work card storage', () async {
     SharedPreferences.setMockInitialValues({});
     final state = WeaviewState();
 
@@ -322,18 +322,10 @@ $$E = mc^2$$
         ),
       );
 
-    state.createWorkCardFromMessage(1);
-
-    expect(state.workCards, hasLength(1));
-    expect(state.workCards.single.kind, 'comparison');
-    expect(state.workCards.single.sourceSessionTitle, '写一个发布文案');
-    expect(state.workCards.single.body, contains('[OpenAI/gpt-test]'));
-    expect(state.workCards.single.body, contains('克制版文案'));
-
     final exported = jsonDecode(state.exportJson()) as Map<String, dynamic>;
-    final cards = exported['work_cards'] as List<dynamic>;
-    expect(cards, hasLength(1));
-    expect(cards.single, isA<Map<String, dynamic>>());
+    expect(exported.containsKey('work_cards'), isFalse);
+    expect(exported['chat_sessions'], isA<List<dynamic>>());
+    expect(exported['token_usage_records'], isA<List<dynamic>>());
     state.dispose();
   });
 

@@ -57,12 +57,12 @@ void main() {
 
     expect(find.byKey(const ValueKey('image-count-selector')), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('image-generation-controls')),
+      find.byKey(const ValueKey('image-mode-strip')),
       findsOneWidget,
     );
     expect(
       tester.getSize(find.byKey(const ValueKey('image-count-selector'))).height,
-      42,
+      34,
     );
 
     await tester.tap(find.byKey(const ValueKey('image-count-option-4')));
@@ -130,7 +130,7 @@ void main() {
                 onEdit: () {},
                 onTranslate: () {},
                 onBranch: () {},
-                onSaveCard: () {},
+
                 onDelete: () {},
                 onSpeak: () {},
                 onDownloadAttachment: (_) {},
@@ -151,7 +151,7 @@ void main() {
                 onEdit: () {},
                 onTranslate: () {},
                 onBranch: () {},
-                onSaveCard: () {},
+
                 onDelete: () {},
                 onSpeak: () {},
                 onDownloadAttachment: (_) {},

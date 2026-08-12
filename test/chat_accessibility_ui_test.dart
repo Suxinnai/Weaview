@@ -31,7 +31,7 @@ void main() {
                 onEdit: () {},
                 onTranslate: () {},
                 onBranch: () {},
-                onSaveCard: () {},
+
                 onDelete: () {},
                 onSpeak: () {},
                 onDownloadAttachment: (_) {},
@@ -91,7 +91,7 @@ void main() {
                 onEdit: () {},
                 onTranslate: () {},
                 onBranch: () {},
-                onSaveCard: () {},
+
                 onDelete: () {},
                 onSpeak: () {},
                 onDownloadAttachment: (_) {},
@@ -144,7 +144,7 @@ void main() {
                 onEdit: () {},
                 onTranslate: () {},
                 onBranch: () {},
-                onSaveCard: () {},
+
                 onDelete: () {},
                 onSpeak: () {},
                 onChooseModel: () => choseModel = true,
@@ -228,7 +228,7 @@ void main() {
                   onEdit: () {},
                   onTranslate: () {},
                   onBranch: () {},
-                  onSaveCard: () {},
+  
                   onDelete: () {},
                   onSpeak: () {},
                   onDownloadAttachment: (_) {},
