@@ -64,7 +64,7 @@ class _ChatModelDropdownState extends State<ChatModelDropdown> {
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.paddingOf(context).top;
     final panelWidth = math.min(
-      356.0,
+      344.0,
       math.max(0.0, MediaQuery.sizeOf(context).width - 30),
     );
     final enabledProviders = widget.state.enabledModelProviders;
@@ -126,7 +126,7 @@ class _ChatModelDropdownState extends State<ChatModelDropdown> {
                   child: SizedBox(
                     width: panelWidth,
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -134,7 +134,7 @@ class _ChatModelDropdownState extends State<ChatModelDropdown> {
                             state: widget.state,
                             onClose: widget.onClose,
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           TextField(
                             controller: widget.modelSearchController,
                             autofocus: false,
@@ -168,22 +168,22 @@ class _ChatModelDropdownState extends State<ChatModelDropdown> {
                               ),
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 12,
-                                vertical: 12,
+                                vertical: 10,
                               ),
                             ),
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           _FilterRow(
                             state: widget.state,
                             filter: _filter,
                             onChanged: (next) => setState(() => _filter = next),
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 8),
                           ConstrainedBox(
                             constraints: BoxConstraints(
                               maxHeight: math.min(
-                                332.0,
-                                MediaQuery.sizeOf(context).height * 0.46,
+                                300.0,
+                                MediaQuery.sizeOf(context).height * 0.42,
                               ),
                             ),
                             child: filtered.isEmpty
@@ -247,7 +247,7 @@ class _ChatModelDropdownState extends State<ChatModelDropdown> {
                                 contentPadding: const EdgeInsets.symmetric(
                                   horizontal: 6,
                                 ),
-                                minTileHeight: 46,
+                                minTileHeight: 42,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
                                 ),
@@ -322,7 +322,7 @@ class _DropdownHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 2, 2, 0),
+      padding: const EdgeInsets.fromLTRB(4, 1, 2, 0),
       child: Row(
         children: [
           Expanded(
@@ -333,14 +333,14 @@ class _DropdownHeader extends StatelessWidget {
                   '选择模型',
                   style: state.textStyle(
                     context,
-                    size: 14,
+                    size: 13.5,
                     weight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   '按用途与提供商快速切换',
-                  style: state.textStyle(context, size: 11, opacity: 0.42),
+                  style: state.textStyle(context, size: 10.5, opacity: 0.42),
                 ),
               ],
             ),
@@ -349,7 +349,7 @@ class _DropdownHeader extends StatelessWidget {
             icon: Icons.close_rounded,
             onTap: onClose,
             color: state.text(context),
-            size: 36,
+            size: 32,
             opacity: 0.72,
             background: state.text(context).withValues(alpha: 0.055),
           ),
@@ -424,12 +424,12 @@ class _FilterChip extends StatelessWidget {
       color: selected
           ? state.accents[0].withValues(alpha: 0.18)
           : state.text(context).withValues(alpha: 0.05),
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         child: SizedBox(
-          height: 38,
+          height: 34,
           child: Center(
             child: Text(
               label,
@@ -456,21 +456,21 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
       child: Column(
         children: [
           Icon(
             Icons.hub_outlined,
-            size: 22,
+            size: 20,
             color: state.text(context).withValues(alpha: 0.34),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
             '当前筛选条件下没有可用模型',
             textAlign: TextAlign.center,
-            style: state.textStyle(context, size: 13, opacity: 0.58),
+            style: state.textStyle(context, size: 12.5, opacity: 0.58),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           TextButton(onPressed: onOpenSettings, child: const Text('前往提供商设置')),
         ],
       ),

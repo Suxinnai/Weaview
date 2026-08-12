@@ -288,8 +288,9 @@ class DividerLine extends StatelessWidget {
   }
 }
 
-class ThemeChoice extends StatelessWidget {
+class ThemeChoice extends StatefulWidget {
   const ThemeChoice({
+    super.key,
     required this.state,
     required this.icon,
     required this.label,
@@ -304,50 +305,71 @@ class ThemeChoice extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<ThemeChoice> createState() => _ThemeChoiceState();
+}
+
+class _ThemeChoiceState extends State<ThemeChoice> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
+    final state = widget.state;
     final selectedBackground = state.isDark(context)
-        ? Colors.white.withValues(alpha: 0.08)
-        : state.accents[0].withValues(alpha: 0.14);
+        ? Colors.white.withValues(alpha: 0.10)
+        : state.accents[0].withValues(alpha: 0.13);
+    final selectedFg = state.isDark(context) ? accentMint : sendGreen;
     return Expanded(
       child: Semantics(
         button: true,
-        selected: selected,
-        child: GestureDetector(
-          onTap: onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            constraints: const BoxConstraints(minHeight: 56),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-            decoration: BoxDecoration(
-              color: selected ? selectedBackground : Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: selected
-                    ? state.accents[0].withValues(alpha: 0.22)
-                    : Colors.transparent,
-              ),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: 20,
-                  color: selected
-                      ? (state.isDark(context) ? accentMint : sendGreen)
-                      : state.text(context).withValues(alpha: 0.52),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  label,
-                  style: state.textStyle(
-                    context,
-                    size: 12.5,
-                    weight: FontWeight.w600,
-                    opacity: selected ? 0.96 : 0.6,
+        selected: widget.selected,
+        child: Listener(
+          onPointerDown: (_) => setState(() => _pressed = true),
+          onPointerUp: (_) => setState(() => _pressed = false),
+          onPointerCancel: (_) => setState(() => _pressed = false),
+          child: AnimatedScale(
+            scale: _pressed ? 0.95 : 1,
+            duration: const Duration(milliseconds: 110),
+            curve: Curves.easeOutCubic,
+            child: GestureDetector(
+              onTap: widget.onTap,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                constraints: const BoxConstraints(minHeight: 48),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                decoration: BoxDecoration(
+                  color: widget.selected
+                      ? selectedBackground
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: widget.selected
+                        ? state.accents[0].withValues(alpha: 0.26)
+                        : Colors.transparent,
                   ),
                 ),
-              ],
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      widget.icon,
+                      size: 18,
+                      color: widget.selected
+                          ? selectedFg
+                          : state.text(context).withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      widget.label,
+                      style: state.textStyle(
+                        context,
+                        size: 12,
+                        weight: FontWeight.w600,
+                        opacity: widget.selected ? 0.96 : 0.55,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
@@ -554,7 +576,7 @@ class _SoftButtonState extends State<SoftButton> {
               enableFeedback: true,
               onTap: widget.onTap,
               child: Container(
-                constraints: const BoxConstraints(minHeight: 52),
+                constraints: const BoxConstraints(minHeight: 48),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: borderColor),
@@ -641,7 +663,7 @@ class SegmentedPills extends StatelessWidget {
                   onTap: () => onChanged(item.key),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
-                    constraints: const BoxConstraints(minHeight: 52),
+                    constraints: const BoxConstraints(minHeight: 48),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: value == item.key

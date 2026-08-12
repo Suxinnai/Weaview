@@ -1320,15 +1320,15 @@ class ModelDropdownItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
           child: Row(
             children: [
               BrandIcon.model(
                 model: item.model,
                 provider: item.provider,
-                size: 34,
-                radius: 12,
-                padding: 6,
+                size: 30,
+                radius: 11,
+                padding: 5,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1340,24 +1340,24 @@ class ModelDropdownItem extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: state.textStyle(
                         context,
-                        size: 14,
+                        size: 13,
                         weight: selected ? FontWeight.w600 : FontWeight.w400,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
                       item.provider.name,
                       overflow: TextOverflow.ellipsis,
                       style: state
                           .textStyle(
                             context,
-                            size: 10,
+                            size: 9.5,
                             weight: FontWeight.w600,
                             opacity: 0.4,
                           )
-                          .copyWith(letterSpacing: 1.2),
+                          .copyWith(letterSpacing: 1.1),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       physics: const BouncingScrollPhysics(),

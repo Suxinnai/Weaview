@@ -437,21 +437,49 @@ extension SettingsTabs on SettingsSheetState {
           ],
         ),
         const SizedBox(height: 16),
-        CardShell(
-          state: state,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          child: TextField(
-            controller: providerSearchController,
-            onChanged: (_) => updateSheet(() {}),
-            style: state.textStyle(context, size: 14),
-            decoration: InputDecoration(
-              hintText: '搜索提供商',
-              hintStyle: state.textStyle(context, size: 14, opacity: 0.38),
-              prefixIcon: Icon(
-                Icons.search_rounded,
-                color: state.text(context).withValues(alpha: 0.42),
+        TextField(
+          controller: providerSearchController,
+          onChanged: (_) => updateSheet(() {}),
+          style: state.textStyle(context, size: 13.5),
+          decoration: InputDecoration(
+            hintText: '搜索提供商',
+            hintStyle: state.textStyle(context, size: 13.5, opacity: 0.36),
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              size: 19,
+              color: state.text(context).withValues(alpha: 0.42),
+            ),
+            prefixIconConstraints: const BoxConstraints(
+              minWidth: 42,
+              minHeight: 42,
+            ),
+            isDense: true,
+            filled: true,
+            fillColor: state.isDark(context)
+                ? Colors.white.withValues(alpha: 0.05)
+                : Colors.white.withValues(alpha: 0.72),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 11,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: state.text(context).withValues(alpha: 0.07),
               ),
-              border: InputBorder.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: state.text(context).withValues(alpha: 0.07),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(
+                color: state.accents[0].withValues(alpha: 0.42),
+                width: 1.2,
+              ),
             ),
           ),
         ),

@@ -156,16 +156,6 @@ class SidebarOverlay extends StatelessWidget {
                             onTap: onUsageStats,
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                          child: _SidebarModeButton(
-                            state: state,
-                            icon: Icons.settings_outlined,
-                            label: '设置',
-                            subtitle: '提供商、模型与偏好',
-                            onTap: onSettings,
-                          ),
-                        ),
                         Expanded(
                           child: ListView(
                             padding: const EdgeInsets.fromLTRB(14, 24, 14, 12),
