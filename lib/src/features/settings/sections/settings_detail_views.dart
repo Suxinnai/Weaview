@@ -55,6 +55,15 @@ String? _validateRoleDraft({
 }
 
 extension SettingsDetailViews on SettingsSheetState {
+  bool get _providerReadyForModels {
+    final saved = editingProvider;
+    final hasSavedKey = saved != null &&
+        (saved.apiKey.trim().isNotEmpty ||
+            saved.status == '已连接' ||
+            saved.status == '使用中');
+    return providerKey.trim().isNotEmpty || hasSavedKey;
+  }
+
   Widget systemPromptView() {
     final state = widget.state;
     return scrollContent([
@@ -542,7 +551,37 @@ extension SettingsDetailViews on SettingsSheetState {
           ),
         ),
       ] else ...[
-        if (providerModels.isEmpty)
+        if (!_providerReadyForModels)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(10, 34, 10, 34),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.key_off_outlined,
+                  size: 28,
+                  color: state.text(context).withValues(alpha: 0.3),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '请先在「配置」中填写 API Key 并保存',
+                  textAlign: TextAlign.center,
+                  style: state.textStyle(context, size: 13.5, opacity: 0.6),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '保存成功后即可拉取或手动添加模型。',
+                  textAlign: TextAlign.center,
+                  style: state.textStyle(
+                    context,
+                    size: 12,
+                    opacity: 0.44,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          )
+        else if (providerModels.isEmpty)
           Padding(
             padding: const EdgeInsets.all(28),
             child: Text(
@@ -552,40 +591,102 @@ extension SettingsDetailViews on SettingsSheetState {
             ),
           )
         else
-          for (final model in providerModels)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Dismissible(
-                key: ValueKey('provider_model_${model.id}'),
-                direction: DismissDirection.endToStart,
-                confirmDismiss: (_) async {
-                  updateSheet(
-                    () => providerModels = providerModels
-                        .where((m) => m.id != model.id)
-                        .toList(),
-                  );
-                  return false;
-                },
-                background: Container(
-                  alignment: Alignment.centerRight,
-                  padding: const EdgeInsets.only(right: 18),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: Icon(
-                    Icons.delete_outline_rounded,
-                    color: Colors.red.withValues(alpha: 0.82),
-                  ),
-                ),
-                child: _ProviderModelCard(
-                  state: state,
-                  model: model,
-                  providerName: providerName,
-                  onTap: () => editModel(model),
-                ),
-              ),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            padding: EdgeInsets.zero,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              mainAxisExtent: 126,
             ),
+            itemCount: providerModels.length,
+            itemBuilder: (context, index) {
+              final model = providerModels[index];
+              return DragTarget<String>(
+                onWillAcceptWithDetails: (details) =>
+                    details.data != model.id,
+                onAcceptWithDetails: (details) {
+                  final fromIndex = providerModels.indexWhere(
+                    (m) => m.id == details.data,
+                  );
+                  if (fromIndex < 0 || fromIndex == index) return;
+                  updateSheet(() {
+                    final target = providerModels.removeAt(fromIndex);
+                    providerModels.insert(index, target);
+                  });
+                },
+                builder: (context, candidateData, rejectedData) {
+                  final hovering = candidateData.isNotEmpty;
+                  return LongPressDraggable<String>(
+                    data: model.id,
+                    delay: const Duration(milliseconds: 260),
+                    dragAnchorStrategy: pointerDragAnchorStrategy,
+                    rootOverlay: true,
+                    feedback: SizedBox(
+                      width: 210,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: _ProviderModelGridCard(
+                          state: state,
+                          model: model,
+                          providerName: providerName,
+                          onTap: () => editModel(model),
+                          highlighted: true,
+                        ),
+                      ),
+                    ),
+                    childWhenDragging: Opacity(
+                      opacity: 0.4,
+                      child: _ProviderModelGridCard(
+                        state: state,
+                        model: model,
+                        providerName: providerName,
+                        onTap: () => editModel(model),
+                      ),
+                    ),
+                    child: Dismissible(
+                      key: ValueKey('provider_model_${model.id}'),
+                      direction: DismissDirection.endToStart,
+                      confirmDismiss: (_) async {
+                        updateSheet(
+                          () => providerModels = providerModels
+                              .where((m) => m.id != model.id)
+                              .toList(),
+                        );
+                        return false;
+                      },
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 14),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Icon(
+                          Icons.delete_outline_rounded,
+                          color: Colors.red.withValues(alpha: 0.82),
+                        ),
+                      ),
+                      child: AnimatedScale(
+                        duration: const Duration(milliseconds: 140),
+                        curve: Curves.easeOutCubic,
+                        scale: hovering ? 0.97 : 1,
+                        child: _ProviderModelGridCard(
+                          state: state,
+                          model: model,
+                          providerName: providerName,
+                          onTap: () => editModel(model),
+                          highlighted: hovering,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
       ],
     ];
 
@@ -617,6 +718,20 @@ extension SettingsDetailViews on SettingsSheetState {
                     ),
                   ),
                 ],
+              ],
+            )
+          : !_providerReadyForModels
+          ? Row(
+              children: [
+                Expanded(
+                  child: SoftButton(
+                    state: state,
+                    label: '填写 API Key',
+                    icon: Icons.key_rounded,
+                    accent: true,
+                    onTap: () => updateSheet(() => providerTab = 'config'),
+                  ),
+                ),
               ],
             )
           : Row(
@@ -1246,82 +1361,115 @@ extension SettingsDetailViews on SettingsSheetState {
   }
 }
 
-class _ProviderModelCard extends StatelessWidget {
-  const _ProviderModelCard({
+class _ProviderModelGridCard extends StatelessWidget {
+  const _ProviderModelGridCard({
     required this.state,
     required this.model,
     required this.providerName,
     required this.onTap,
+    this.highlighted = false,
   });
 
   final WeaviewState state;
   final AiModel model;
   final String providerName;
   final VoidCallback onTap;
+  final bool highlighted;
 
   @override
   Widget build(BuildContext context) {
+    final dark = state.isDark(context);
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(18),
         onTap: onTap,
-        child: CardShell(
-          state: state,
-          padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
-          child: Row(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+          decoration: BoxDecoration(
+            color: highlighted
+                ? state.accents[0].withValues(alpha: dark ? 0.14 : 0.09)
+                : (dark
+                      ? Colors.white.withValues(alpha: 0.05)
+                      : Colors.white.withValues(alpha: 0.82)),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: highlighted
+                  ? state.accents[0].withValues(alpha: 0.5)
+                  : state.text(context).withValues(alpha: 0.07),
+              width: highlighted ? 1.2 : 0.8,
+            ),
+            boxShadow: highlighted
+                ? [
+                    BoxShadow(
+                      color: state.accents[0].withValues(alpha: 0.14),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              BrandIcon.model(
-                model: model,
-                providerName: providerName,
-                size: 38,
-                radius: 14,
-                padding: 7,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  BrandIcon.model(
+                    model: model,
+                    providerName: providerName,
+                    size: 30,
+                    radius: 10,
+                    padding: 5,
+                  ),
+                  const Spacer(),
+                  if (highlighted)
+                    Icon(
+                      Icons.drag_indicator_rounded,
+                      size: 14,
+                      color: state.accents[0].withValues(alpha: 0.7),
+                    )
+                  else
+                    Icon(
+                      Icons.drag_indicator_rounded,
+                      size: 13,
+                      color: state.text(context).withValues(alpha: 0.22),
+                    ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      model.name,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: state.textStyle(
-                        context,
-                        size: 15,
-                        weight: FontWeight.w600,
-                        height: 1.25,
-                      ),
-                    ),
-                    if (model.id != model.name) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        model.id,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: state.textStyle(
-                          context,
-                          size: 11.5,
-                          opacity: 0.44,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 9),
-                    ModelCapabilityChips(
-                      state: state,
-                      capabilities: model.capabilities,
-                      compact: true,
-                    ),
-                  ],
+              const SizedBox(height: 7),
+              Text(
+                model.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: state.textStyle(
+                  context,
+                  size: 12.5,
+                  weight: FontWeight.w600,
+                  height: 1.2,
                 ),
               ),
-              const SizedBox(width: 8),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: state.text(context).withValues(alpha: 0.32),
+              if (model.id != model.name) ...[
+                const SizedBox(height: 2),
+                Text(
+                  model.id,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: state.textStyle(
+                    context,
+                    size: 9.5,
+                    opacity: 0.42,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 7),
+              ModelCapabilityChips(
+                state: state,
+                capabilities: model.capabilities,
+                compact: true,
               ),
             ],
           ),

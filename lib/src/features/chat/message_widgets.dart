@@ -54,7 +54,6 @@ class MessageBubble extends StatefulWidget {
 
 class _MessageBubbleState extends State<MessageBubble> {
   final GlobalKey _actionsKey = GlobalKey();
-  final GlobalKey _assistantActionToggleKey = GlobalKey();
   bool _actionsVisible = false;
   bool _inlineEditing = false;
   TextEditingController? _inlineEditController;
@@ -180,33 +179,23 @@ class _MessageBubbleState extends State<MessageBubble> {
               ),
             ),
             if (hasActionText)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: _MessageActionToggle(
+              _ActionReveal(
+                key: _actionsKey,
+                visible: _actionsVisible,
+                alignRight: true,
+                child: MessageActionBar(
                   state: state,
-                  visible: _actionsVisible,
-                  alignRight: true,
-                  onTap: _toggleActions,
-                  keyValue: 'user-${widget.index}',
+                  isModel: false,
+                  hasText: hasActionText,
+                  onCopy: widget.onCopy,
+                  onRetry: widget.onRetry,
+                  onEdit: widget.onEdit,
+                  onTranslate: widget.onTranslate,
+                  onBranch: widget.onBranch,
+                  onDelete: widget.onDelete,
+                  onSpeak: widget.onSpeak,
                 ),
               ),
-            _ActionReveal(
-              key: _actionsKey,
-              visible: _actionsVisible,
-              alignRight: true,
-              child: MessageActionBar(
-                state: state,
-                isModel: false,
-                hasText: hasActionText,
-                onCopy: widget.onCopy,
-                onRetry: widget.onRetry,
-                onEdit: widget.onEdit,
-                onTranslate: widget.onTranslate,
-                onBranch: widget.onBranch,
-                onDelete: widget.onDelete,
-                onSpeak: widget.onSpeak,
-              ),
-            ),
             if (message.translation.trim().isNotEmpty) ...[
               const SizedBox(height: 8),
               TranslationBlock(
@@ -228,14 +217,6 @@ class _MessageBubbleState extends State<MessageBubble> {
         final start = _assistantPointerDown;
         _assistantPointerDown = null;
         if (start != null && (event.position - start).distance > 10) return;
-        final toggleBox =
-            _assistantActionToggleKey.currentContext?.findRenderObject()
-                as RenderBox?;
-        if (toggleBox != null && toggleBox.hasSize) {
-          final toggleBounds =
-              toggleBox.localToGlobal(Offset.zero) & toggleBox.size;
-          if (toggleBounds.contains(event.position)) return;
-        }
         if (!message.isThinking && !_inlineEditing) {
           _toggleActions();
         }
@@ -360,21 +341,10 @@ class _MessageBubbleState extends State<MessageBubble> {
                     ),
             ),
             if (showMessageActions)
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: _MessageActionToggle(
-                  key: _assistantActionToggleKey,
-                  state: state,
-                  visible: _actionsVisible,
-                  alignRight: false,
-                  onTap: _toggleActions,
-                  keyValue: 'assistant-${widget.index}',
-                ),
-              ),
-            _ActionReveal(
-              key: _actionsKey,
-              visible: _actionsVisible && showMessageActions,
-              child: MessageActionBar(
+              _ActionReveal(
+                key: _actionsKey,
+                visible: _actionsVisible && showMessageActions,
+                child: MessageActionBar(
                 state: state,
                 isModel: true,
                 hasText: hasActionText,
@@ -409,66 +379,6 @@ class _MessageBubbleState extends State<MessageBubble> {
           const SizedBox(height: 8),
           assistantContent,
         ],
-      ),
-    );
-  }
-}
-
-class _MessageActionToggle extends StatelessWidget {
-  const _MessageActionToggle({
-    super.key,
-    required this.state,
-    required this.visible,
-    required this.alignRight,
-    required this.onTap,
-    required this.keyValue,
-  });
-
-  final WeaviewState state;
-  final bool visible;
-  final bool alignRight;
-  final VoidCallback onTap;
-  final String keyValue;
-
-  @override
-  Widget build(BuildContext context) {
-    final label = visible ? '收起操作' : '显示操作';
-    final text = state.text(context);
-    return Align(
-      alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
-      child: Semantics(
-        button: true,
-        label: label,
-        child: Tooltip(
-          message: label,
-          child: Material(
-            color: Colors.transparent,
-            shape: const CircleBorder(),
-            child: InkWell(
-              key: ValueKey('message-action-toggle-$keyValue'),
-              customBorder: const CircleBorder(),
-              onTap: onTap,
-              child: SizedBox(
-                width: 34,
-                height: 26,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOut,
-                  opacity: visible ? 1 : 0.5,
-                  child: Center(
-                    child: Icon(
-                      visible
-                          ? Icons.keyboard_arrow_up_rounded
-                          : Icons.more_horiz_rounded,
-                      size: 20,
-                      color: text.withValues(alpha: 0.3),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }

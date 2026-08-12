@@ -9,7 +9,7 @@ import 'package:weaview_flutter/src/features/chat/message_widgets.dart';
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  testWidgets('message bubble exposes explicit action toggle', (
+  testWidgets('message bubble reveals actions on tap without overflow toggle', (
     WidgetTester tester,
   ) async {
     final state = WeaviewState();
@@ -43,33 +43,23 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(
-      find.byKey(const ValueKey('message-action-toggle-user-0')),
-      findsOneWidget,
-    );
     expect(find.byIcon(Icons.content_copy_rounded), findsNothing);
 
-    await tester.tap(
-      find.byKey(const ValueKey('message-action-toggle-user-0')),
-    );
+    await tester.tap(find.text('请帮我总结这段内容'));
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.content_copy_rounded), findsOneWidget);
     expect(find.byIcon(Icons.more_vert_rounded), findsOneWidget);
-    final toggleSize = tester.getSize(
-      find.byKey(const ValueKey('message-action-toggle-user-0')),
-    );
     final actionBarSize = tester.getSize(
       find.byKey(const ValueKey('message-action-bar')),
     );
-    expect(toggleSize.width, lessThanOrEqualTo(40));
     expect(actionBarSize.width, lessThan(220));
     expect(actionBarSize.height, lessThanOrEqualTo(44));
 
     state.dispose();
   });
 
-  testWidgets('assistant action toggle opens actions without double toggling', (
+testWidgets('assistant action tap opens actions without double toggling', (
     WidgetTester tester,
   ) async {
     final state = WeaviewState();
@@ -103,13 +93,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final toggle = find.byKey(
-      const ValueKey('message-action-toggle-assistant-0'),
-    );
-    expect(toggle, findsOneWidget);
     expect(find.byIcon(Icons.content_copy_rounded), findsNothing);
 
-    await tester.tap(toggle);
+    await tester.tap(find.text('这是助手回复'));
     await tester.pumpAndSettle();
 
     expect(find.byIcon(Icons.content_copy_rounded), findsOneWidget);
@@ -160,10 +146,6 @@ void main() {
     expect(find.text('模型已停止服务'), findsOneWidget);
     expect(find.textContaining('deepseek-v4-flash'), findsOneWidget);
     expect(find.textContaining('HTTP 410'), findsNothing);
-    expect(
-      find.byKey(const ValueKey('message-action-toggle-assistant-0')),
-      findsNothing,
-    );
 
     await tester.tap(find.text('技术详情'));
     await tester.pumpAndSettle();

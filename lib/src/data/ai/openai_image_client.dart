@@ -282,6 +282,119 @@ class OpenAiImageClient {
         'image_url': {'url': 'data:$mimeType;base64,${base64Encode(bytes)}'},
       });
     }
+    try {
+      return await _generateChatImagesStreaming(
+        uri: uri,
+        apiKey: apiKey,
+        model: model,
+        content: content,
+        timeout: timeout,
+      );
+    } catch (error) {
+      debugPrint('Streaming chat image generation failed, '
+          'falling back to a single response: $error');
+      return _generateChatImagesLegacy(
+        uri: uri,
+        apiKey: apiKey,
+        model: model,
+        content: content,
+        timeout: timeout,
+      );
+    }
+  }
+
+  Future<List<GeneratedImageResult>> _generateChatImagesStreaming({
+    required Uri uri,
+    required String apiKey,
+    required String model,
+    required List<Map<String, dynamic>> content,
+    required Duration timeout,
+  }) async {
+    final request = http.Request('POST', uri)
+      ..headers['Authorization'] = 'Bearer $apiKey'
+      ..headers['Content-Type'] = 'application/json'
+      ..headers['Accept'] = 'text/event-stream'
+      ..body = jsonEncode({
+        'model': model,
+        'messages': [
+          {
+            'role': 'user',
+            'content': content.length == 1 ? content.first['text'] : content,
+          },
+        ],
+        'stream': true,
+      });
+    final response = await http.Client().send(request).timeout(timeout);
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Chat Completions image HTTP ${response.statusCode}',
+      );
+    }
+    final nodes = <dynamic>[];
+    final contentText = StringBuffer();
+    await for (final line
+        in response.stream
+            .transform(utf8.decoder)
+            .transform(const LineSplitter())) {
+      final trimmed = line.trim();
+      if (!trimmed.startsWith('data:')) continue;
+      final payload = trimmed.substring(5).trim();
+      if (payload == '[DONE]') break;
+      if (payload.isEmpty) continue;
+      try {
+        final chunk = jsonDecode(payload);
+        if (chunk is! Map) continue;
+        final choices = chunk['choices'];
+        final delta = (choices is List && choices.isNotEmpty)
+            ? (choices.first is Map ? choices.first['delta'] : null)
+            : null;
+        if (delta is! Map) continue;
+        final images = delta['images'];
+        if (images is List) nodes.addAll(images);
+        final contentPart = delta['content'];
+        if (contentPart is String) {
+          contentText.write(contentPart);
+        } else if (contentPart is List) {
+          nodes.addAll(contentPart);
+        }
+      } catch (_) {
+        // Skip malformed stream chunks; the final image list still counts.
+      }
+    }
+    final revisedPrompt = contentText.toString().trim();
+    final seen = <String>{};
+    final images = <GeneratedImageResult>[];
+    for (final node in nodes) {
+      final source = _chatImageSource(node);
+      if (source == null || source.trim().isEmpty || !seen.add(source)) {
+        continue;
+      }
+      images.add(
+        await _chatImageResult(
+          source: source,
+          node: node,
+          apiKey: apiKey,
+          requestUri: uri,
+          timeout: timeout,
+          revisedPrompt: revisedPrompt,
+        ),
+      );
+    }
+    if (images.isEmpty) {
+      throw Exception(
+        'Chat Completions stream did not include message.images image data.',
+      );
+    }
+    return images;
+  }
+
+  Future<List<GeneratedImageResult>> _generateChatImagesLegacy({
+    required Uri uri,
+    required String apiKey,
+    required String model,
+    required List<Map<String, dynamic>> content,
+    required Duration timeout,
+  }) async {
     final response = await http
         .post(
           uri,

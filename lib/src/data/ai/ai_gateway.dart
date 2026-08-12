@@ -344,6 +344,27 @@ class AiGateway {
         failedCount: requestedCount - images.length,
       );
     }
+    if (_looksLikeGeminiChatImageModel(route.modelId)) {
+      // Gemini image models behind custom OpenAI-compatible gateways
+      // stream images through /chat/completions (delta.images) instead of
+      // /images/generations, which many gateways do not expose.
+      final images = await _openAiClient.generateChatImages(
+        apiKey: route.apiKey,
+        baseUrl: route.baseUrl,
+        model: route.modelId,
+        prompt: guardedPrompt,
+        attachments: attachments,
+        timeout: imageRequestTimeout,
+        outputCount: requestedCount,
+        aspectRatio: _geminiAspectRatio(aspectRatio, size),
+        imageSize: _geminiImageSize(route.modelId, guardedPrompt),
+      );
+      return GeneratedImageBatchResult(
+        images: images,
+        requestedCount: requestedCount,
+        failedCount: requestedCount - images.length,
+      );
+    }
 
     final openAiOptions = _openAiImageOptions(
       provider: provider,
@@ -457,7 +478,8 @@ class AiGateway {
           timeout: imageRequestTimeout,
         );
       }
-      if (_isGeminiProvider(providerName)) {
+      if (_isGeminiProvider(providerName) ||
+          _looksLikeGeminiChatImageModel(model)) {
         return _openAiClient.testChatImageConnection(
           apiKey: apiKey,
           baseUrl: baseUrl,
@@ -549,6 +571,11 @@ class AiGateway {
 
   static bool _isGeminiProvider(String providerName) {
     return providerName.toLowerCase().contains('gemini');
+  }
+
+  static bool _looksLikeGeminiChatImageModel(String modelId) {
+    final text = modelId.trim().toLowerCase();
+    return text.contains('gemini') && text.contains('image');
   }
 
   static bool _isAnthropicProvider(String providerName) {

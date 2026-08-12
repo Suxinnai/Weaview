@@ -449,29 +449,29 @@ class _ImageModeStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('image-mode-strip'),
-      margin: const EdgeInsets.fromLTRB(12, 8, 12, 2),
-      padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+      margin: const EdgeInsets.fromLTRB(10, 6, 10, 2),
+      padding: const EdgeInsets.fromLTRB(10, 5, 7, 5),
       decoration: BoxDecoration(
         color: sendGreen.withValues(
           alpha: state.isDark(context) ? 0.10 : 0.06,
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: sendGreen.withValues(alpha: 0.16)),
       ),
       child: Row(
         children: [
           Icon(
             Icons.auto_awesome_rounded,
-            size: 15,
+            size: 14,
             color: sendGreen.withValues(alpha: 0.9),
           ),
-          const SizedBox(width: 7),
+          const SizedBox(width: 6),
           Expanded(
             child: Text(
               '图片生成',
               style: state.textStyle(
                 context,
-                size: 12.5,
+                size: 12,
                 weight: FontWeight.w500,
                 opacity: 0.72,
               ),
@@ -507,11 +507,11 @@ class _ImageCountSelector extends StatelessWidget {
       message: '输出张数',
       child: Container(
         key: const ValueKey('image-count-selector'),
-        height: 34,
+        height: 30,
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
           color: base.withValues(alpha: dark ? 0.085 : 0.06),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: base.withValues(alpha: 0.08)),
         ),
         child: Row(
@@ -526,22 +526,22 @@ class _ImageCountSelector extends StatelessWidget {
                   label: '输出 $option 张图片',
                   child: Material(
                     color: option == value ? sendGreen : Colors.transparent,
-                    borderRadius: BorderRadius.circular(9),
+                    borderRadius: BorderRadius.circular(7),
                     child: InkWell(
                       key: ValueKey('image-count-option-$option'),
-                      borderRadius: BorderRadius.circular(9),
+                      borderRadius: BorderRadius.circular(7),
                       onTap: onChanged == null
                           ? null
                           : () => onChanged!(option),
                       child: SizedBox(
-                        width: 36,
+                        width: 32,
                         child: Center(
                           child: Text(
                             '$option',
                             style: state
                                 .textStyle(
                                   context,
-                                  size: 12,
+                                  size: 11.5,
                                   weight: FontWeight.w500,
                                   opacity: option == value ? 1 : 0.6,
                                 )

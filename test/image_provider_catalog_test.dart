@@ -2,7 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:weaview_flutter/src/domain/models.dart';
 
 void main() {
-  test('ships mainstream image providers with real image-capable models', () {
+  test('ships mainstream providers with real image-capable models', () {
     final providers = {
       for (final provider in AiProvider.defaults()) provider.name: provider,
     };
@@ -12,11 +12,6 @@ void main() {
       'Gemini': 'gemini-3.1-flash-image',
       'Grok': 'grok-imagine-image-quality',
       '火山方舟': 'doubao-seedream-5-0-lite-260128',
-      'Recraft': 'recraftv4',
-      'Stability AI': 'stable-image-ultra',
-      'Black Forest Labs': 'flux-2-pro-preview',
-      'Ideogram': 'ideogram-v4',
-      'Replicate': 'qwen/qwen-image',
     };
 
     for (final entry in expectedModels.entries) {
@@ -37,15 +32,22 @@ void main() {
     }
   });
 
+  test('excludes image-only provider presets by default', () {
+    final names = AiProvider.defaults().map((item) => item.name).toSet();
+    expect(names, isNot(contains('Recraft')));
+    expect(names, isNot(contains('Stability AI')));
+    expect(names, isNot(contains('Black Forest Labs')));
+    expect(names, isNot(contains('Ideogram')));
+    expect(names, isNot(contains('Replicate')));
+  });
+
   test('preserves image API routing when provider settings round-trip', () {
-    final provider = AiProvider.defaults().firstWhere(
-      (item) => item.name == 'Black Forest Labs',
+    final openAi = AiProvider.defaults().firstWhere(
+      (item) => item.name == 'OpenAI',
     );
-
-    final restored = AiProvider.fromJson(provider.toJson());
-
-    expect(restored.imageApi, ImageApiKind.bfl);
-    expect(restored.models.map((model) => model.id), contains('flux-pro-1.1'));
+    final restored = AiProvider.fromJson(openAi.toJson());
+    expect(restored.imageApi, ImageApiKind.openAi);
+    expect(restored.models.map((model) => model.id), contains('gpt-image-2'));
 
     final ark = AiProvider.defaults().firstWhere((item) => item.name == '火山方舟');
     expect(AiProvider.fromJson(ark.toJson()).imageApi, ImageApiKind.ark);

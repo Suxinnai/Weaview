@@ -75,31 +75,46 @@ void main() {
                 as Map<String, dynamic>;
         expect(request.headers.value('authorization'), 'Bearer test-key');
         expect(requestBody['model'], 'gemini-3.1-flash-image');
-        request.response
-          ..statusCode = 200
-          ..headers.contentType = ContentType.json
-          ..write(
-            jsonEncode({
+        final imageNode = {
+          'type': 'image_url',
+          'image_url': {
+            'url':
+                'data:image/jpeg;base64,${base64Encode(utf8.encode('image-$requestCount'))}',
+          },
+          'index': 0,
+        };
+        if (requestBody['stream'] == true) {
+          request.response
+            ..statusCode = 200
+            ..headers.contentType = ContentType('text', 'event-stream');
+          request.response.write(
+            'data: ${jsonEncode({
               'choices': [
                 {
-                  'message': {
-                    'role': 'assistant',
-                    'content': '',
-                    'images': [
-                      {
-                        'type': 'image_url',
-                        'image_url': {
-                          'url':
-                              'data:image/jpeg;base64,${base64Encode(utf8.encode('image-$requestCount'))}',
-                        },
-                        'index': 0,
-                      },
-                    ],
-                  },
+                  'delta': {'role': 'assistant', 'images': [imageNode]},
                 },
               ],
-            }),
+            })}\n\n',
           );
+          request.response.write('data: [DONE]\n\n');
+        } else {
+          request.response
+            ..statusCode = 200
+            ..headers.contentType = ContentType.json
+            ..write(
+              jsonEncode({
+                'choices': [
+                  {
+                    'message': {
+                      'role': 'assistant',
+                      'content': '',
+                      'images': [imageNode],
+                    },
+                  },
+                ],
+              }),
+            );
+        }
         await request.response.close();
       });
 
@@ -136,6 +151,78 @@ void main() {
           result.images.map((image) => image.mimeType),
           everyElement('image/jpeg'),
         );
+      } finally {
+        await serving.cancel();
+        await server.close(force: true);
+      }
+    },
+  );
+
+  test(
+    'streaming chat images parse delta.images without legacy fallback',
+    () async {
+      var requestCount = 0;
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final serving = server.listen((request) async {
+        requestCount += 1;
+        final requestBody =
+            jsonDecode(await utf8.decoder.bind(request).join())
+                as Map<String, dynamic>;
+        expect(requestBody['stream'], isTrue);
+        request.response
+          ..statusCode = 200
+          ..headers.contentType = ContentType('text', 'event-stream');
+        request.response.write(
+          'data: ${jsonEncode({
+            'choices': [
+              {
+                'delta': {
+                  'role': 'assistant',
+                  'content': null,
+                  'images': [
+                    {
+                      'type': 'image_url',
+                      'image_url': {
+                        'url':
+                            'data:image/png;base64,${base64Encode(utf8.encode('streamed-image'))}',
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          })}\n\n',
+        );
+        request.response.write('data: [DONE]\n\n');
+        await request.response.close();
+      });
+
+      try {
+        final provider = _proxyProvider(
+          server.port,
+          model: 'gemini-3.1-flash-image',
+          capabilities: const ['image_generation', 'vision'],
+        );
+        final result = await AiGateway.generateImages(
+          provider: provider,
+          assignment: const ModelAssignment(
+            provider: 'Gemini',
+            model: 'gemini-3.1-flash-image',
+            prompt: '',
+          ),
+          prompt: 'a tiny glass planet',
+          outputCount: 1,
+          aspectRatio: '1:1',
+        );
+
+        expect(requestCount, 1);
+        expect(result.images, hasLength(1));
+        expect(utf8.decode(result.images.single.bytes), 'streamed-image');
+        expect(
+          result.images.single.route,
+          '/v1/chat/completions#message.images',
+        );
+        expect(result.images.single.mimeType, 'image/png');
       } finally {
         await serving.cancel();
         await server.close(force: true);
