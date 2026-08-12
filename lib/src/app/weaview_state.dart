@@ -1443,10 +1443,15 @@ class WeaviewState extends ChangeNotifier {
     final promptAspect =
         _imageAspectRatioFromPrompt(contextualPrompt) ??
         _imageAspectRatioFromPrompt(basePrompt);
+    final wantsOriginalAspect = _requestsOriginalImageAspect(contextualPrompt);
     final imageAspect = promptAspect == null
         ? await _imageAspectRatioFromAttachments(
-            imageAttachments,
-            preferLast: _requestsOriginalImageAspect(contextualPrompt),
+            imageAttachments.isNotEmpty || !wantsOriginalAspect
+                ? imageAttachments
+                : await _historyImageAttachments(
+                    beforeIndex: beforeIndex,
+                  ),
+            preferLast: wantsOriginalAspect,
           )
         : null;
     final aspect = promptAspect ?? imageAspect;
@@ -1501,8 +1506,7 @@ $prompt
 $previousPrompt
 
 [本轮执行要求]
-如果本轮上传了新的参考图片，请以本轮图片为主要输入，对新图执行同样的处理、风格迁移或版式规则；不要返回上一轮图片或原图。
-如果本轮是继续修改上一轮生成图，请把自动附带的上一轮生成图当作待编辑结果，把原始参考图当作构图、主体和宽高比约束。
+本轮未附带任何图片。请仅依据上方上一轮提示词与文本描述，保持主题与构图一致地重新生成或修改；不要提及、返回或推测任何未提供的图片内容。
 '''
         .trim();
   }
@@ -1512,23 +1516,20 @@ $previousPrompt
     List<MessageAttachment> attachments, {
     int? beforeIndex,
   }) {
-    final copied = attachments.map((attachment) => attachment.copy()).toList();
-    if (copied.any((attachment) => attachment.isImage)) return copied;
-    if (!_isImageFollowUpPrompt(prompt)) return copied;
+    // 仅携带用户本轮上传的附件；文字续改不再自动附带上一轮生成图或
+    // 原始参考图，模型基于上一轮提示词文本重新生成，避免历史图干扰。
+    return attachments.map((attachment) => attachment.copy()).toList();
+  }
+
+  Future<List<MessageAttachment>> _historyImageAttachments({
+    int? beforeIndex,
+  }) async {
+    final list = <MessageAttachment>[];
     final previous = _lastGeneratedImageAttachment(beforeIndex: beforeIndex);
     final reference = _lastUserImageAttachment(beforeIndex: beforeIndex);
-    final contextual = [
-      if (previous != null) previous.copy(),
-      if (reference != null) reference.copy(),
-    ];
-    final seen = <String>{};
-    for (final attachment in contextual) {
-      final key = attachment.path.isNotEmpty
-          ? attachment.path
-          : attachment.name;
-      if (seen.add(key)) copied.add(attachment);
-    }
-    return copied;
+    if (previous != null) list.add(previous);
+    if (reference != null) list.add(reference);
+    return list;
   }
 
   bool _shouldCarryImageContext(

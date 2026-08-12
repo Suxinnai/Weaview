@@ -557,7 +557,7 @@ $$E = mc^2$$
   );
 
   test(
-    'image generation follow-up reuses previous generated and source images',
+    'image generation follow-up keeps text-only context without images',
     () async {
       SharedPreferences.setMockInitialValues({});
       final tempDir = await Directory.systemTemp.createTemp(
@@ -602,10 +602,7 @@ $$E = mc^2$$
       final user = state.messages.lastWhere(
         (message) => message.role == 'user',
       );
-      expect(user.attachments.map((item) => item.path), [
-        previous.path,
-        original.path,
-      ]);
+      expect(user.attachments, isEmpty);
       expect(state.messages.last.content, contains('生图模型'));
       state.dispose();
       await tempDir.delete(recursive: true);
@@ -660,10 +657,7 @@ $$E = mc^2$$
 
         expect(prepared['size'], '1536x1024');
         expect(prepared['prompt'], contains('严格使用 16:9 画幅生成'));
-        expect(
-          prepared['attachmentPaths'],
-          '${previous.path}|${original.path}',
-        );
+        expect(prepared['attachmentPaths'], isEmpty);
       } finally {
         state.dispose();
         await tempDir.delete(recursive: true);
@@ -703,7 +697,7 @@ $$E = mc^2$$
           '给它添加一顶帽子',
         );
 
-        expect(prepared['attachmentPaths'], previous.path);
+        expect(prepared['attachmentPaths'], isEmpty);
         expect(prepared['prompt'], contains('上一轮图像处理上下文'));
       } finally {
         state.dispose();

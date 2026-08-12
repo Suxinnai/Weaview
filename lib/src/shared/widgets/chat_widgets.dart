@@ -401,13 +401,14 @@ class _GeneratedImageGalleryState extends State<GeneratedImageGallery> {
     }
     final dark = state.isDark(context);
     final columns = images.length == 1 ? 1 : 2;
+    final single = images.length == 1;
     return Container(
       key: const ValueKey('generated-image-gallery'),
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(single ? 4 : 12),
       decoration: BoxDecoration(
         color: state.layer(context).withValues(alpha: dark ? 0.48 : 0.72),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(single ? 18 : 20),
         border: Border.all(
           color: state.text(context).withValues(alpha: dark ? 0.08 : 0.07),
         ),
@@ -415,33 +416,34 @@ class _GeneratedImageGalleryState extends State<GeneratedImageGallery> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Icon(
-                Icons.auto_awesome_rounded,
-                size: 18,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  '已生成 ${images.length} 张',
-                  style: state.textStyle(
-                    context,
-                    size: 14,
-                    weight: FontWeight.w700,
+          if (!single)
+            Row(
+              children: [
+                Icon(
+                  Icons.auto_awesome_rounded,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '已生成 ${images.length} 张',
+                    style: state.textStyle(
+                      context,
+                      size: 14,
+                      weight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-              Text(
-                _selectedIndices.isEmpty
-                    ? '点按选择'
-                    : '已选 ${_selectedIndices.length} 张',
-                style: state.textStyle(context, size: 11.5, opacity: 0.52),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+                Text(
+                  _selectedIndices.isEmpty
+                      ? '点按选择'
+                      : '已选 ${_selectedIndices.length} 张',
+                  style: state.textStyle(context, size: 11.5, opacity: 0.52),
+                ),
+              ],
+            ),
+          if (!single) const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, constraints) {
               final spacing = 10.0;
@@ -459,15 +461,24 @@ class _GeneratedImageGalleryState extends State<GeneratedImageGallery> {
                       attachment: images[index],
                       index: index,
                       width: tileWidth,
-                      selected: _selectedIndices.contains(index),
+                      selected: single || _selectedIndices.contains(index),
+                      single: single,
                       animateImages: widget.animateImages,
-                      onToggleSelected: () {
-                        setState(() {
-                          if (!_selectedIndices.add(index)) {
-                            _selectedIndices.remove(index);
-                          }
-                        });
-                      },
+                      onToggleSelected: single
+                          ? () => _openImagePreview(
+                              context,
+                              state,
+                              attachments: images,
+                              initialIndex: index,
+                              onDownload: widget.onDownload,
+                            )
+                          : () {
+                              setState(() {
+                                if (!_selectedIndices.add(index)) {
+                                  _selectedIndices.remove(index);
+                                }
+                              });
+                            },
                       onPreview: () => _openImagePreview(
                         context,
                         state,
@@ -480,47 +491,49 @@ class _GeneratedImageGalleryState extends State<GeneratedImageGallery> {
               );
             },
           ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _GalleryActionButton(
-                  state: state,
-                  icon: Icons.download_rounded,
-                  label: '保存所选',
-                  enabled:
-                      widget.onDownload != null && _selectedIndices.isNotEmpty,
-                  onTap: () {
-                    for (final index in _selectedIndices) {
-                      widget.onDownload?.call(images[index]);
-                    }
-                  },
+          if (!single) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _GalleryActionButton(
+                    state: state,
+                    icon: Icons.download_rounded,
+                    label: '保存所选',
+                    enabled: widget.onDownload != null &&
+                        _selectedIndices.isNotEmpty,
+                    onTap: () {
+                      for (final index in _selectedIndices) {
+                        widget.onDownload?.call(images[index]);
+                      }
+                    },
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _GalleryActionButton(
-                  state: state,
-                  icon: Icons.open_in_full_rounded,
-                  label: '查看大图',
-                  enabled: _selectedIndices.isNotEmpty,
-                  emphasized: true,
-                  onTap: () {
-                    final index = _selectedIndices.isEmpty
-                        ? 0
-                        : _selectedIndices.first;
-                    _openImagePreview(
-                      context,
-                      state,
-                      attachments: images,
-                      initialIndex: index,
-                      onDownload: widget.onDownload,
-                    );
-                  },
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _GalleryActionButton(
+                    state: state,
+                    icon: Icons.open_in_full_rounded,
+                    label: '查看大图',
+                    enabled: _selectedIndices.isNotEmpty,
+                    emphasized: true,
+                    onTap: () {
+                      final index = _selectedIndices.isEmpty
+                          ? 0
+                          : _selectedIndices.first;
+                      _openImagePreview(
+                        context,
+                        state,
+                        attachments: images,
+                        initialIndex: index,
+                        onDownload: widget.onDownload,
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -603,6 +616,7 @@ class _GeneratedGridTile extends StatelessWidget {
     required this.animateImages,
     required this.onToggleSelected,
     required this.onPreview,
+    this.single = false,
   });
 
   final WeaviewState state;
@@ -614,6 +628,7 @@ class _GeneratedGridTile extends StatelessWidget {
   final bool animateImages;
   final VoidCallback onToggleSelected;
   final VoidCallback onPreview;
+  final bool single;
 
   @override
   Widget build(BuildContext context) {
@@ -650,61 +665,63 @@ class _GeneratedGridTile extends StatelessWidget {
               ),
             ),
           ),
-          Positioned(
-            top: 8,
-            right: 8,
-            child: Semantics(
-              button: true,
-              selected: selected,
-              label: '选择图片 ${index + 1}，共 ${attachments.length} 张',
-              child: GestureDetector(
-                onTap: onToggleSelected,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: selected
-                        ? primary
-                        : Colors.black.withValues(alpha: 0.24),
-                    border: Border.all(color: Colors.white, width: 2),
+          if (!single)
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Semantics(
+                button: true,
+                selected: selected,
+                label: '选择图片 ${index + 1}，共 ${attachments.length} 张',
+                child: GestureDetector(
+                  onTap: onToggleSelected,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 160),
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: selected
+                          ? primary
+                          : Colors.black.withValues(alpha: 0.24),
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: selected
+                        ? const Icon(
+                            Icons.check_rounded,
+                            size: 18,
+                            color: Colors.white,
+                          )
+                        : null,
                   ),
-                  child: selected
-                      ? const Icon(
-                          Icons.check_rounded,
-                          size: 18,
-                          color: Colors.white,
-                        )
-                      : null,
                 ),
               ),
             ),
-          ),
-          Positioned(
-            right: 8,
-            bottom: 8,
-            child: Tooltip(
-              message: '查看大图',
-              child: Material(
-                color: Colors.black.withValues(alpha: 0.36),
-                shape: const CircleBorder(),
-                child: InkWell(
-                  onTap: onPreview,
-                  customBorder: const CircleBorder(),
-                  child: const SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: Icon(
-                      Icons.open_in_full_rounded,
-                      size: 17,
-                      color: Colors.white,
+          if (!single)
+            Positioned(
+              right: 8,
+              bottom: 8,
+              child: Tooltip(
+                message: '查看大图',
+                child: Material(
+                  color: Colors.black.withValues(alpha: 0.36),
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    onTap: onPreview,
+                    customBorder: const CircleBorder(),
+                    child: const SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: Icon(
+                        Icons.open_in_full_rounded,
+                        size: 17,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
         ],
       ),
     );
