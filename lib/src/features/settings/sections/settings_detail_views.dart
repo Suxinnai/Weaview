@@ -542,7 +542,7 @@ extension SettingsDetailViews on SettingsSheetState {
         ),
         const SizedBox(height: 10),
         Text(
-          'API Key 仅存储在本机 SharedPreferences 中，不会被发送给除所选模型服务外的第三方。',
+          'API Key 仅存储在本机；Android 上由 Keystore 加密，不会被发送给除所选模型服务外的第三方。',
           style: state.textStyle(
             context,
             size: 11,
@@ -877,18 +877,17 @@ extension SettingsDetailViews on SettingsSheetState {
         child: Column(
           children: [
             TextField(
-              controller: TextEditingController(text: roleDraft.prompt)
-                ..selection = TextSelection.collapsed(
-                  offset: roleDraft.prompt.length,
-                ),
+              key: const ValueKey('role-prompt-field'),
+              controller: rolePromptController,
               maxLines: 7,
               style: state.textStyle(context, size: 14, height: 1.55),
               decoration: const InputDecoration(
                 border: InputBorder.none,
                 hintText: '输入自定义提示词...',
               ),
-              onChanged: (value) =>
-                  roleDraft = roleDraft.copyWith(prompt: value),
+              onChanged: (value) => updateSheet(
+                () => roleDraft = roleDraft.copyWith(prompt: value),
+              ),
             ),
             DividerLine(state: state),
             Row(
@@ -900,9 +899,14 @@ extension SettingsDetailViews on SettingsSheetState {
                 const Spacer(),
                 TextButton(
                   onPressed: () => updateSheet(() {
-                    roleDraft = roleDraft.copyWith(
-                      prompt: ModelAssignment.defaults()[editingRole]!.prompt,
-                    );
+                    final prompt =
+                        ModelAssignment.defaults()[editingRole]!.prompt;
+                    roleDraft = roleDraft.copyWith(prompt: prompt);
+                    rolePromptController
+                      ..text = prompt
+                      ..selection = TextSelection.collapsed(
+                        offset: prompt.length,
+                      );
                   }),
                   child: const Text('恢复默认'),
                 ),
@@ -940,7 +944,7 @@ extension SettingsDetailViews on SettingsSheetState {
     final state = widget.state;
     return scrollContent([
       Text(
-        '配置默认的搜索引擎与对应的API Key。您可以自行注册并获取各个厂商的密钥。',
+        '配置 Tavily API Key。您可以在 Tavily 控制台注册并获取密钥。',
         style: state.textStyle(context, size: 13, opacity: 0.55, height: 1.5),
       ),
       const SizedBox(height: 20),
@@ -986,11 +990,10 @@ extension SettingsDetailViews on SettingsSheetState {
                   const SizedBox(height: 16),
                   DividerLine(state: state),
                   const SizedBox(height: 12),
-                  TextField(
+                  TextFormField(
+                    key: ValueKey('search-key-${engine.$1}'),
+                    initialValue: state.searchConfig.keys[engine.$1] ?? '',
                     obscureText: true,
-                    controller: TextEditingController(
-                      text: state.searchConfig.keys[engine.$1] ?? '',
-                    ),
                     onChanged: (value) {
                       state.saveSearchConfig(
                         state.searchConfig.copyWith(
@@ -1077,9 +1080,9 @@ extension SettingsDetailViews on SettingsSheetState {
                 ),
               ),
               const SizedBox(height: 8),
-              TextField(
-                controller: TextEditingController(text: value)
-                  ..selection = TextSelection.collapsed(offset: value.length),
+              TextFormField(
+                key: ValueKey('tts-${draft.id}-${draft.type}-$label'),
+                initialValue: value,
                 obscureText: obscure,
                 onChanged: (value) => setLocal(() => onChanged(value)),
                 style: state.textStyle(context, size: 15),
@@ -1107,8 +1110,6 @@ extension SettingsDetailViews on SettingsSheetState {
             items: const [
               DropdownMenuItem(value: 'xiaomi', child: Text('Xiaomi MiMo TTS')),
               DropdownMenuItem(value: 'openai', child: Text('OpenAI TTS')),
-              DropdownMenuItem(value: 'azure', child: Text('Azure TTS')),
-              DropdownMenuItem(value: 'edge', child: Text('Edge TTS')),
               DropdownMenuItem(value: 'custom', child: Text('自定义 (Custom)')),
             ],
             onChanged: (value) => setLocal(() {
@@ -1193,12 +1194,20 @@ extension SettingsDetailViews on SettingsSheetState {
             label: '保存设置',
             accent: true,
             onTap: () {
+              final normalizedDraft = draft.copyWith(
+                baseUrl: normalizeBaseUrl(draft.baseUrl),
+              );
+              final baseUrlIssue = secureBaseUrlIssue(normalizedDraft.baseUrl);
+              if (baseUrlIssue != null) {
+                widget.showSnack(baseUrlIssue);
+                return;
+              }
               final next = [...state.ttsProviders];
-              final index = next.indexWhere((t) => t.id == draft.id);
+              final index = next.indexWhere((t) => t.id == normalizedDraft.id);
               if (index >= 0) {
-                next[index] = draft;
+                next[index] = normalizedDraft;
               } else {
-                next.add(draft);
+                next.add(normalizedDraft);
               }
               state.saveTtsConfig(next, state.activeTtsId);
               goBack();

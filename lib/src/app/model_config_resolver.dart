@@ -17,6 +17,7 @@ class ModelConfigResolver {
   static String? modelConfigIssue({
     required ModelAssignment? assignment,
     required AiProvider? provider,
+    required String role,
     required String roleLabel,
   }) {
     if (assignment == null ||
@@ -29,6 +30,27 @@ class ModelConfigResolver {
     }
     if (provider.apiKey.trim().isEmpty) {
       return '请先在「设置 > 提供商」中为 ${provider.name} 配置 API Key。';
+    }
+    final baseUrlIssue = secureBaseUrlIssue(
+      provider.baseUrl,
+      allowEmpty: provider.name.toLowerCase().contains('gemini'),
+    );
+    if (baseUrlIssue != null) return baseUrlIssue;
+    final assignedModel = provider.models.firstWhereOrNull(
+      (model) =>
+          model.id.trim() == assignment.model.trim() ||
+          model.name.trim() == assignment.model.trim(),
+    );
+    if (assignedModel == null) {
+      return '$roleLabel所选模型“${assignment.model}”已不在 ${provider.name} 的模型列表中，请重新选择。';
+    }
+    if (!supportsModelRole(
+      role: role,
+      id: assignedModel.id,
+      name: assignedModel.name,
+      capabilities: assignedModel.capabilities,
+    )) {
+      return '$roleLabel所选模型“${assignedModel.name}”不支持当前任务，请重新选择兼容模型。';
     }
     return null;
   }

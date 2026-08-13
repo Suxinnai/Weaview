@@ -80,13 +80,25 @@ class ProviderConfigService {
         ...modelAssignments,
         'chat': chatAssignment.copyWith(provider: '', model: ''),
       };
+      prefs.saveModelAssignments(modelAssignments);
     }
 
-    searchConfig = prefs.loadSearchConfig() ?? searchConfig;
+    final savedSearch = prefs.loadSearchConfig();
+    if (savedSearch != null) {
+      searchConfig = savedSearch.active == 'tavily'
+          ? savedSearch
+          : savedSearch.copyWith(active: 'tavily');
+      if (searchConfig.active != savedSearch.active) {
+        prefs.saveSearchConfig(searchConfig);
+      }
+    }
 
     final savedTts = prefs.loadTtsProviders();
     ttsProviders = _mergeTtsProviders(savedTts);
     activeTtsId = _safeActiveTtsId(prefs.activeTtsId, ttsProviders);
+    if (savedTts.isNotEmpty || prefs.activeTtsId != activeTtsId) {
+      prefs.saveTtsConfig(ttsProviders, activeTtsId);
+    }
   }
 
   void saveProviders(List<AiProvider> next, WeaviewPreferences? prefs) {
@@ -270,11 +282,15 @@ class ProviderConfigService {
     final defaultsById = {for (final p in defaults) p.id: p};
     final merged = saved.map((provider) {
       final preset = defaultsById[provider.id];
-      if (preset == null) return provider;
+      final normalizedType =
+          const {'xiaomi', 'openai', 'custom'}.contains(provider.type)
+          ? provider.type
+          : 'custom';
+      if (preset == null) return provider.copyWith(type: normalizedType);
       return provider.copyWith(
         type: provider.id == 'xiaomi' || provider.type.isEmpty
             ? preset.type
-            : provider.type,
+            : normalizedType,
         name: provider.name.isEmpty ? preset.name : provider.name,
         baseUrl: provider.baseUrl.isEmpty ? preset.baseUrl : provider.baseUrl,
         model: provider.model.isEmpty ? preset.model : provider.model,

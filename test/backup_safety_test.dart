@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:weaview_flutter/src/app/weaview_state.dart';
 import 'package:weaview_flutter/src/core/app_utils.dart';
 import 'package:weaview_flutter/src/core/zip_writer.dart';
+import 'package:weaview_flutter/src/domain/models.dart';
 
 void main() {
   test('reads valid backup zip entries within configured limits', () {
@@ -27,6 +28,19 @@ void main() {
     );
 
     expect(text, '{"ok":true}');
+  });
+
+  test('rejects unsafe or duplicate zip entry names', () {
+    final unsafe = buildStoredZip([
+      ZipEntryData(name: '../outside.txt', bytes: utf8.encode('bad')),
+    ]);
+    final duplicate = buildStoredZip([
+      ZipEntryData(name: 'same.txt', bytes: utf8.encode('one')),
+      ZipEntryData(name: 'same.txt', bytes: utf8.encode('two')),
+    ]);
+
+    expect(() => readZipEntries(unsafe), throwsFormatException);
+    expect(() => readZipEntries(duplicate), throwsFormatException);
   });
 
   test('rejects oversized zip entry metadata before inflating', () async {
@@ -161,6 +175,138 @@ void main() {
     } finally {
       source.dispose();
       target.dispose();
+    }
+  });
+
+  test('backup exports never include usable service credentials', () async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+    try {
+      await state.load();
+      state.saveProviders([
+        AiProvider.defaults().first.copyWith(apiKey: 'provider-secret'),
+      ]);
+      state.saveSearchConfig(
+        const SearchConfig(active: 'tavily', keys: {'tavily': 'search-secret'}),
+      );
+      state.saveTtsConfig(const [
+        TtsProviderConfig(
+          id: 'custom',
+          type: 'openai',
+          name: 'Custom',
+          apiKey: 'tts-secret',
+          baseUrl: 'https://tts.example.com/v1',
+          model: 'tts-model',
+          voice: 'voice',
+        ),
+      ], 'custom');
+
+      final exported = state.exportJson();
+
+      expect(exported, isNot(contains('provider-secret')));
+      expect(exported, isNot(contains('search-secret')));
+      expect(exported, isNot(contains('tts-secret')));
+      expect(exported, contains('***'));
+    } finally {
+      state.dispose();
+    }
+  });
+
+  test('raw backup JSON cannot attach an existing destination file', () async {
+    SharedPreferences.setMockInitialValues({});
+    final temp = await Directory.systemTemp.createTemp('weaview_backup_path_');
+    final localFile = File('${temp.path}${Platform.pathSeparator}private.txt');
+    await localFile.writeAsString('local-only data');
+    final state = WeaviewState();
+    try {
+      await state.load();
+      await state.importBackupJson(
+        jsonEncode({
+          'chat_sessions': [
+            {
+              'id': 'untrusted-path',
+              'title': 'Untrusted',
+              'updatedAt': 1,
+              'messages': [
+                {
+                  'role': 'user',
+                  'content': 'read this',
+                  'attachments': [
+                    {
+                      'path': localFile.path,
+                      'name': 'private.txt',
+                      'mimeType': 'text/plain',
+                      'kind': 'file',
+                      'size': await localFile.length(),
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        }),
+      );
+
+      final imported = state.chatSessions.firstWhere(
+        (session) => session.id == 'untrusted-path',
+      );
+      expect(imported.messages.single.attachments, isEmpty);
+    } finally {
+      state.dispose();
+      if (await temp.exists()) await temp.delete(recursive: true);
+    }
+  });
+
+  test('zip backup restores attachment bytes to a valid local path', () async {
+    SharedPreferences.setMockInitialValues({});
+    final temp = await Directory.systemTemp.createTemp('weaview_backup_test_');
+    final sourceFile = File('${temp.path}${Platform.pathSeparator}note.txt');
+    await sourceFile.writeAsString('attachment payload');
+    final source = WeaviewState();
+    final target = WeaviewState();
+
+    try {
+      await source.load();
+      source.chatSessions.add(
+        ChatSession(
+          id: 'with-attachment',
+          title: '附件会话',
+          updatedAt: 1,
+          messages: [
+            ChatMessage.user(
+              '请读取附件',
+              attachments: [
+                MessageAttachment(
+                  path: sourceFile.path,
+                  name: 'note.txt',
+                  mimeType: 'text/plain',
+                  kind: 'file',
+                  size: await sourceFile.length(),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+
+      final archive = source.exportZipBytes();
+      SharedPreferences.setMockInitialValues({});
+      await target.load();
+      await target.importBackupBytes(archive, fileName: 'backup.zip');
+
+      final restored = target.chatSessions
+          .firstWhere((session) => session.id == 'with-attachment')
+          .messages
+          .single
+          .attachments
+          .single;
+      expect(restored.path, isNot(sourceFile.path));
+      expect(await File(restored.path).exists(), isTrue);
+      expect(await File(restored.path).readAsString(), 'attachment payload');
+    } finally {
+      source.dispose();
+      target.dispose();
+      if (await temp.exists()) await temp.delete(recursive: true);
     }
   });
 }

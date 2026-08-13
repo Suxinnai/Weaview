@@ -25,6 +25,20 @@ void main() {
       );
     });
 
+    test('rejects cleartext remote API endpoints but permits loopback', () {
+      expect(secureBaseUrlIssue('https://api.example.com/v1'), isNull);
+      expect(secureBaseUrlIssue('http://localhost:11434/v1'), isNull);
+      expect(secureBaseUrlIssue('http://127.0.0.1:11434/v1'), isNull);
+      expect(secureBaseUrlIssue('http://[::1]:11434/v1'), isNull);
+      expect(secureBaseUrlIssue('', allowEmpty: true), isNull);
+      expect(
+        secureBaseUrlIssue('http://api.example.com/v1'),
+        contains('HTTPS'),
+      );
+      expect(secureBaseUrlIssue('https://'), contains('格式无效'));
+      expect(secureBaseUrlIssue('ftp://api.example.com'), contains('HTTPS'));
+    });
+
     test('parses enum and opacity inputs defensively', () {
       expect(enumPref(' BOLD ', const ['normal', 'bold'], 'normal'), 'bold');
       expect(enumPref('heavy', const ['normal', 'bold'], 'normal'), 'normal');

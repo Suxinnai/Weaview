@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/app_utils.dart';
-import '../core/zip_writer.dart';
 import '../data/ai/ai_gateway.dart';
 import '../data/ai/ai_response_parsers.dart';
 import '../data/ai/image_tool_call_parser.dart';
@@ -14,6 +13,7 @@ import '../data/ai/openai_compatible_client.dart' show GeneratedImageResult;
 import '../domain/models.dart';
 import 'app_constants.dart';
 import 'model_config_resolver.dart';
+import 'services/backup_service.dart';
 import 'services/personalization_service.dart';
 import 'services/provider_config_service.dart';
 import 'services/session_manager.dart';
@@ -67,8 +67,8 @@ class BackupImportResult {
 }
 
 class WeaviewState extends ChangeNotifier {
-  static const int maxBackupArchiveBytes = 32 * 1024 * 1024;
-  static const int maxBackupJsonBytes = 16 * 1024 * 1024;
+  static const int maxBackupArchiveBytes = BackupService.maxArchiveBytes;
+  static const int maxBackupJsonBytes = BackupService.maxJsonBytes;
 
   static const MethodChannel _nativeMedia = MethodChannel(
     'weaview/native_media',
@@ -86,6 +86,7 @@ class WeaviewState extends ChangeNotifier {
   final PersonalizationService _personal = PersonalizationService();
   final SessionManager _sessions = SessionManager();
   final ProviderConfigService _providers = ProviderConfigService();
+  final BackupService _backups = const BackupService();
 
   // Streaming state
   bool isStreaming = false;
@@ -705,6 +706,7 @@ class WeaviewState extends ChangeNotifier {
     final configIssue = _modelConfigIssue(
       assignment: chatAssignment,
       provider: chatProvider,
+      role: 'chat',
       roleLabel: '主对话模型',
     );
     if (configIssue != null) {
@@ -1302,6 +1304,7 @@ class WeaviewState extends ChangeNotifier {
     final configIssue = _modelConfigIssue(
       assignment: imageAssignment,
       provider: imageProvider,
+      role: 'image',
       roleLabel: '生图模型',
     );
     if (configIssue != null) {
@@ -2141,6 +2144,7 @@ $prompt
     if (_modelConfigIssue(
           assignment: assignment,
           provider: provider,
+          role: 'suggest',
           roleLabel: '聊天建议模型',
         ) !=
         null) {
@@ -2336,11 +2340,13 @@ $prompt
   String? _modelConfigIssue({
     required ModelAssignment? assignment,
     required AiProvider? provider,
+    required String role,
     required String roleLabel,
   }) {
     return ModelConfigResolver.modelConfigIssue(
       assignment: assignment,
       provider: provider,
+      role: role,
       roleLabel: roleLabel,
     );
   }
@@ -2445,6 +2451,7 @@ $prompt
     final configIssue = _modelConfigIssue(
       assignment: assignment,
       provider: provider,
+      role: 'translate',
       roleLabel: '翻译模型',
     );
     if (configIssue != null) throw Exception(configIssue);
@@ -2469,9 +2476,11 @@ $prompt
 
   // ── Export / clear ───────────────────────────────────────────────
 
-  String exportJson() {
+  String exportJson() => _exportJsonForSessions(chatSessions);
+
+  String _exportJsonForSessions(List<ChatSession> sessions) {
     return const JsonEncoder.withIndent('  ').convert({
-      'chat_sessions': chatSessions.map((s) => s.toJson()).toList(),
+      'chat_sessions': sessions.map((s) => s.toJson()).toList(),
       'ai_providers': providers.map((p) => p.safeJson()).toList(),
       'ai_model_assignments': modelAssignments.map(
         (key, value) => MapEntry(key, value.toJson()),
@@ -2510,71 +2519,37 @@ $prompt
   }
 
   Uint8List exportZipBytes() {
-    final exportedAt = DateTime.now().toIso8601String();
-    return buildStoredZip([
-      ZipEntryData(
-        name: 'weaview-export.json',
-        bytes: utf8.encode(exportJson()),
-      ),
-      ZipEntryData(
-        name: 'README.txt',
-        bytes: utf8.encode(
-          'Weaview local data export\nExported at: $exportedAt\nFormat: UTF-8 JSON\nNote: original attachment/image/audio files are not included in this backup.\n',
-        ),
-      ),
-    ]);
+    final prepared = _backups.prepareSessions(chatSessions);
+    return _backups.buildArchive(
+      json: _exportJsonForSessions(prepared.sessions),
+      prepared: prepared,
+    );
   }
 
   Future<BackupImportResult> importBackupBytes(
     Uint8List bytes, {
     String fileName = '',
   }) async {
-    if (bytes.length > maxBackupArchiveBytes) {
-      throw FormatException(
-        '备份文件超过 ${_formatBackupLimit(maxBackupArchiveBytes)} 限制。',
-      );
-    }
-    final lowerName = fileName.toLowerCase();
-    final isZip =
-        lowerName.endsWith('.zip') ||
-        (bytes.length >= 4 &&
-            bytes[0] == 0x50 &&
-            bytes[1] == 0x4B &&
-            bytes[2] == 0x03 &&
-            bytes[3] == 0x04);
-    final text = isZip
-        ? readZipUtf8Entry(
-            bytes,
-            'weaview-export.json',
-            maxCompressedBytes: maxBackupJsonBytes,
-            maxUncompressedBytes: maxBackupJsonBytes,
-          )
-        : bytes.length > maxBackupJsonBytes
-        ? throw FormatException(
-            '备份 JSON 超过 ${_formatBackupLimit(maxBackupJsonBytes)} 限制。',
-          )
-        : utf8.decode(bytes, allowMalformed: true);
-    if (text == null || text.trim().isEmpty) {
-      throw const FormatException('备份文件中未找到 weaview-export.json。');
-    }
-    return importBackupJson(text);
+    final decoded = _backups.decode(bytes, fileName: fileName);
+    return importBackupJson(decoded.json, backupEntries: decoded.entries);
   }
 
-  Future<BackupImportResult> importBackupJson(String text) async {
-    if (utf8.encode(text).length > maxBackupJsonBytes) {
-      throw FormatException(
-        '备份 JSON 超过 ${_formatBackupLimit(maxBackupJsonBytes)} 限制。',
-      );
-    }
+  Future<BackupImportResult> importBackupJson(
+    String text, {
+    Map<String, Uint8List> backupEntries = const {},
+  }) async {
+    _backups.ensureJsonWithinLimit(text);
     final decoded = jsonDecode(text);
     if (decoded is! Map) {
       throw const FormatException('备份 JSON 格式无效。');
     }
     final data = decoded.cast<String, dynamic>();
 
-    final importedSessions = _decodeImportList(
-      data['chat_sessions'],
-      ChatSession.fromJson,
+    final importedSessions = await _backups.restoreAttachments(
+      _decodeImportList(data['chat_sessions'], ChatSession.fromJson),
+      backupEntries,
+      generatedImagesDirectory: _generatedImagesDirectory,
+      uniqueName: _uniqueGeneratedImageName,
     );
     final importedMemoryItems = _decodeMemoryItems(
       data['ai_memory_items'],
@@ -2656,7 +2631,21 @@ $prompt
   }
 
   Future<void> clearAllLocalData() async {
-    await _prefs?.clear();
+    final prefs = _prefs;
+    await prefs?.clear();
+    try {
+      final generatedImages = await _generatedImagesDirectory();
+      if (await generatedImages.exists()) {
+        await generatedImages.delete(recursive: true);
+      }
+    } on FileSystemException {
+      // Preference data must still be cleared if managed media cleanup fails.
+    }
+    _cancelStreamRequested = true;
+    _cancelledImageRuns.add(_streamRunId);
+    _streamRunId++;
+    _backgroundedImageRuns.clear();
+    _activeImageGenerationCount = 0;
     messages.clear();
     chatSessions.clear();
     suggestions = [];
@@ -2690,6 +2679,7 @@ $prompt
     messageAlignment = 'left';
     assistantBubbleOpacity = 0.08;
     userBubbleOpacity = 0.12;
+    _prefs = await WeaviewPreferences.open();
     notifyListeners();
   }
 
@@ -3046,11 +3036,4 @@ $prompt
   }
 
   String? _colorToHex(Color? color) => color == null ? null : colorToHex(color);
-
-  String _formatBackupLimit(int bytes) {
-    final megaBytes = bytes / (1024 * 1024);
-    return megaBytes == megaBytes.roundToDouble()
-        ? '${megaBytes.toInt()} MB'
-        : '${megaBytes.toStringAsFixed(1)} MB';
-  }
 }

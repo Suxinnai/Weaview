@@ -72,8 +72,9 @@ class AiGateway {
     final providerName = assignment.provider.isNotEmpty
         ? assignment.provider
         : provider.name;
+    late final _ResolvedRoute route;
     if (_isGeminiProvider(providerName)) {
-      return _ResolvedRoute(
+      route = _ResolvedRoute(
         type: _ProviderType.gemini,
         provider: provider,
         assignment: assignment,
@@ -81,9 +82,8 @@ class AiGateway {
         baseUrl: provider.baseUrl,
         modelId: _geminiModelId(assignment, provider),
       );
-    }
-    if (_isAnthropicProvider(providerName)) {
-      return _ResolvedRoute(
+    } else if (_isAnthropicProvider(providerName)) {
+      route = _ResolvedRoute(
         type: _ProviderType.anthropic,
         provider: provider,
         assignment: assignment,
@@ -91,15 +91,21 @@ class AiGateway {
         baseUrl: _effectiveAnthropicBaseUrl(provider),
         modelId: _providerModelId(assignment, provider),
       );
+    } else {
+      route = _ResolvedRoute(
+        type: _ProviderType.openAi,
+        provider: provider,
+        assignment: assignment,
+        apiKey: provider.apiKey,
+        baseUrl: _effectiveOpenAiBaseUrl(provider),
+        modelId: _providerModelId(assignment, provider),
+      );
     }
-    return _ResolvedRoute(
-      type: _ProviderType.openAi,
-      provider: provider,
-      assignment: assignment,
-      apiKey: provider.apiKey,
-      baseUrl: _effectiveOpenAiBaseUrl(provider),
-      modelId: _providerModelId(assignment, provider),
+    app_utils.ensureSecureBaseUrl(
+      route.baseUrl,
+      allowEmpty: route.type == _ProviderType.gemini,
     );
+    return route;
   }
 
   static void _assertApiKey(_ResolvedRoute route) {
@@ -419,6 +425,7 @@ class AiGateway {
     required String baseUrl,
     String providerName = '',
   }) async {
+    app_utils.ensureSecureBaseUrl(baseUrl, allowEmpty: true);
     final preset = _providerPreset(providerName);
     if (preset != null && _usesNativeImageClient(preset.imageApi)) {
       return preset.models;
@@ -450,6 +457,7 @@ class AiGateway {
     Iterable<String> capabilities = const [],
     String providerName = '',
   }) async {
+    app_utils.ensureSecureBaseUrl(baseUrl, allowEmpty: true);
     if (looksLikeImageGenerationModel(
       id: model,
       name: model,
@@ -509,6 +517,7 @@ class AiGateway {
     required TtsProviderConfig config,
     required String text,
   }) {
+    app_utils.ensureSecureBaseUrl(config.baseUrl);
     return _ttsClient.synthesize(
       config: config,
       text: text,
@@ -521,6 +530,7 @@ class AiGateway {
     required String text,
     required Pcm16ChunkHandler onChunk,
   }) {
+    app_utils.ensureSecureBaseUrl(config.baseUrl);
     return _ttsClient.streamPcm16(
       config: config,
       text: text,

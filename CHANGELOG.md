@@ -6,21 +6,35 @@
 
 ### 中文
 
-- 移除工作台、分支图谱与作品卡入口，对话回归单一专注的聊天流；作品卡数据模型与本地存储一并清理。
-- 用量统计统一保留在侧边栏入口，移除设置页中的重复入口。
-- 主页模型选择器改为单行磨砂胶囊，菜单按钮加入高斯模糊背景，整体占用更小、质感更通透。
-- 提供商卡片重新设计：连接状态改为胶囊化展示，卡片表面更柔和，移除冗余箭头与多余控件。
-- 设置界面统一字体规范：页头、分组标题、空状态与品牌文案改用诗意的楷体（霞鹜文楷子集，GB2312 常用字），正文保持系统无衬线字体以保证清晰度。
-- 设置页按钮与顶部 Tab 增加按压缩放动效，并遵循系统「减少动态效果」偏好。
+- 暂无。
 
 ### English
 
-- Removed the workboard, branch graph, and work-card surfaces so chat returns to a single focused conversation stream; the work-card model and local storage were cleaned up with them.
-- Usage statistics now live only in the sidebar entry; the duplicate settings route was removed.
-- The home model selector became a compact single-line frosted capsule, the menu button gained a Gaussian-blur backdrop, and the header takes less space with a more translucent feel.
-- Provider cards were redesigned: connection state is now a pill, surfaces are softer, and redundant chevrons and controls were removed.
-- Settings typography now follows one spec: page headers, section labels, empty states, and brand copy use a poetic kai-style font (a GB2312-subset of LXGW WenKai), while body text keeps the system sans-serif for readability.
-- Settings buttons and header tabs gained press-scale motion, respecting the system reduced-motion preference.
+- Nothing yet.
+
+## 2.0.2 - 2026-08-13
+
+### 中文
+
+- 重做聊天模型选择器：加入真实高斯模糊玻璃层、统一的用途筛选、搜索反馈、能力标签和更清晰的当前模型状态。
+- 提供商界面改为两列紧凑卡片，支持长按拖拽排序和删除；主题选择器、关于页与设置层级同步精简。
+- 默认模型新增独立的翻译模型和标题生成模型配置，并继续校验提供商启用状态与模型能力。
+- 侧边栏将分支会话显示在主会话下方，并支持根分支和嵌套分支分别折叠。
+- 修复单图结果不显示的问题；多图结果改为 PhotoStack 风格堆叠卡组，并保留全屏翻页与逐张保存。
+- Android 凭据迁移至 Keystore 加密存储；远程明文 HTTP 地址会被拒绝，仅回环地址允许用于本机调试。
+- 备份会恢复有效附件，同时限制压缩包条目、解压体积与文件路径；导出内容不会携带可用 API Key。
+- CI 增加覆盖率门槛和 Android 构建检查，正式包不再回退到调试签名；完整测试套件增至 218 项。
+
+### English
+
+- Rebuilt the in-chat model picker with a true Gaussian-blur glass surface, unified purpose filters, clearer search feedback, capability chips, and a stronger current-model state.
+- Redesigned provider management as compact two-column cards with long-press drag sorting and deletion, while simplifying theme selection, About, and the settings hierarchy.
+- Added independent default assignments for translation and title generation, retaining provider-state and capability validation.
+- Nested branch conversations directly beneath their parent session and added independent collapsing for root and nested branches.
+- Fixed missing single-image results and replaced multi-image presentation with a PhotoStack-style stack while preserving fullscreen paging and per-image saving.
+- Moved Android credentials to Keystore-backed encrypted storage. Remote cleartext HTTP endpoints are now rejected, with loopback-only exceptions for local development.
+- Restored valid attachments from backups while enforcing archive-entry, inflated-size, and path-safety limits; exports never contain usable API keys.
+- Added CI coverage enforcement and Android build checks, removed release fallback to debug signing, and expanded the complete suite to 218 tests.
 
 ## 2.0.1 - 2026-08-11
 

@@ -8,6 +8,7 @@ void main() {
       final issue = ModelConfigResolver.modelConfigIssue(
         assignment: const ModelAssignment(provider: '', model: '', prompt: ''),
         provider: null,
+        role: 'chat',
         roleLabel: '主对话模型',
       );
 
@@ -26,11 +27,58 @@ void main() {
           prompt: '',
         ),
         provider: provider,
+        role: 'chat',
         roleLabel: '主对话模型',
       );
 
       expect(issue, contains('Gemini'));
       expect(issue, contains('API Key'));
+    });
+
+    test('rejects assignments whose model is no longer in the provider', () {
+      final provider = AiProvider.defaults().first.copyWith(
+        apiKey: 'secret',
+        models: const [AiModel(id: 'gpt-current', name: 'GPT Current')],
+      );
+
+      final issue = ModelConfigResolver.modelConfigIssue(
+        assignment: const ModelAssignment(
+          provider: 'OpenAI',
+          model: 'gpt-removed',
+          prompt: '',
+        ),
+        provider: provider,
+        role: 'chat',
+        roleLabel: '主对话模型',
+      );
+
+      expect(issue, contains('已不在'));
+    });
+
+    test('rejects a pure image model assigned to the chat role', () {
+      final provider = AiProvider.defaults().first.copyWith(
+        apiKey: 'secret',
+        models: const [
+          AiModel(
+            id: 'image-only',
+            name: 'Image Only',
+            capabilities: ['image'],
+          ),
+        ],
+      );
+
+      final issue = ModelConfigResolver.modelConfigIssue(
+        assignment: const ModelAssignment(
+          provider: 'OpenAI',
+          model: 'image-only',
+          prompt: '',
+        ),
+        provider: provider,
+        role: 'chat',
+        roleLabel: '主对话模型',
+      );
+
+      expect(issue, contains('不支持'));
     });
 
     test('prefers explicitly assigned chat provider over current flag', () {

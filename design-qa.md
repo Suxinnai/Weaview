@@ -93,6 +93,74 @@
 
 ## Result
 
-The implemented UI preserves the app's original home identity, cool neutral palette, teal interaction color, rounded-card system, direct settings navigation and bottom composer while remaining truthful to local data. All discovered P0–P2 visual or interaction issues were fixed. The v2.0.1 empty-home comparison is captured in `build/visual-qa/home-reference-comparison.png`; the real-device message action state is captured in `build/visual-qa/weaview-v2.0.1-actions.png` and exposes five 38 dp targets in a single compact capsule. Static analysis is clean and the complete 185-test suite passes. Three signed release APKs were rebuilt as v2.0.1+44, verified as upgrade-compatible with v1.0.33/v2.0.0, and installed successfully on the Android emulator.
+The implemented UI preserves the app's original home identity, cool neutral palette, teal interaction color, rounded-card system, direct settings navigation and bottom composer while remaining truthful to local data. All discovered P0–P2 visual or interaction issues were fixed. The v2.0.1 empty-home comparison is captured in `build/visual-qa/home-reference-comparison.png`; the earlier real-device message action state is captured in `build/visual-qa/weaview-v2.0.1-actions.png`, while the current implementation expands all five action targets to 44 dp. Static analysis is clean and the complete 210-test suite passes with 60.93% line coverage. An Android debug APK builds successfully, and unsigned release builds are now explicitly blocked until production signing variables are provided.
+
+final result: passed
+
+---
+
+## Settings refresh v2 implementation QA (2026-08-13)
+
+### Scope
+
+- Provider management: compact two-column cards, persistent drag ordering, long-press delete mode, and a distinct current-provider state.
+- About: one condensed identity panel plus four non-duplicated destinations.
+- General theme: three visual theme cards and an inline accent palette.
+- Conversation history: recursive branch rows nested directly under their parent session.
+
+### Combined comparison evidence
+
+- Theme: `design/ui-concepts/settings-refresh-v2/implemented/theme-compare.png`
+- Providers: `design/ui-concepts/settings-refresh-v2/implemented/providers-compare.png`
+- About: `design/ui-concepts/settings-refresh-v2/implemented/about-compare.png`
+- Branch conversations: `design/ui-concepts/settings-refresh-v2/implemented/branches-compare.png`
+- Current-provider selected state: `design/ui-concepts/settings-refresh-v2/implemented/providers-current.png`
+
+### Findings and corrections
+
+1. The first provider implementation allowed card contents to determine width, producing uneven columns. The card surface now expands to the full grid cell width.
+2. The provider screen contains no resting-state search, add, overflow, enable switch, or “view all” controls. Configuration remains available by tapping a card; sorting and deletion are intentionally moved behind long press.
+3. The active provider is identified by a mint-tinted selected surface, border, check mark, and the single status line `当前 · N 个模型`.
+4. Theme selection now communicates light, dark, and system-following behavior with direct previews instead of a dense segmented control. Accent colors stay visible and one-tap selectable.
+5. About-page version data appears once in the identity panel; support and repository destinations are consolidated into four rows.
+6. A branch created from an assistant message was verified on the emulator. It renders below the root conversation with an indented connector, `分支` badge, independent selection, and retained overflow actions.
+
+### Verification
+
+- Flutter static analysis: no issues.
+- Full Flutter test suite: 216 tests passed.
+- Focused post-layout provider/settings tests: 5 tests passed after the equal-width correction.
+- Android debug APK built, installed, and launched on `emulator-5554` (`Pixel_9_Pro_XL_API_35`).
+
+### Result
+
+No P0–P2 visual or interaction defects remain in the four confirmed surfaces. Differences from the concept boards are limited to real device content, provider ordering, and platform font metrics.
+
+final result: passed
+
+---
+
+## Default model roles and collapsible branches (2026-08-13)
+
+- `设置 > 默认模型` now separates `核心模型` from `辅助任务` and exposes independent translation and title-generation assignments.
+- Both new rows open the existing provider/model/system-prompt editor and use the established assignment persistence path.
+- Conversations with branches now expose a compact chevron. Root collapse hides its full descendant tree; nested collapse hides only that branch's descendants.
+- Expanded device evidence: `build/visual-qa/sidebar-branches-expanded.png`.
+- Collapsed device evidence: `build/visual-qa/sidebar-branches-collapsed.png`.
+- Default-model device evidence: `build/visual-qa/default-models-translation-title.png`.
+- Full static analysis: no issues. Full Flutter suite: 218 tests passed.
+
+final result: passed
+
+---
+
+## Model picker glass refresh (2026-08-13)
+
+- Reworked the in-chat model picker as a compact glass surface with a clipped 30 px backdrop blur, translucent gradient, fine border, depth shadow, and restrained mint glow.
+- Consolidated usage filters into one segmented glass rail, strengthened search focus feedback, and simplified model rows around capability chips plus a single `当前` status.
+- Added provider/model counts and a compact management footer without obscuring the conversation behind the picker.
+- Final emulator evidence: `build/visual-qa/model-picker-glass-v3.png`.
+- Reference comparison: `build/visual-qa/model-picker-glass-compare.png`.
+- Flutter static analysis: no issues. Full Flutter suite: 218 tests passed.
 
 final result: passed

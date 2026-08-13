@@ -507,7 +507,7 @@ class _ImageCountSelector extends StatelessWidget {
       message: '输出张数',
       child: Container(
         key: const ValueKey('image-count-selector'),
-        height: 30,
+        height: 44,
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
           color: base.withValues(alpha: dark ? 0.085 : 0.06),
@@ -534,7 +534,7 @@ class _ImageCountSelector extends StatelessWidget {
                           ? null
                           : () => onChanged!(option),
                       child: SizedBox(
-                        width: 32,
+                        width: 40,
                         child: Center(
                           child: Text(
                             '$option',
@@ -919,8 +919,8 @@ class _ActiveToolIndicator extends StatelessWidget {
           customBorder: const CircleBorder(),
           onTap: onTap,
           child: SizedBox(
-            width: 38,
-            height: 38,
+            width: 44,
+            height: 44,
             child: Icon(icon, size: 20, color: sendGreen),
           ),
         ),

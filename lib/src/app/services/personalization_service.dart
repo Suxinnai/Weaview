@@ -200,6 +200,7 @@ class PersonalizationService {
     final configIssue = ModelConfigResolver.modelConfigIssue(
       assignment: assignment,
       provider: provider,
+      role: 'tool',
       roleLabel: '工具模型',
     );
     if (configIssue != null) throw Exception(configIssue);
@@ -244,6 +245,7 @@ ${_compactConversation(messages.isNotEmpty ? messages : chatSessions.expand((s) 
     final configIssue = ModelConfigResolver.modelConfigIssue(
       assignment: assignment,
       provider: provider,
+      role: 'tool',
       roleLabel: '工具模型',
     );
     if (configIssue != null) throw Exception(configIssue);
@@ -287,6 +289,7 @@ ${_compactConversation(messages.isNotEmpty ? messages : chatSessions.expand((s) 
     if (ModelConfigResolver.modelConfigIssue(
           assignment: assignment,
           provider: provider,
+          role: 'tool',
           roleLabel: '工具模型',
         ) !=
         null) {
@@ -350,6 +353,7 @@ ${_compactConversation(messages)}
     if (ModelConfigResolver.modelConfigIssue(
           assignment: assignment,
           provider: provider,
+          role: 'tool',
           roleLabel: '工具模型',
         ) !=
         null) {

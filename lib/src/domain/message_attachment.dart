@@ -61,6 +61,26 @@ class MessageAttachment {
     pixelHeight: pixelHeight,
   );
 
+  MessageAttachment copyWith({
+    String? path,
+    String? name,
+    String? mimeType,
+    String? kind,
+    int? size,
+    int? pixelWidth,
+    int? pixelHeight,
+  }) {
+    return MessageAttachment(
+      path: path ?? this.path,
+      name: name ?? this.name,
+      mimeType: mimeType ?? this.mimeType,
+      kind: kind ?? this.kind,
+      size: size ?? this.size,
+      pixelWidth: pixelWidth ?? this.pixelWidth,
+      pixelHeight: pixelHeight ?? this.pixelHeight,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
     'path': path,
     'name': name,

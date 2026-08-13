@@ -145,6 +145,8 @@ class _MessageBubbleState extends State<MessageBubble> {
               onTap: _toggleActions,
               child: Semantics(
                 container: true,
+                button: hasActionText,
+                onTap: hasActionText ? _toggleActions : null,
                 label: '用户消息',
                 hint: hasActionText ? '轻触消息可以打开消息操作' : null,
                 child: _StyledMessageSurface(
@@ -223,6 +225,8 @@ class _MessageBubbleState extends State<MessageBubble> {
       },
       child: Semantics(
         container: true,
+        button: showMessageActions,
+        onTap: showMessageActions ? _toggleActions : null,
         label: '助手消息',
         hint: showMessageActions ? '轻触消息可以打开消息操作' : null,
         child: Column(
@@ -2081,8 +2085,8 @@ class _CopyMiniButton extends StatelessWidget {
           customBorder: const CircleBorder(),
           onTap: onTap,
           child: SizedBox(
-            width: 36,
-            height: 36,
+            width: 44,
+            height: 44,
             child: Icon(
               Icons.content_copy_rounded,
               size: 15.5,

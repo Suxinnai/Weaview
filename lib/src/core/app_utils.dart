@@ -187,3 +187,39 @@ String normalizeBaseUrl(String value) {
   }
   return base;
 }
+
+String? secureBaseUrlIssue(String value, {bool allowEmpty = false}) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return allowEmpty ? null : 'Base URL 不能为空。';
+  }
+  final explicitScheme = RegExp(
+    r'^([a-z][a-z0-9+.-]*):',
+    caseSensitive: false,
+  ).firstMatch(trimmed)?.group(1)?.toLowerCase();
+  if (explicitScheme != null &&
+      explicitScheme != 'http' &&
+      explicitScheme != 'https') {
+    return 'Base URL 仅支持 HTTPS（本机调试可使用 HTTP）。';
+  }
+  final normalized = normalizeBaseUrl(trimmed);
+  final uri = Uri.tryParse(normalized);
+  if (uri == null || !uri.hasAuthority || uri.host.trim().isEmpty) {
+    return 'Base URL 格式无效。';
+  }
+  if (uri.scheme == 'https') return null;
+  if (uri.scheme == 'http' && _isLoopbackHost(uri.host)) return null;
+  return '为保护 API Key，Base URL 必须使用 HTTPS；仅本机 localhost/127.0.0.1/::1 可使用 HTTP。';
+}
+
+void ensureSecureBaseUrl(String value, {bool allowEmpty = false}) {
+  final issue = secureBaseUrlIssue(value, allowEmpty: allowEmpty);
+  if (issue != null) throw Exception(issue);
+}
+
+bool _isLoopbackHost(String host) {
+  final normalized = host.trim().toLowerCase();
+  return normalized == 'localhost' ||
+      normalized == '127.0.0.1' ||
+      normalized == '::1';
+}

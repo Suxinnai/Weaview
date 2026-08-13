@@ -232,7 +232,8 @@ class SessionManager {
     if (ModelConfigResolver.modelConfigIssue(
           assignment: assignment,
           provider: provider,
-          roleLabel: '标题总结模型',
+          role: 'title',
+          roleLabel: '标题生成模型',
         ) !=
         null) {
       return null;

@@ -171,9 +171,9 @@ class _MessageIconAction extends StatelessWidget {
             customBorder: const CircleBorder(),
             onTap: onTap,
             child: SizedBox(
-              width: 34,
-              height: 34,
-              child: Icon(icon, size: 16, color: text.withValues(alpha: 0.62)),
+              width: 44,
+              height: 44,
+              child: Icon(icon, size: 18, color: text.withValues(alpha: 0.62)),
             ),
           ),
         ),

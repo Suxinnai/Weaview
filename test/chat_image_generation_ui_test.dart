@@ -62,7 +62,7 @@ void main() {
     );
     expect(
       tester.getSize(find.byKey(const ValueKey('image-count-selector'))).height,
-      30,
+      44,
     );
 
     await tester.tap(find.byKey(const ValueKey('image-count-option-4')));

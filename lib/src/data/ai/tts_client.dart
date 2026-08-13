@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
+import '../../core/app_utils.dart' as app_utils;
 import '../../domain/models.dart';
 
 class TtsAudioResult {
@@ -28,7 +29,8 @@ class TtsClient {
     if (input.isEmpty) {
       throw Exception('没有可朗读的文本。');
     }
-    final baseUrl = config.baseUrl.trim();
+    app_utils.ensureSecureBaseUrl(config.baseUrl);
+    final baseUrl = app_utils.normalizeBaseUrl(config.baseUrl);
     if (baseUrl.isEmpty) {
       throw Exception('请先配置 TTS Base URL。');
     }
@@ -87,7 +89,8 @@ class TtsClient {
     if (!_isMimoTts(config)) {
       throw Exception('当前 TTS 服务不支持 PCM16 流式播放。');
     }
-    final baseUrl = config.baseUrl.trim();
+    app_utils.ensureSecureBaseUrl(config.baseUrl);
+    final baseUrl = app_utils.normalizeBaseUrl(config.baseUrl);
     final apiKey = config.apiKey.trim();
     final model = config.model.trim();
     final voice = config.voice.trim();

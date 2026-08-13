@@ -20,13 +20,21 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import android.speech.tts.TextToSpeech
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
+import java.security.KeyStore
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import javax.crypto.Cipher
+import javax.crypto.KeyGenerator
+import javax.crypto.SecretKey
+import javax.crypto.spec.GCMParameterSpec
 
 class MainActivity : FlutterActivity() {
     private val notificationPermissionRequestCode = 42019
@@ -110,6 +118,125 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "weaview/secure_storage"
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "readAll" -> readSecureSecrets(result)
+                "replaceAll" -> replaceSecureSecrets(
+                    call.arguments as? Map<*, *> ?: emptyMap<String, String>(),
+                    result
+                )
+                "clear" -> clearSecureSecrets(result)
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    private fun readSecureSecrets(result: MethodChannel.Result) {
+        try {
+            val prefs = getSharedPreferences(securePreferencesName, Context.MODE_PRIVATE)
+            val values = mutableMapOf<String, String>()
+            val editor = prefs.edit()
+            for ((key, rawValue) in prefs.all) {
+                val encrypted = rawValue as? String ?: continue
+                try {
+                    values[key] = decryptSecret(encrypted)
+                } catch (_: Exception) {
+                    editor.remove(key)
+                }
+            }
+            editor.apply()
+            result.success(values)
+        } catch (error: Exception) {
+            result.error("SECURE_STORAGE_READ_FAILED", error.message, null)
+        }
+    }
+
+    private fun replaceSecureSecrets(values: Map<*, *>, result: MethodChannel.Result) {
+        try {
+            val editor = getSharedPreferences(
+                securePreferencesName,
+                Context.MODE_PRIVATE
+            ).edit().clear()
+            for ((rawKey, rawValue) in values) {
+                val key = rawKey?.toString()?.trim().orEmpty()
+                val value = rawValue?.toString().orEmpty()
+                if (key.isNotEmpty() && value.isNotEmpty()) {
+                    editor.putString(key, encryptSecret(value))
+                }
+            }
+            if (!editor.commit()) {
+                throw IllegalStateException("无法写入加密凭据")
+            }
+            result.success(null)
+        } catch (error: Exception) {
+            result.error("SECURE_STORAGE_WRITE_FAILED", error.message, null)
+        }
+    }
+
+    private fun clearSecureSecrets(result: MethodChannel.Result) {
+        try {
+            val cleared = getSharedPreferences(securePreferencesName, Context.MODE_PRIVATE)
+                .edit()
+                .clear()
+                .commit()
+            if (!cleared) {
+                throw IllegalStateException("无法清除加密凭据")
+            }
+            val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            if (keyStore.containsAlias(secureKeyAlias)) {
+                keyStore.deleteEntry(secureKeyAlias)
+            }
+            result.success(null)
+        } catch (error: Exception) {
+            result.error("SECURE_STORAGE_CLEAR_FAILED", error.message, null)
+        }
+    }
+
+    private fun encryptSecret(value: String): String {
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, secureSecretKey())
+        val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
+        val payload = ByteArray(1 + cipher.iv.size + encrypted.size)
+        payload[0] = cipher.iv.size.toByte()
+        cipher.iv.copyInto(payload, destinationOffset = 1)
+        encrypted.copyInto(payload, destinationOffset = 1 + cipher.iv.size)
+        return Base64.encodeToString(payload, Base64.NO_WRAP)
+    }
+
+    private fun decryptSecret(value: String): String {
+        val payload = Base64.decode(value, Base64.NO_WRAP)
+        if (payload.isEmpty()) throw IllegalArgumentException("加密凭据为空")
+        val ivLength = payload[0].toInt() and 0xFF
+        if (ivLength !in 12..16 || payload.size <= 1 + ivLength) {
+            throw IllegalArgumentException("加密凭据格式无效")
+        }
+        val iv = payload.copyOfRange(1, 1 + ivLength)
+        val encrypted = payload.copyOfRange(1 + ivLength, payload.size)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.DECRYPT_MODE, secureSecretKey(), GCMParameterSpec(128, iv))
+        return String(cipher.doFinal(encrypted), Charsets.UTF_8)
+    }
+
+    private fun secureSecretKey(): SecretKey {
+        val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        (keyStore.getKey(secureKeyAlias, null) as? SecretKey)?.let { return it }
+        val generator = KeyGenerator.getInstance(
+            KeyProperties.KEY_ALGORITHM_AES,
+            "AndroidKeyStore"
+        )
+        generator.init(
+            KeyGenParameterSpec.Builder(
+                secureKeyAlias,
+                KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
+            )
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .build()
+        )
+        return generator.generateKey()
     }
 
     private fun ensureNotificationPermission(result: MethodChannel.Result) {
@@ -533,5 +660,10 @@ class MainActivity : FlutterActivity() {
         stopAudioPlayback()
         stopPcm16Stream()
         super.onDestroy()
+    }
+
+    companion object {
+        private const val securePreferencesName = "weaview_secure_secrets"
+        private const val secureKeyAlias = "weaview_secure_secrets_v1"
     }
 }

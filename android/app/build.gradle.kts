@@ -5,6 +5,27 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val releaseKeystorePath = System.getenv("WEAVIEW_KEYSTORE_PATH")
+val releaseKeystorePassword = System.getenv("WEAVIEW_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("WEAVIEW_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("WEAVIEW_KEY_PASSWORD")
+val hasReleaseSigning = listOf(
+    releaseKeystorePath,
+    releaseKeystorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all { !it.isNullOrBlank() }
+val requestsReleaseBuild = gradle.startParameter.taskNames.any {
+    it.contains("release", ignoreCase = true)
+}
+
+if (requestsReleaseBuild && !hasReleaseSigning) {
+    throw org.gradle.api.GradleException(
+        "Release signing is not configured. Set WEAVIEW_KEYSTORE_PATH, " +
+            "WEAVIEW_KEYSTORE_PASSWORD, WEAVIEW_KEY_ALIAS, and WEAVIEW_KEY_PASSWORD."
+    )
+}
+
 android {
     namespace = "com.weaview.weaview_flutter"
     compileSdk = flutter.compileSdkVersion
@@ -20,21 +41,29 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.weaview.weaview_flutter"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releaseKeystorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 }

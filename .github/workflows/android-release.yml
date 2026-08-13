@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release tag used in artifact filenames (for example v2.0.0)
+        description: Release tag used in artifact filenames (for example v2.0.2)
         required: true
         type: string
 
@@ -42,7 +42,25 @@ jobs:
       - name: Test
         run: flutter test --no-pub
 
+      - name: Prepare release signing
+        env:
+          WEAVIEW_RELEASE_KEYSTORE_BASE64: ${{ secrets.WEAVIEW_RELEASE_KEYSTORE_BASE64 }}
+          WEAVIEW_KEYSTORE_PASSWORD: ${{ secrets.WEAVIEW_KEYSTORE_PASSWORD }}
+          WEAVIEW_KEY_ALIAS: ${{ secrets.WEAVIEW_KEY_ALIAS }}
+          WEAVIEW_KEY_PASSWORD: ${{ secrets.WEAVIEW_KEY_PASSWORD }}
+        run: |
+          test -n "$WEAVIEW_RELEASE_KEYSTORE_BASE64"
+          test -n "$WEAVIEW_KEYSTORE_PASSWORD"
+          test -n "$WEAVIEW_KEY_ALIAS"
+          test -n "$WEAVIEW_KEY_PASSWORD"
+          printf '%s' "$WEAVIEW_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/weaview-release.jks"
+
       - name: Build split APKs
+        env:
+          WEAVIEW_KEYSTORE_PATH: ${{ runner.temp }}/weaview-release.jks
+          WEAVIEW_KEYSTORE_PASSWORD: ${{ secrets.WEAVIEW_KEYSTORE_PASSWORD }}
+          WEAVIEW_KEY_ALIAS: ${{ secrets.WEAVIEW_KEY_ALIAS }}
+          WEAVIEW_KEY_PASSWORD: ${{ secrets.WEAVIEW_KEY_PASSWORD }}
         run: flutter build apk --release --split-per-abi --no-pub
 
       - name: Prepare release assets

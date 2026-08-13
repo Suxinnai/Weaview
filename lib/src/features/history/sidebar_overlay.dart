@@ -9,7 +9,7 @@ import '../../app/weaview_state.dart';
 import '../../domain/models.dart';
 import '../../shared/widgets/shared_widgets.dart';
 
-class SidebarOverlay extends StatelessWidget {
+class SidebarOverlay extends StatefulWidget {
   const SidebarOverlay({
     required this.state,
     required this.open,
@@ -25,9 +25,31 @@ class SidebarOverlay extends StatelessWidget {
   final VoidCallback onUsageStats;
 
   @override
+  State<SidebarOverlay> createState() => _SidebarOverlayState();
+}
+
+class _SidebarOverlayState extends State<SidebarOverlay> {
+  final Set<String> _collapsedSessionIds = {};
+
+  WeaviewState get state => widget.state;
+  bool get open => widget.open;
+  VoidCallback get onClose => widget.onClose;
+  VoidCallback get onSettings => widget.onSettings;
+  VoidCallback get onUsageStats => widget.onUsageStats;
+
+  void _toggleBranches(String sessionId) {
+    setState(() {
+      if (!_collapsedSessionIds.add(sessionId)) {
+        _collapsedSessionIds.remove(sessionId);
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final width = math.min(286.0, MediaQuery.sizeOf(context).width * 0.84);
-    final groupedSessions = _groupSessionsByDate(state.chatSessions);
+    final sessionTree = _buildSessionTree(state.chatSessions);
+    final groupedSessions = _groupSessionsByDate(sessionTree.roots);
     return IgnorePointer(
       ignoring: !open,
       child: Stack(
@@ -240,23 +262,95 @@ class SidebarOverlay extends StatelessWidget {
                                       ],
                                     ),
                                   ),
-                                  for (final session in entry.value)
-                                    _HistoryListTile(
-                                      state: state,
-                                      session: session,
-                                      selected:
-                                          session.id == state.currentSessionId,
-                                      onTap: () {
-                                        state.selectSession(session);
-                                        onClose();
+                                  for (final session in entry.value) ...[
+                                    Builder(
+                                      builder: (context) {
+                                        final hasBranches = sessionTree
+                                            .hasBranches(session.id);
+                                        final collapsed =
+                                            _collapsedSessionIds.contains(
+                                              session.id,
+                                            );
+                                        return _HistoryListTile(
+                                          state: state,
+                                          session: session,
+                                          depth: 0,
+                                          selected:
+                                              session.id ==
+                                              state.currentSessionId,
+                                          hasBranches: hasBranches,
+                                          branchesCollapsed: collapsed,
+                                          onToggleBranches: hasBranches
+                                              ? () => _toggleBranches(
+                                                  session.id,
+                                                )
+                                              : null,
+                                          onTap: () {
+                                            state.selectSession(session);
+                                            onClose();
+                                          },
+                                          onMore: (tileContext) =>
+                                              _showHistoryActions(
+                                                context,
+                                                tileContext,
+                                                session,
+                                              ),
+                                        );
                                       },
-                                      onMore: (tileContext) =>
-                                          _showHistoryActions(
-                                            context,
-                                            tileContext,
-                                            session,
-                                          ),
                                     ),
+                                    AnimatedSize(
+                                      duration: const Duration(
+                                        milliseconds: 180,
+                                      ),
+                                      curve: Curves.easeOutCubic,
+                                      alignment: Alignment.topCenter,
+                                      child: Column(
+                                        children: [
+                                          for (final branch in sessionTree
+                                              .visibleBranchRows(
+                                                session.id,
+                                                _collapsedSessionIds,
+                                              ))
+                                            _HistoryListTile(
+                                              state: state,
+                                              session: branch.session,
+                                              depth: branch.depth,
+                                              selected:
+                                                  branch.session.id ==
+                                                  state.currentSessionId,
+                                              hasBranches: sessionTree
+                                                  .hasBranches(
+                                                    branch.session.id,
+                                                  ),
+                                              branchesCollapsed:
+                                                  _collapsedSessionIds.contains(
+                                                    branch.session.id,
+                                                  ),
+                                              onToggleBranches: sessionTree
+                                                  .hasBranches(
+                                                    branch.session.id,
+                                                  )
+                                                  ? () => _toggleBranches(
+                                                      branch.session.id,
+                                                    )
+                                                  : null,
+                                              onTap: () {
+                                                state.selectSession(
+                                                  branch.session,
+                                                );
+                                                onClose();
+                                              },
+                                              onMore: (tileContext) =>
+                                                  _showHistoryActions(
+                                                    context,
+                                                    tileContext,
+                                                    branch.session,
+                                                  ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ],
                             ],
                           ),
@@ -400,7 +494,7 @@ class SidebarOverlay extends StatelessWidget {
         final changed = await state.regenerateSessionTitle(session.id);
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(changed ? '标题已重新生成。' : '请先配置标题总结模型。')),
+            SnackBar(content: Text(changed ? '标题已重新生成。' : '请先配置标题生成模型。')),
           );
         }
       } catch (error) {
@@ -542,38 +636,64 @@ class _HistoryListTile extends StatelessWidget {
   const _HistoryListTile({
     required this.state,
     required this.session,
+    required this.depth,
     required this.selected,
+    required this.hasBranches,
+    required this.branchesCollapsed,
     required this.onTap,
     required this.onMore,
+    this.onToggleBranches,
   });
 
   final WeaviewState state;
   final ChatSession session;
+  final int depth;
   final bool selected;
+  final bool hasBranches;
+  final bool branchesCollapsed;
   final VoidCallback onTap;
   final ValueChanged<BuildContext> onMore;
+  final VoidCallback? onToggleBranches;
+
+  bool get _isBranch => depth > 0;
 
   @override
   Widget build(BuildContext context) {
+    final textColor = state.text(context);
+    final indent = depth * 18.0;
+    final surfaceAlpha = _isBranch
+        ? (selected ? 0.09 : 0.032)
+        : (selected ? 0.10 : 0.0);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: EdgeInsets.only(left: indent, bottom: 4),
       child: Material(
-        color: selected
-            ? state.text(context).withValues(alpha: 0.10)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
+        color: surfaceAlpha == 0
+            ? Colors.transparent
+            : textColor.withValues(alpha: surfaceAlpha),
+        borderRadius: BorderRadius.circular(_isBranch ? 14 : 16),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(_isBranch ? 14 : 16),
           onTap: onTap,
           onLongPress: () => onMore(context),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(13, 10, 6, 10),
+            padding: EdgeInsets.fromLTRB(
+              _isBranch ? 10 : 13,
+              _isBranch ? 9 : 10,
+              6,
+              _isBranch ? 9 : 10,
+            ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (_isBranch)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8, top: 2),
+                    child: _BranchTreeMarker(state: state, selected: selected),
+                  ),
                 if (session.pinned) ...[
                   Icon(
                     Icons.push_pin_rounded,
-                    size: 14,
+                    size: _isBranch ? 12 : 14,
                     color: state.accents[0].withValues(alpha: 0.72),
                   ),
                   const SizedBox(width: 7),
@@ -582,15 +702,48 @@ class _HistoryListTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (_isBranch)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 5),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 2.5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: state.accents[0].withValues(
+                                alpha: selected ? 0.18 : 0.10,
+                              ),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: state.accents[0].withValues(alpha: 0.18),
+                                width: 0.6,
+                              ),
+                            ),
+                            child: Text(
+                              '分支',
+                              style: state
+                                  .textStyle(
+                                    context,
+                                    size: 9,
+                                    weight: FontWeight.w700,
+                                    opacity: 0.86,
+                                  )
+                                  .copyWith(color: state.accents[0]),
+                            ),
+                          ),
+                        ),
                       Text(
                         session.title,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: state.textStyle(
                           context,
-                          size: 13.5,
-                          weight: selected ? FontWeight.w600 : FontWeight.w400,
-                          opacity: selected ? 1 : 0.72,
+                          size: _isBranch ? 12.2 : 13.5,
+                          weight: selected
+                              ? FontWeight.w600
+                              : (_isBranch ? FontWeight.w500 : FontWeight.w400),
+                          opacity: selected ? 1 : (_isBranch ? 0.62 : 0.72),
                           height: 1.22,
                         ),
                       ),
@@ -599,21 +752,41 @@ class _HistoryListTile extends StatelessWidget {
                         _formatUpdatedTime(session.updatedAt),
                         style: state.textStyle(
                           context,
-                          size: 10,
+                          size: _isBranch ? 9.5 : 10,
                           weight: FontWeight.w600,
-                          opacity: 0.32,
+                          opacity: _isBranch ? 0.28 : 0.32,
                         ),
                       ),
                     ],
                   ),
                 ),
+                if (hasBranches)
+                  IconButton(
+                    key: ValueKey('toggle-branches-${session.id}'),
+                    tooltip: branchesCollapsed ? '展开分支' : '折叠分支',
+                    onPressed: onToggleBranches,
+                    visualDensity: VisualDensity.compact,
+                    icon: AnimatedRotation(
+                      turns: branchesCollapsed ? 0 : 0.25,
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeOutCubic,
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        size: _isBranch ? 18 : 19,
+                        color: textColor.withValues(
+                          alpha: _isBranch ? 0.38 : 0.46,
+                        ),
+                      ),
+                    ),
+                  ),
                 IconButton(
                   tooltip: '更多操作',
                   onPressed: () => onMore(context),
                   visualDensity: VisualDensity.compact,
                   icon: Icon(
                     Icons.more_horiz_rounded,
-                    color: state.text(context).withValues(alpha: 0.42),
+                    size: _isBranch ? 18 : 20,
+                    color: textColor.withValues(alpha: _isBranch ? 0.34 : 0.42),
                   ),
                 ),
               ],
@@ -623,6 +796,175 @@ class _HistoryListTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _BranchTreeMarker extends StatelessWidget {
+  const _BranchTreeMarker({required this.state, required this.selected});
+
+  final WeaviewState state;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final lineColor = (selected ? state.accents[0] : state.text(context))
+        .withValues(alpha: selected ? 0.46 : 0.16);
+    return SizedBox(
+      width: 16,
+      height: 34,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 6,
+            top: 0,
+            bottom: 0,
+            child: Container(width: 1.1, color: lineColor),
+          ),
+          Positioned(
+            left: 6,
+            top: 17,
+            right: 0,
+            child: Container(height: 1.1, color: lineColor),
+          ),
+          Positioned(
+            left: 3.5,
+            top: 14.5,
+            child: Container(
+              width: 5,
+              height: 5,
+              decoration: BoxDecoration(
+                color: selected ? state.accents[0] : lineColor,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SessionTree {
+  const _SessionTree({
+    required this.roots,
+    required this.branchMap,
+    required this.branchParentIds,
+  });
+
+  final List<ChatSession> roots;
+  final Map<String, List<_BranchSessionRow>> branchMap;
+  final Set<String> branchParentIds;
+
+  List<_BranchSessionRow> branchRows(String sessionId) =>
+      branchMap[sessionId] ?? const [];
+
+  List<_BranchSessionRow> visibleBranchRows(
+    String sessionId,
+    Set<String> collapsedSessionIds,
+  ) {
+    return branchRows(sessionId)
+        .where(
+          (row) => row.ancestorIds.every(
+            (ancestorId) => !collapsedSessionIds.contains(ancestorId),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  bool hasBranches(String sessionId) => branchParentIds.contains(sessionId);
+}
+
+class _BranchSessionRow {
+  const _BranchSessionRow({
+    required this.session,
+    required this.depth,
+    required this.ancestorIds,
+  });
+
+  final ChatSession session;
+  final int depth;
+  final Set<String> ancestorIds;
+}
+
+_SessionTree _buildSessionTree(List<ChatSession> sessions) {
+  final byId = <String, ChatSession>{
+    for (final session in sessions) session.id: session,
+  };
+  final children = <String, List<ChatSession>>{};
+  final fallbackRoots = <ChatSession>[];
+
+  for (final session in sessions) {
+    final parentId = session.parentId.trim();
+    if (parentId.isEmpty ||
+        parentId == session.id ||
+        !byId.containsKey(parentId)) {
+      fallbackRoots.add(session);
+      continue;
+    }
+    children.putIfAbsent(parentId, () => []).add(session);
+  }
+
+  final rendered = <String>{};
+  final rootIds = <String>{};
+  final orderedRoots = <ChatSession>[];
+  final branchMap = <String, List<_BranchSessionRow>>{};
+
+  void registerRoot(ChatSession session) {
+    if (rootIds.add(session.id)) {
+      orderedRoots.add(session);
+    }
+  }
+
+  void addBranchRows(
+    ChatSession root,
+    ChatSession session,
+    int depth,
+    Set<String> path,
+  ) {
+    if (!rendered.add(session.id)) {
+      return;
+    }
+    if (session.id != root.id) {
+      branchMap
+          .putIfAbsent(root.id, () => [])
+          .add(
+            _BranchSessionRow(
+              session: session,
+              depth: depth,
+              ancestorIds: Set.unmodifiable(path),
+            ),
+          );
+    }
+    final nextPath = {...path, session.id};
+    for (final child in children[session.id] ?? const <ChatSession>[]) {
+      if (nextPath.contains(child.id)) {
+        continue;
+      }
+      addBranchRows(root, child, depth + 1, nextPath);
+    }
+  }
+
+  for (final root in fallbackRoots) {
+    registerRoot(root);
+    addBranchRows(root, root, 0, <String>{});
+  }
+
+  for (final session in sessions) {
+    if (rendered.contains(session.id)) {
+      continue;
+    }
+    registerRoot(session);
+    addBranchRows(session, session, 0, <String>{});
+  }
+
+  final branchParentIds = <String>{
+    for (final rows in branchMap.values)
+      for (final row in rows) row.session.parentId,
+  };
+  return _SessionTree(
+    roots: orderedRoots,
+    branchMap: branchMap,
+    branchParentIds: branchParentIds,
+  );
 }
 
 String _formatSidebarCost(double value) {

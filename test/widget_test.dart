@@ -937,6 +937,14 @@ $$E = mc^2$$
         ],
       ),
     ]);
+    state.saveModelAssignment(
+      'chat',
+      const ModelAssignment(
+        provider: 'OpenAI',
+        model: 'custom-vision-tool',
+        prompt: '',
+      ),
+    );
 
     await tester.pumpWidget(
       MaterialApp(
@@ -961,9 +969,84 @@ $$E = mc^2$$
     await tester.pumpAndSettle();
 
     expect(find.text('custom-vision-tool'), findsOneWidget);
+    expect(find.byKey(const ValueKey('model_picker_glass')), findsOneWidget);
+    final glassSize = tester.getSize(
+      find.byKey(const ValueKey('model_picker_glass')),
+    );
+    expect(glassSize.width, lessThanOrEqualTo(354));
+    expect(glassSize.height, inInclusiveRange(180, 450));
+    expect(find.byKey(const ValueKey('model_picker_filters')), findsOneWidget);
+    expect(find.byKey(const ValueKey('manage_models_button')), findsOneWidget);
+    expect(find.byType(BackdropFilter), findsOneWidget);
+    expect(find.text('1 个可用'), findsOneWidget);
+    expect(find.text('当前'), findsOneWidget);
     expect(find.text('视觉'), findsOneWidget);
     expect(find.text('工具'), findsOneWidget);
     expect(find.text('推理'), findsOneWidget);
+
+    search.dispose();
+    state.dispose();
+  });
+
+  testWidgets('model picker resyncs its filter after a closed mode switch', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+    final search = TextEditingController();
+    await state.load();
+    state.saveProviders([
+      AiProvider.defaults().first.copyWith(
+        apiKey: 'key',
+        current: true,
+        models: const [
+          AiModel(id: 'chat-only', name: 'Chat Only', capabilities: ['chat']),
+          AiModel(
+            id: 'image-only',
+            name: 'Image Only',
+            capabilities: ['image'],
+          ),
+        ],
+      ),
+    ]);
+
+    Future<void> pumpPicker({required bool open, required bool imageMode}) {
+      return tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Stack(
+              children: [
+                ChatModelDropdown(
+                  state: state,
+                  modelSearchController: search,
+                  open: open,
+                  imageGenerationMode: imageMode,
+                  onClose: () {},
+                  onOpenSettings: () {},
+                  onSearchChanged: () {},
+                  onSelectModel: (_, _) {},
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    await pumpPicker(open: true, imageMode: false);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('对话'));
+    await tester.pumpAndSettle();
+    expect(find.text('Chat Only'), findsOneWidget);
+    expect(find.text('Image Only'), findsNothing);
+
+    await pumpPicker(open: false, imageMode: true);
+    await tester.pump();
+    await pumpPicker(open: true, imageMode: true);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Image Only'), findsOneWidget);
+    expect(find.text('Chat Only'), findsNothing);
 
     search.dispose();
     state.dispose();
@@ -1060,21 +1143,22 @@ $$E = mc^2$$
     },
   );
 
-  testWidgets('provider cards mark assigned providers as selected', (
+  testWidgets('provider cards mark only the current provider as selected', (
     WidgetTester tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
     final state = WeaviewState();
 
     await state.load();
-    state.saveModelAssignment(
-      'image',
-      const ModelAssignment(
-        provider: 'OpenAI',
-        model: 'gpt-image-2',
-        prompt: '',
+    final defaults = AiProvider.defaults();
+    state.saveProviders([
+      defaults.first.copyWith(
+        apiKey: 'openai-key',
+        status: '使用中',
+        current: true,
       ),
-    );
+      defaults[1],
+    ]);
     await tester.pumpWidget(
       MaterialApp(
         home: SettingsSheet(
@@ -1090,7 +1174,8 @@ $$E = mc^2$$
     await tester.tap(find.text('提供商'));
     await tester.pumpAndSettle();
 
-    expect(find.text('已选择'), findsOneWidget);
+    expect(find.textContaining('当前'), findsOneWidget);
+    expect(find.text('已选择'), findsNothing);
     state.dispose();
   });
 

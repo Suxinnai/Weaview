@@ -2,6 +2,7 @@
 
 import 'dart:collection';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -316,13 +317,14 @@ class _PendingAttachmentChip extends StatelessWidget {
                 child: InkWell(
                   customBorder: const CircleBorder(),
                   onTap: onRemove,
-                  child: const SizedBox(
-                    width: 32,
-                    height: 32,
-                    child: Icon(
-                      Icons.close_rounded,
-                      size: 18,
-                      color: Colors.white,
+                  child: const SizedBox.square(
+                    dimension: 44,
+                    child: Center(
+                      child: Icon(
+                        Icons.close_rounded,
+                        size: 18,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
@@ -399,38 +401,14 @@ class _GeneratedImageGalleryState extends State<GeneratedImageGallery> {
     }
     final single = images.length == 1;
     if (single) {
-      return Container(
+      return Align(
         key: const ValueKey('generated-image-gallery'),
-        width: double.infinity,
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: state.layer(context).withValues(
-            alpha: state.isDark(context) ? 0.48 : 0.72,
-          ),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: state
-                .text(context)
-                .withValues(alpha: state.isDark(context) ? 0.08 : 0.07),
-          ),
-        ),
-        child: _GeneratedGridTile(
+        alignment: Alignment.centerLeft,
+        child: _GeneratedSingleImageCard(
           state: state,
-          attachments: images,
           attachment: images.first,
-          index: 0,
-          width: double.infinity,
-          selected: true,
-          single: true,
           animateImages: widget.animateImages,
-          onToggleSelected: () => _openImagePreview(
-            context,
-            state,
-            attachments: images,
-            initialIndex: 0,
-            onDownload: widget.onDownload,
-          ),
-          onPreview: () => _openImagePreview(
+          onTap: () => _openImagePreview(
             context,
             state,
             attachments: images,
@@ -455,6 +433,83 @@ class _GeneratedImageGalleryState extends State<GeneratedImageGallery> {
   }
 }
 
+class _GeneratedSingleImageCard extends StatelessWidget {
+  const _GeneratedSingleImageCard({
+    required this.state,
+    required this.attachment,
+    required this.animateImages,
+    required this.onTap,
+  });
+
+  final WeaviewState state;
+  final MessageAttachment attachment;
+  final bool animateImages;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final knownSize = attachment.hasPixelSize
+        ? Size(
+            attachment.pixelWidth!.toDouble(),
+            attachment.pixelHeight!.toDouble(),
+          )
+        : null;
+    return FutureBuilder<Size>(
+      initialData: knownSize,
+      future: knownSize == null ? _readImageSize(attachment.path) : null,
+      builder: (context, snapshot) {
+        final ratio = snapshot.data == null
+            ? 1.0
+            : (snapshot.data!.width / snapshot.data!.height).clamp(0.62, 1.9);
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final availableWidth = constraints.maxWidth.isFinite
+                ? constraints.maxWidth
+                : MediaQuery.sizeOf(context).width - 72;
+            const maxHeight = 320.0;
+            final maxWidth = math.min(availableWidth, 320.0);
+            var width = maxWidth;
+            var height = width / ratio;
+            if (height > maxHeight) {
+              height = maxHeight;
+              width = height * ratio;
+            }
+            final radius = BorderRadius.circular(18);
+            return Material(
+              color: Colors.transparent,
+              borderRadius: radius,
+              clipBehavior: Clip.antiAlias,
+              child: Semantics(
+                button: true,
+                label: '查看生成图片 ${attachment.name}',
+                child: InkWell(
+                  onTap: onTap,
+                  child: Ink(
+                    key: const ValueKey('generated-image-single'),
+                    width: width,
+                    height: height,
+                    decoration: BoxDecoration(
+                      color: state.text(context).withValues(alpha: 0.05),
+                      borderRadius: radius,
+                      border: Border.all(
+                        color: state.text(context).withValues(alpha: 0.09),
+                      ),
+                    ),
+                    child: _AttachmentVisual(
+                      attachment: attachment,
+                      animate: animateImages,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
 class _StackedPhotoCard extends StatefulWidget {
   const _StackedPhotoCard({
     super.key,
@@ -473,12 +528,12 @@ class _StackedPhotoCard extends StatefulWidget {
 
 class _StackedPhotoCardState extends State<_StackedPhotoCard>
     with SingleTickerProviderStateMixin {
-  static const double _cardWidth = 236;
-  static const double _cardHeight = 172;
-  static const double _peek = 13;
-  static const double _peekStep = 10;
-  static const double _rotStep = 2.4;
-  static const double _scaleStep = 0.07;
+  static const double _cardWidth = 212;
+  static const double _fallbackAspectRatio = 0.84;
+  static const double _peek = 15;
+  static const double _peekStep = 11;
+  static const double _rotStep = 2.2;
+  static const double _scaleStep = 0.065;
   static const double _edgeBounce = 24;
   static const double _flingVelocity = 400;
 
@@ -488,6 +543,7 @@ class _StackedPhotoCardState extends State<_StackedPhotoCard>
   bool _dragging = false;
   int _flipDirection = 0;
   DateTime? _lastDragUpdate;
+  Animation<double>? _snapBack;
   late final AnimationController _controller;
 
   List<MessageAttachment> get _images => widget.images;
@@ -495,21 +551,47 @@ class _StackedPhotoCardState extends State<_StackedPhotoCard>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 340),
-    )
-      ..addListener(() => setState(() {}))
-      ..addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          setState(() {
-            _index = (_index + _flipDirection).clamp(0, _images.length - 1);
-            _drag = 0;
-            _flipDirection = 0;
+    _controller =
+        AnimationController(
+            vsync: this,
+            duration: const Duration(milliseconds: 320),
+          )
+          ..addListener(() {
+            final snapBack = _snapBack;
+            if (_flipDirection == 0 && snapBack != null) {
+              _drag = snapBack.value;
+            }
+            setState(() {});
+          })
+          ..addStatusListener((status) {
+            if (status == AnimationStatus.completed) {
+              setState(() {
+                if (_flipDirection != 0) {
+                  _index = (_index + _flipDirection).clamp(
+                    0,
+                    _images.length - 1,
+                  );
+                }
+                _drag = 0;
+                _flipDirection = 0;
+                _snapBack = null;
+              });
+              _controller.reset();
+            }
           });
-          _controller.reset();
-        }
-      });
+  }
+
+  @override
+  void didUpdateWidget(covariant _StackedPhotoCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_index >= _images.length) {
+      _controller.stop();
+      _controller.reset();
+      _index = math.max(0, _images.length - 1);
+      _drag = 0;
+      _flipDirection = 0;
+      _snapBack = null;
+    }
   }
 
   @override
@@ -518,9 +600,15 @@ class _StackedPhotoCardState extends State<_StackedPhotoCard>
     super.dispose();
   }
 
-  double get _progress => Curves.easeOutCubic.transform(_controller.value);
+  double get _aspectRatio {
+    if (_images.isEmpty) return _fallbackAspectRatio;
+    final first = _images.first;
+    if (!first.hasPixelSize) return _fallbackAspectRatio;
+    return (first.pixelWidth! / first.pixelHeight!).clamp(0.72, 1.7);
+  }
 
   void _handleDragStart(DragStartDetails details) {
+    if (_controller.isAnimating) return;
     _dragging = true;
     _velocity = 0;
     _lastDragUpdate = null;
@@ -532,7 +620,10 @@ class _StackedPhotoCardState extends State<_StackedPhotoCard>
     final last = _lastDragUpdate;
     if (last != null) {
       final dt = now.difference(last).inMicroseconds / 1e6;
-      if (dt > 0) _velocity = details.delta.dx / dt;
+      if (dt > 0) {
+        final instantaneous = details.delta.dx / dt;
+        _velocity = instantaneous * 0.7 + _velocity * 0.3;
+      }
     }
     _lastDragUpdate = now;
     var next = _drag + details.delta.dx;
@@ -551,25 +642,49 @@ class _StackedPhotoCardState extends State<_StackedPhotoCard>
     final atStart = _index == 0 && _drag > 0;
     final atEnd = _index == _images.length - 1 && _drag < 0;
     if (atStart || atEnd) {
-      _controller.animateBack(
-        0,
-        duration: const Duration(milliseconds: 240),
-      );
+      _animateBack();
       return;
     }
-    final fling = _velocity.abs() > _flingVelocity &&
+    final fling =
+        _velocity.abs() > _flingVelocity &&
         (_velocity > 0) == (_drag > 0) &&
         _drag.abs() > 10;
     final threshold = _drag.abs() > _cardWidth * 0.28;
     if ((fling || threshold) && _drag != 0) {
-      _flipDirection = _drag > 0 ? -1 : 1;
-      _controller.forward(from: 0);
+      _startFlip(_drag > 0 ? -1 : 1);
     } else {
-      _controller.animateBack(
-        0,
-        duration: const Duration(milliseconds: 240),
-      );
+      _animateBack();
     }
+  }
+
+  void _handleDragCancel() {
+    if (!_dragging) return;
+    _dragging = false;
+    _animateBack();
+  }
+
+  void _startFlip(int direction) {
+    final target = _index + direction;
+    if (_controller.isAnimating || target < 0 || target >= _images.length) {
+      _animateBack();
+      return;
+    }
+    _flipDirection = direction;
+    _snapBack = null;
+    _controller.duration = const Duration(milliseconds: 320);
+    _controller.forward(from: 0);
+  }
+
+  void _animateBack() {
+    if (_drag == 0) return;
+    _controller.stop();
+    _flipDirection = 0;
+    _controller.duration = const Duration(milliseconds: 220);
+    _snapBack = Tween<double>(
+      begin: _drag,
+      end: 0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    _controller.forward(from: 0);
   }
 
   Widget _card(MessageAttachment attachment, int cacheWidth, double radius) {
@@ -600,167 +715,204 @@ class _StackedPhotoCardState extends State<_StackedPhotoCard>
     final count = _images.length;
     final flipping = _flipDirection != 0;
     final dir = _flipDirection;
-    final p = flipping ? _progress : 0.0;
+    final p = flipping ? _controller.value : 0.0;
     final rightPeek = _peek + _peekStep;
     final rightPeek2 = _peek + _peekStep * 2;
 
-    final slots = <({
-      MessageAttachment image,
-      double dx,
-      double rot,
-      double scale,
-      int z,
-    })>[];
+    final slots =
+        <
+          ({
+            MessageAttachment image,
+            double dx,
+            double rot,
+            double scale,
+            int z,
+          })
+        >[];
     void add(int index, double dx, double rot, double scale, int z) {
       if (index < 0 || index >= count) return;
-      slots.add((
-        image: _images[index],
-        dx: dx,
-        rot: rot,
-        scale: scale,
-        z: z,
-      ));
+      slots.add((image: _images[index], dx: dx, rot: rot, scale: scale, z: z));
     }
 
     if (!flipping) {
       final i = _index;
-      add(i + 1, rightPeek, _rotStep, 1 - _scaleStep, 1);
+      add(i + 1, rightPeek, _rotStep, 1 - _scaleStep, 2);
       if (i == 0) {
-        add(i + 2, rightPeek2, _rotStep * 2, 1 - _scaleStep * 2, 0);
+        add(i + 2, rightPeek2, _rotStep * 2, 1 - _scaleStep * 2, 1);
       }
-      add(i - 1, -rightPeek, -_rotStep, 1 - _scaleStep, 1);
+      add(i - 1, -rightPeek, -_rotStep, 1 - _scaleStep, 2);
       if (i == count - 1) {
-        add(i - 2, -rightPeek2, -_rotStep * 2, 1 - _scaleStep * 2, 0);
+        add(i - 2, -rightPeek2, -_rotStep * 2, 1 - _scaleStep * 2, 1);
       }
-      add(i, _drag, _drag * 0.05, 1, 2);
+      add(i, _drag, _drag * 0.045, 1, 4);
     } else {
-      final peak = _cardWidth * 0.62;
+      final swipeSign = -dir.toDouble();
+      final peak = _cardWidth * 0.58;
       final frontPhase = p < 0.55 ? p / 0.55 : 1.0;
       final settle = p < 0.55 ? 0.0 : (p - 0.55) / 0.45;
-      final frontDx = _drag +
-          dir *
-              (p < 0.55
-                  ? peak * Curves.easeOutCubic.transform(frontPhase)
-                  : peak -
-                      (peak + rightPeek) *
-                          Curves.easeInCubic.transform(settle));
-      add(
-        _index,
-        frontDx,
-        _lerp(dir * 3.5, -dir * _rotStep, settle),
-        _lerp(1, 1 - _scaleStep, settle),
-        2,
-      );
+      final frontDx = p < 0.55
+          ? _lerp(
+              _drag,
+              swipeSign * peak,
+              Curves.easeOutCubic.transform(frontPhase),
+            )
+          : _lerp(
+              swipeSign * peak,
+              -dir * rightPeek,
+              Curves.easeInOutCubic.transform(settle),
+            );
+      final frontRotation = p < 0.55
+          ? _lerp(
+              _drag * 0.045,
+              swipeSign * 4.2,
+              Curves.easeOutCubic.transform(frontPhase),
+            )
+          : _lerp(
+              swipeSign * 4.2,
+              -dir * _rotStep,
+              Curves.easeInOutCubic.transform(settle),
+            );
+      final frontScale = p < 0.55
+          ? _lerp(1, 0.94, Curves.easeOutCubic.transform(frontPhase))
+          : _lerp(
+              0.94,
+              1 - _scaleStep,
+              Curves.easeInOutCubic.transform(settle),
+            );
+      final pastPeak = p >= 0.55;
+      add(_index, frontDx, frontRotation, frontScale, pastPeak ? 2 : 4);
       add(
         _index + dir,
-        _lerp(-dir * rightPeek, 0, p),
-        _lerp(-dir * _rotStep, 0, p),
-        _lerp(1 - _scaleStep, 1, p),
-        1,
+        _lerp(dir * rightPeek, 0, Curves.easeInOutCubic.transform(p)),
+        _lerp(dir * _rotStep, 0, Curves.easeInOutCubic.transform(p)),
+        _lerp(1 - _scaleStep, 1, Curves.easeInOutCubic.transform(p)),
+        pastPeak ? 4 : 3,
       );
       add(
         _index + 2 * dir,
         _lerp(dir * rightPeek2, dir * rightPeek, p),
         _lerp(dir * _rotStep * 2, dir * _rotStep, p),
         _lerp(1 - _scaleStep * 2, 1 - _scaleStep, p),
-        0,
+        1,
       );
       add(
         _index - dir,
         _lerp(-dir * rightPeek, -dir * rightPeek2, p),
         _lerp(-dir * _rotStep, -dir * _rotStep * 2, p),
         _lerp(1 - _scaleStep, 1 - _scaleStep * 2, p),
-        0,
+        1,
       );
     }
     slots.sort((a, b) => a.z.compareTo(b.z));
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = _cardWidth.clamp(0, constraints.maxWidth).toDouble();
-        final height = width * (_cardHeight / _cardWidth);
-        return Center(
+        final available = constraints.maxWidth.isFinite
+            ? constraints.maxWidth
+            : MediaQuery.sizeOf(context).width - 72;
+        const leadingInset = 0.0;
+        final trailingInset = rightPeek2 + 12;
+        final width = math.min(
+          _cardWidth,
+          math.max(1.0, available - leadingInset - trailingInset),
+        );
+        final height = width / _aspectRatio;
+        final stageWidth = width + leadingInset + trailingInset;
+        return Align(
+          alignment: Alignment.centerLeft,
           child: SizedBox(
-            width: width,
-            height: height + 22,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
+            key: const ValueKey('generated-image-stack-stage'),
+            width: stageWidth,
+            height: height + 28,
+            child: Semantics(
+              container: true,
+              button: true,
+              label: '生成的图片，共 $count 张',
+              value: '第 ${_index + 1} 张',
+              increasedValue: _index < count - 1 ? '第 ${_index + 2} 张' : null,
+              decreasedValue: _index > 0 ? '第 $_index 张' : null,
+              hint: '左右滑动切换，轻触查看大图',
               onTap: () => widget.onTapImage(_index),
-              onHorizontalDragStart: _handleDragStart,
-              onHorizontalDragUpdate: _handleDragUpdate,
-              onHorizontalDragEnd: _handleDragEnd,
-              child: Stack(
-                clipBehavior: Clip.none,
-                alignment: Alignment.topCenter,
-                children: [
-                  for (final slot in slots)
-                    Positioned(
-                      left: width * 0.2,
-                      right: width * 0.2,
-                      top: 4,
-                      height: height,
-                      child: Transform.translate(
-                        offset: Offset(slot.dx, 0),
-                        child: Transform.rotate(
-                          angle: slot.rot * 3.14159265 / 180,
-                          child: Transform.scale(
-                            scale: slot.scale,
-                            child: slot.z == 2
-                                ? Container(
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(14),
-                                      border: Border.all(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.24,
-                                        ),
-                                        width: 1.2,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withValues(
-                                            alpha: 0.18,
+              onIncrease: _index < count - 1 ? () => _startFlip(1) : null,
+              onDecrease: _index > 0 ? () => _startFlip(-1) : null,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => widget.onTapImage(_index),
+                onHorizontalDragStart: _handleDragStart,
+                onHorizontalDragUpdate: _handleDragUpdate,
+                onHorizontalDragEnd: _handleDragEnd,
+                onHorizontalDragCancel: _handleDragCancel,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    for (final slot in slots)
+                      Positioned(
+                        left: leadingInset,
+                        top: 4,
+                        width: width,
+                        height: height,
+                        child: Transform.translate(
+                          offset: Offset(slot.dx, 0),
+                          child: Transform.rotate(
+                            angle: slot.rot * math.pi / 180,
+                            child: Transform.scale(
+                              scale: slot.scale,
+                              child: slot.z == 4
+                                  ? Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(18),
+                                        border: Border.all(
+                                          color: Colors.white.withValues(
+                                            alpha: 0.34,
                                           ),
-                                          blurRadius: 16,
-                                          offset: const Offset(0, 6),
+                                          width: 1.2,
                                         ),
-                                      ],
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withValues(
+                                              alpha: 0.16,
+                                            ),
+                                            blurRadius: 18,
+                                            offset: const Offset(0, 8),
+                                          ),
+                                        ],
+                                      ),
+                                      child: _card(slot.image, 440, 18),
+                                    )
+                                  : Opacity(
+                                      opacity: slot.z == 1 ? 0.72 : 0.9,
+                                      child: _card(slot.image, 260, 16),
                                     ),
-                                    child: _card(
-                                      slot.image,
-                                      360,
-                                      14,
-                                    ),
-                                  )
-                                : _card(slot.image, 180, 12),
+                            ),
                           ),
                         ),
                       ),
+                    Positioned(
+                      right: trailingInset + 10,
+                      bottom: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.46),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '${_index + 1}/$count',
+                          style: widget.state
+                              .textStyle(
+                                context,
+                                size: 11,
+                                weight: FontWeight.w700,
+                              )
+                              .copyWith(color: Colors.white),
+                        ),
+                      ),
                     ),
-                  Positioned(
-                    right: 10,
-                    bottom: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.38),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        '${_index + 1}/$count',
-                        style: widget.state
-                            .textStyle(
-                              context,
-                              size: 11,
-                              weight: FontWeight.w700,
-                            )
-                            .copyWith(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -770,129 +922,6 @@ class _StackedPhotoCardState extends State<_StackedPhotoCard>
   }
 
   static double _lerp(double a, double b, double t) => a + (b - a) * t;
-}
-
-class _GeneratedGridTile extends StatelessWidget {
-  const _GeneratedGridTile({
-    required this.state,
-    required this.attachments,
-    required this.attachment,
-    required this.index,
-    required this.width,
-    required this.selected,
-    required this.animateImages,
-    required this.onToggleSelected,
-    required this.onPreview,
-    this.single = false,
-  });
-
-  final WeaviewState state;
-  final List<MessageAttachment> attachments;
-  final MessageAttachment attachment;
-  final int index;
-  final double width;
-  final bool selected;
-  final bool animateImages;
-  final VoidCallback onToggleSelected;
-  final VoidCallback onPreview;
-  final bool single;
-
-  @override
-  Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    final radius = BorderRadius.circular(16);
-    return SizedBox(
-      width: width,
-      height: width,
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: Material(
-              color: state.text(context).withValues(alpha: 0.04),
-              borderRadius: radius,
-              clipBehavior: Clip.antiAlias,
-              child: InkWell(
-                onTap: onToggleSelected,
-                borderRadius: radius,
-                child: Ink(
-                  decoration: BoxDecoration(
-                    borderRadius: radius,
-                    border: Border.all(
-                      color: selected
-                          ? primary
-                          : state.text(context).withValues(alpha: 0.08),
-                      width: selected ? 2 : 1,
-                    ),
-                  ),
-                  child: _AttachmentVisual(
-                    attachment: attachment,
-                    animate: animateImages,
-                  ),
-                ),
-              ),
-            ),
-          ),
-          if (!single)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Semantics(
-                button: true,
-                selected: selected,
-                label: '选择图片 ${index + 1}，共 ${attachments.length} 张',
-                child: GestureDetector(
-                  onTap: onToggleSelected,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    width: 30,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: selected
-                          ? primary
-                          : Colors.black.withValues(alpha: 0.24),
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                    child: selected
-                        ? const Icon(
-                            Icons.check_rounded,
-                            size: 18,
-                            color: Colors.white,
-                          )
-                        : null,
-                  ),
-                ),
-              ),
-            ),
-          if (!single)
-            Positioned(
-              right: 8,
-              bottom: 8,
-              child: Tooltip(
-                message: '查看大图',
-                child: Material(
-                  color: Colors.black.withValues(alpha: 0.36),
-                  shape: const CircleBorder(),
-                  child: InkWell(
-                    onTap: onPreview,
-                    customBorder: const CircleBorder(),
-                    child: const SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: Icon(
-                        Icons.open_in_full_rounded,
-                        size: 17,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 }
 
 class _AttachmentTile extends StatelessWidget {
@@ -971,21 +1000,31 @@ class _AttachmentTile extends StatelessWidget {
         card,
         if (onDownload != null && !attachment.isImage)
           Positioned(
-            right: 6,
-            top: 6,
-            child: GestureDetector(
-              onTap: () => onDownload!(attachment),
-              child: Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.48),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.download_rounded,
-                  size: 15,
-                  color: Colors.white,
+            right: 0,
+            top: 5,
+            child: Semantics(
+              button: true,
+              label: '下载附件 ${attachment.name}',
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onDownload!(attachment),
+                child: SizedBox.square(
+                  dimension: 44,
+                  child: Center(
+                    child: Container(
+                      width: 26,
+                      height: 26,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.48),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.download_rounded,
+                        size: 15,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -1495,72 +1534,126 @@ class ModelDropdownItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected
-          ? state.accents[0].withValues(alpha: 0.12)
-          : Colors.transparent,
-      borderRadius: BorderRadius.circular(14),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
-          child: Row(
-            children: [
-              BrandIcon.model(
-                model: item.model,
-                provider: item.provider,
-                size: 30,
-                radius: 11,
-                padding: 5,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.model.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: state.textStyle(
-                        context,
-                        size: 13,
-                        weight: selected ? FontWeight.w600 : FontWeight.w400,
+    final text = state.text(context);
+    return AnimatedContainer(
+      key: ValueKey('model_picker_item_${item.provider.name}_${item.model.id}'),
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      margin: const EdgeInsets.only(bottom: 4),
+      decoration: BoxDecoration(
+        gradient: selected
+            ? LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  state.accents[0].withValues(alpha: 0.18),
+                  state.accents[1].withValues(alpha: 0.075),
+                ],
+              )
+            : null,
+        color: selected ? null : text.withValues(alpha: 0.018),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: selected
+              ? state.accents[0].withValues(alpha: 0.28)
+              : text.withValues(alpha: 0.035),
+        ),
+        boxShadow: selected
+            ? [
+                BoxShadow(
+                  color: state.accents[0].withValues(alpha: 0.09),
+                  blurRadius: 18,
+                  spreadRadius: -8,
+                  offset: const Offset(0, 7),
+                ),
+              ]
+            : null,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(11, 9, 10, 9),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                BrandIcon.model(
+                  model: item.model,
+                  provider: item.provider,
+                  size: 36,
+                  radius: 13,
+                  padding: 6,
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.model.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: state.textStyle(
+                          context,
+                          size: 13.2,
+                          weight: selected ? FontWeight.w700 : FontWeight.w500,
+                          opacity: selected ? 0.98 : 0.82,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        child: ModelCapabilityChips(
+                          state: state,
+                          capabilities: item.model.capabilities,
+                          compact: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (selected) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: state.accents[0].withValues(alpha: 0.16),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: state.accents[0].withValues(alpha: 0.24),
                       ),
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      item.provider.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: state
-                          .textStyle(
-                            context,
-                            size: 9.5,
-                            weight: FontWeight.w600,
-                            opacity: 0.4,
-                          )
-                          .copyWith(letterSpacing: 1.1),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.check_rounded,
+                          size: 12,
+                          color: state.accents[0],
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          '当前',
+                          style: state
+                              .textStyle(
+                                context,
+                                size: 9,
+                                weight: FontWeight.w700,
+                              )
+                              .copyWith(color: state.accents[0]),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      child: ModelCapabilityChips(
-                        state: state,
-                        capabilities: item.model.capabilities,
-                        compact: true,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (selected)
-                Icon(
-                  Icons.check_circle_rounded,
-                  size: 18,
-                  color: state.accents[0],
-                ),
-            ],
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
       ),

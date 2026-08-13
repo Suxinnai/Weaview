@@ -10,7 +10,9 @@ import 'ai_response_parsers.dart';
 import 'chat_message_payloads.dart';
 
 class AnthropicClient {
-  const AnthropicClient();
+  const AnthropicClient({http.Client? client}) : _client = client;
+
+  final http.Client? _client;
 
   Future<String> generate({
     required String apiKey,
@@ -23,38 +25,44 @@ class AnthropicClient {
   }) async {
     final uri = Uri.parse('${_trimSlash(baseUrl)}/messages');
     final requestMessages = await _anthropicMessages(messages);
-    final response = await http
-        .post(
-          uri,
-          headers: {
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({
-            'model': model,
-            'messages': requestMessages,
-            'system': systemInstruction,
-            'max_tokens': 4096,
-            'temperature': 0.7,
-          }),
-        )
-        .timeout(timeout);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('HTTP ${response.statusCode}: ${response.body}');
+    final ownsClient = _client == null;
+    final client = _client ?? http.Client();
+    try {
+      final response = await client
+          .post(
+            uri,
+            headers: {
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'model': model,
+              'messages': requestMessages,
+              'system': systemInstruction,
+              'max_tokens': 4096,
+              'temperature': 0.7,
+            }),
+          )
+          .timeout(timeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final content = decoded['content'] as List? ?? [];
+      if (content.isEmpty) return '';
+      final textBlock = content.firstWhere(
+        (block) => block['type'] == 'text',
+        orElse: () => null,
+      );
+      if (textBlock == null) return '';
+      final text = textBlock['text']?.toString() ?? '';
+      final result = consumeThemeCommand(text);
+      if (result.args != null) onThemeUpdate?.call(result.args!);
+      return result.text;
+    } finally {
+      if (ownsClient) client.close();
     }
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    final content = decoded['content'] as List? ?? [];
-    if (content.isEmpty) return '';
-    final textBlock = content.firstWhere(
-      (block) => block['type'] == 'text',
-      orElse: () => null,
-    );
-    if (textBlock == null) return '';
-    final text = textBlock['text']?.toString() ?? '';
-    final result = consumeThemeCommand(text);
-    if (result.args != null) onThemeUpdate?.call(result.args!);
-    return result.text;
   }
 
   Future<void> generateStream({
@@ -70,7 +78,8 @@ class AnthropicClient {
     bool Function()? shouldCancel,
   }) async {
     final uri = Uri.parse('${_trimSlash(baseUrl)}/messages');
-    final client = http.Client();
+    final ownsClient = _client == null;
+    final client = _client ?? http.Client();
     var rawContent = '';
     try {
       final requestMessages = await _anthropicMessages(messages);
@@ -120,7 +129,7 @@ class AnthropicClient {
       final split = splitReasoning(result.text);
       onSnapshot(split.answer, split.reasoning, false);
     } finally {
-      client.close();
+      if (ownsClient) client.close();
     }
   }
 

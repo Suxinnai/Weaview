@@ -6,14 +6,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_utils.dart';
 import '../domain/models.dart';
 import 'app_constants.dart';
+import 'secure_secret_store.dart';
 
 class WeaviewPreferences {
-  WeaviewPreferences._(this._prefs);
+  WeaviewPreferences._(this._prefs, this._secretStore);
 
   final SharedPreferences _prefs;
+  final SecureSecretStore _secretStore;
+  Map<String, String> _secrets = {};
+  Future<void> _secretWriteQueue = Future<void>.value();
 
   static Future<WeaviewPreferences> open() async {
-    return WeaviewPreferences._(await SharedPreferences.getInstance());
+    final instance = WeaviewPreferences._(
+      await SharedPreferences.getInstance(),
+      const SecureSecretStore(),
+    );
+    await instance._loadAndMigrateSecrets();
+    return instance;
   }
 
   String get systemPrompt =>
@@ -78,9 +87,16 @@ class WeaviewPreferences {
 
   List<AiProvider> loadProviders() {
     return decodeList(
-      _prefs.getString(_PrefsKey.aiProviders),
-      AiProvider.fromJson,
-    );
+          _prefs.getString(_PrefsKey.aiProviders),
+          AiProvider.fromJson,
+        )
+        .map(
+          (provider) => provider.copyWith(
+            apiKey:
+                _secrets[_providerSecretKey(provider.name)] ?? provider.apiKey,
+          ),
+        )
+        .toList();
   }
 
   Map<String, ModelAssignment>? loadModelAssignments() {
@@ -129,7 +145,13 @@ class WeaviewPreferences {
     final savedSearch = _prefs.getString(_PrefsKey.aiSearchConfig);
     if (savedSearch == null) return null;
     try {
-      return SearchConfig.fromJson(jsonDecode(savedSearch));
+      final config = SearchConfig.fromJson(jsonDecode(savedSearch));
+      return config.copyWith(
+        keys: {
+          for (final entry in config.keys.entries)
+            entry.key: _secrets[_searchSecretKey(entry.key)] ?? entry.value,
+        },
+      );
     } catch (_) {
       return null;
     }
@@ -139,9 +161,15 @@ class WeaviewPreferences {
 
   List<TtsProviderConfig> loadTtsProviders() {
     return decodeList(
-      _prefs.getString(_PrefsKey.aiTtsProviders),
-      TtsProviderConfig.fromJson,
-    );
+          _prefs.getString(_PrefsKey.aiTtsProviders),
+          TtsProviderConfig.fromJson,
+        )
+        .map(
+          (provider) => provider.copyWith(
+            apiKey: _secrets[_ttsSecretKey(provider.id)] ?? provider.apiKey,
+          ),
+        )
+        .toList();
   }
 
   void saveThemeMode(ThemeMode value) {
@@ -311,9 +339,17 @@ class WeaviewPreferences {
   }
 
   void saveProviders(List<AiProvider> providers) {
+    _replaceSecretNamespace('provider:', {
+      for (final provider in providers)
+        _providerSecretKey(provider.name): provider.apiKey,
+    });
     _prefs.setString(
       _PrefsKey.aiProviders,
-      jsonEncode(providers.map((provider) => provider.toJson()).toList()),
+      jsonEncode(
+        providers
+            .map((provider) => provider.copyWith(apiKey: '').toJson())
+            .toList(),
+      ),
     );
   }
 
@@ -327,19 +363,160 @@ class WeaviewPreferences {
   }
 
   void saveSearchConfig(SearchConfig config) {
-    _prefs.setString(_PrefsKey.aiSearchConfig, jsonEncode(config.toJson()));
+    _replaceSecretNamespace('search:', {
+      for (final entry in config.keys.entries)
+        _searchSecretKey(entry.key): entry.value,
+    });
+    _prefs.setString(
+      _PrefsKey.aiSearchConfig,
+      jsonEncode(
+        config
+            .copyWith(keys: {for (final key in config.keys.keys) key: ''})
+            .toJson(),
+      ),
+    );
   }
 
   void saveTtsConfig(List<TtsProviderConfig> providers, String activeId) {
+    _replaceSecretNamespace('tts:', {
+      for (final provider in providers)
+        _ttsSecretKey(provider.id): provider.apiKey,
+    });
     _prefs
       ..setString(
         _PrefsKey.aiTtsProviders,
-        jsonEncode(providers.map((provider) => provider.toJson()).toList()),
+        jsonEncode(
+          providers
+              .map((provider) => provider.copyWith(apiKey: '').toJson())
+              .toList(),
+        ),
       )
       ..setString(_PrefsKey.aiActiveTtsId, activeId);
   }
 
-  Future<void> clear() => _prefs.clear();
+  Future<void> clear() async {
+    _secrets = {};
+    await _secretWriteQueue;
+    await _secretStore.clear(_prefs);
+    await _prefs.clear();
+  }
+
+  Future<void> _loadAndMigrateSecrets() async {
+    final secureSecrets = await _secretStore.readAll(_prefs);
+    final legacySecrets = _legacySecrets();
+    // A non-empty legacy value represents the most recent user-visible
+    // configuration and wins over a stale secure-store copy during migration.
+    _secrets = {...secureSecrets, ...legacySecrets};
+    if (legacySecrets.isEmpty) return;
+    final migrated = await _secretStore.replaceAll(_prefs, _secrets);
+    if (!migrated) return;
+    _sanitizeLegacySecretFields();
+  }
+
+  Map<String, String> _legacySecrets() {
+    final result = <String, String>{};
+    for (final provider in decodeList(
+      _prefs.getString(_PrefsKey.aiProviders),
+      AiProvider.fromJson,
+    )) {
+      if (provider.apiKey.isNotEmpty) {
+        result[_providerSecretKey(provider.name)] = provider.apiKey;
+      }
+    }
+    final search = _rawSearchConfig();
+    if (search != null) {
+      for (final entry in search.keys.entries) {
+        if (entry.value.isNotEmpty) {
+          result[_searchSecretKey(entry.key)] = entry.value;
+        }
+      }
+    }
+    for (final provider in decodeList(
+      _prefs.getString(_PrefsKey.aiTtsProviders),
+      TtsProviderConfig.fromJson,
+    )) {
+      if (provider.apiKey.isNotEmpty) {
+        result[_ttsSecretKey(provider.id)] = provider.apiKey;
+      }
+    }
+    return result;
+  }
+
+  SearchConfig? _rawSearchConfig() {
+    final text = _prefs.getString(_PrefsKey.aiSearchConfig);
+    if (text == null) return null;
+    try {
+      return SearchConfig.fromJson(jsonDecode(text));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _sanitizeLegacySecretFields() {
+    final providers = decodeList(
+      _prefs.getString(_PrefsKey.aiProviders),
+      AiProvider.fromJson,
+    );
+    if (providers.isNotEmpty) {
+      _prefs.setString(
+        _PrefsKey.aiProviders,
+        jsonEncode(
+          providers
+              .map((provider) => provider.copyWith(apiKey: '').toJson())
+              .toList(),
+        ),
+      );
+    }
+    final search = _rawSearchConfig();
+    if (search != null) {
+      _prefs.setString(
+        _PrefsKey.aiSearchConfig,
+        jsonEncode(
+          search
+              .copyWith(keys: {for (final key in search.keys.keys) key: ''})
+              .toJson(),
+        ),
+      );
+    }
+    final tts = decodeList(
+      _prefs.getString(_PrefsKey.aiTtsProviders),
+      TtsProviderConfig.fromJson,
+    );
+    if (tts.isNotEmpty) {
+      _prefs.setString(
+        _PrefsKey.aiTtsProviders,
+        jsonEncode(
+          tts
+              .map((provider) => provider.copyWith(apiKey: '').toJson())
+              .toList(),
+        ),
+      );
+    }
+  }
+
+  void _replaceSecretNamespace(String namespace, Map<String, String> values) {
+    _secrets = {
+      for (final entry in _secrets.entries)
+        if (!entry.key.startsWith(namespace)) entry.key: entry.value,
+      for (final entry in values.entries)
+        if (entry.value.trim().isNotEmpty) entry.key: entry.value.trim(),
+    };
+    final snapshot = Map<String, String>.from(_secrets);
+    Future<void> write() async {
+      await _secretStore.replaceAll(_prefs, snapshot);
+    }
+
+    _secretWriteQueue = _secretWriteQueue.then(
+      (_) => write(),
+      onError: (_) => write(),
+    );
+  }
+
+  String _providerSecretKey(String name) => 'provider:${name.trim()}';
+
+  String _searchSecretKey(String id) => 'search:${id.trim()}';
+
+  String _ttsSecretKey(String id) => 'tts:${id.trim()}';
 }
 
 abstract final class _PrefsKey {

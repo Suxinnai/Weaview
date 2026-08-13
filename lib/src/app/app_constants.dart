@@ -13,6 +13,7 @@ const accentGreen = Color(0xFFE2F0CB);
 const sendGreen = Color(0xFF10B981);
 
 const githubReleasesUrl = 'https://github.com/Suxinnai/Weaview/releases';
+const githubRepositoryUrl = 'https://github.com/Suxinnai/Weaview';
 const githubReleasesApiUrl =
     'https://api.github.com/repos/Suxinnai/Weaview/releases';
 const githubFeedbackUrl = 'https://github.com/Suxinnai/Weaview/issues/new';

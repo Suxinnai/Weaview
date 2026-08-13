@@ -55,8 +55,7 @@ class SettingsSheetState extends State<SettingsSheet> {
   final TextEditingController memoryController = TextEditingController();
   final TextEditingController systemPromptController = TextEditingController();
   final TextEditingController profileController = TextEditingController();
-  final TextEditingController providerSearchController =
-      TextEditingController();
+  final TextEditingController rolePromptController = TextEditingController();
   final TextEditingController feedbackTitleController = TextEditingController();
   final TextEditingController feedbackDetailController =
       TextEditingController();
@@ -72,7 +71,6 @@ class SettingsSheetState extends State<SettingsSheet> {
   final Set<String> deletingProviders = {};
   String? providerDeleteTarget;
   String? draggingProviderName;
-  bool showAllProviders = false;
   String feedbackType = '问题反馈';
 
   static const settingsTabs = [
@@ -86,7 +84,7 @@ class SettingsSheetState extends State<SettingsSheet> {
 
   static const settingsRoles = {
     'chat': ('主对话模型', '用于处理主要对话和生成内容'),
-    'title': ('标题总结模型', '用于生成历史记录标题 (需要快速)'),
+    'title': ('标题生成模型', '用于生成简短的对话标题'),
     'suggest': ('聊天建议模型', '生成后续对话建议'),
     'translate': ('翻译模型', '用于语言翻译功能'),
     'tool': ('工具模型', '用于人物画像补全与记忆整理'),
@@ -95,8 +93,6 @@ class SettingsSheetState extends State<SettingsSheet> {
 
   static const settingsEngines = [
     ('tavily', 'Tavily AI', 'Tavily 提供专为 AI 打造的快速搜索服务。'),
-    ('brave', 'Brave Search', 'Brave Search 提供完整的独立索引。'),
-    ('perplexity', 'Perplexity', 'Perplexity 提供强大的智能问答引擎。'),
   ];
 
   @override
@@ -106,6 +102,7 @@ class SettingsSheetState extends State<SettingsSheet> {
     profileController.text = widget.state.userProfile;
     appVersionInfoFuture = loadAppVersionInfo();
     roleDraft = widget.state.modelAssignments['chat']!;
+    rolePromptController.text = roleDraft.prompt;
   }
 
   @override
@@ -122,7 +119,7 @@ class SettingsSheetState extends State<SettingsSheet> {
     memoryController.dispose();
     systemPromptController.dispose();
     profileController.dispose();
-    providerSearchController.dispose();
+    rolePromptController.dispose();
     feedbackTitleController.dispose();
     feedbackDetailController.dispose();
     feedbackStepsController.dispose();
@@ -481,6 +478,17 @@ class SettingsSheetState extends State<SettingsSheet> {
       return;
     }
     final enabled = enabledOverride ?? editingProvider?.enabled ?? true;
+    final normalizedBaseUrl = providerBaseUrl.trim().isEmpty
+        ? ''
+        : AiGateway.normalizeBaseUrl(providerBaseUrl);
+    final baseUrlIssue = secureBaseUrlIssue(
+      normalizedBaseUrl,
+      allowEmpty: name.toLowerCase().contains('gemini'),
+    );
+    if (enabled && baseUrlIssue != null) {
+      widget.showSnack(baseUrlIssue);
+      return;
+    }
     final keepCurrent =
         enabled && (makeCurrent || (editingProvider?.current ?? false));
     final status = !enabled
@@ -497,9 +505,7 @@ class SettingsSheetState extends State<SettingsSheet> {
       enabled: enabled,
       color: editingProvider?.color ?? providerFallbackColor(name),
       apiKey: providerKey.trim(),
-      baseUrl: providerBaseUrl.trim().isEmpty
-          ? ''
-          : AiGateway.normalizeBaseUrl(providerBaseUrl),
+      baseUrl: normalizedBaseUrl,
       models: providerModels,
       imageApi: editingProvider?.imageApi ?? ImageApiKind.automatic,
     );
@@ -634,28 +640,32 @@ class SettingsSheetState extends State<SettingsSheet> {
     });
   }
 
-  Future<String?> textDialog(String title, String hint) {
+  Future<String?> textDialog(String title, String hint) async {
     final controller = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(hintText: hint),
+    try {
+      return await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(title),
+          content: TextField(
+            controller: controller,
+            decoration: InputDecoration(hintText: hint),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, controller.text),
+              child: const Text('确定'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('确定'),
-          ),
-        ],
-      ),
-    );
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 
   Future<void> confirmDeleteProvider(String name) async {
@@ -700,6 +710,7 @@ class SettingsSheetState extends State<SettingsSheet> {
         title: const Text('清空所有本地数据'),
         content: const Text(
           '这会删除本机保存的对话记录、长期记忆、模型提供商、默认模型、搜索/TTS 配置和外观偏好。'
+          '应用管理的生成图片与备份恢复附件也会删除。'
           '导出的备份不会被删除。确定继续吗？',
         ),
         actions: [

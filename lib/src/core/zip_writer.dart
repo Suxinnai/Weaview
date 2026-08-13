@@ -74,6 +74,97 @@ Uint8List buildStoredZip(List<ZipEntryData> entries) {
   return output.toBytes();
 }
 
+Map<String, Uint8List> readZipEntries(
+  Uint8List bytes, {
+  int maxEntries = 512,
+  int? maxEntryCompressedBytes,
+  int? maxEntryUncompressedBytes,
+  int? maxTotalUncompressedBytes,
+}) {
+  final entries = <String, Uint8List>{};
+  var totalUncompressedBytes = 0;
+  var offset = 0;
+  while (offset + 30 <= bytes.length) {
+    if (_readU32(bytes, offset) != 0x04034B50) break;
+    if (entries.length >= maxEntries) {
+      throw FormatException('ZIP 条目数量超过 $maxEntries 个限制。');
+    }
+    final flags = _readU16(bytes, offset + 6);
+    final method = _readU16(bytes, offset + 8);
+    final expectedCrc = _readU32(bytes, offset + 14);
+    final compressedSize = _readU32(bytes, offset + 18);
+    final uncompressedSize = _readU32(bytes, offset + 22);
+    final nameLength = _readU16(bytes, offset + 26);
+    final extraLength = _readU16(bytes, offset + 28);
+    final nameStart = offset + 30;
+    final dataStart = nameStart + nameLength + extraLength;
+    final dataEnd = dataStart + compressedSize;
+    if ((flags & 0x0008) != 0) {
+      throw const FormatException('暂不支持带数据描述符的 ZIP 备份。');
+    }
+    if ((flags & 0x0001) != 0) {
+      throw const FormatException('不支持加密 ZIP 备份。');
+    }
+    if (maxEntryCompressedBytes != null &&
+        compressedSize > maxEntryCompressedBytes) {
+      throw FormatException(
+        'ZIP 条目压缩体积超过 ${_formatLimit(maxEntryCompressedBytes)} 限制。',
+      );
+    }
+    if (maxEntryUncompressedBytes != null &&
+        uncompressedSize > maxEntryUncompressedBytes) {
+      throw FormatException(
+        'ZIP 条目解压后体积超过 ${_formatLimit(maxEntryUncompressedBytes)} 限制。',
+      );
+    }
+    if (nameStart + nameLength > bytes.length || dataEnd > bytes.length) {
+      throw const FormatException('ZIP 备份结构不完整。');
+    }
+    final nameBytes = bytes.sublist(nameStart, nameStart + nameLength);
+    final rawName = (flags & 0x0800) != 0
+        ? utf8.decode(nameBytes, allowMalformed: true)
+        : latin1.decode(nameBytes, allowInvalid: true);
+    final name = _safeZipEntryName(rawName);
+    if (entries.containsKey(name)) {
+      throw FormatException('ZIP 包含重复条目：$name');
+    }
+    final compressed = bytes.sublist(dataStart, dataEnd);
+    final remainingTotal = maxTotalUncompressedBytes == null
+        ? null
+        : maxTotalUncompressedBytes - totalUncompressedBytes;
+    final decodeLimit = _smallerLimit(
+      maxEntryUncompressedBytes,
+      remainingTotal,
+    );
+    final decoded = switch (method) {
+      0 => compressed,
+      8 => _inflateRawBounded(compressed, decodeLimit),
+      _ => throw FormatException('Unsupported zip compression: $method'),
+    };
+    if (maxEntryUncompressedBytes != null &&
+        decoded.length > maxEntryUncompressedBytes) {
+      throw FormatException(
+        'ZIP 条目解压后体积超过 ${_formatLimit(maxEntryUncompressedBytes)} 限制。',
+      );
+    }
+    totalUncompressedBytes += decoded.length;
+    if (maxTotalUncompressedBytes != null &&
+        totalUncompressedBytes > maxTotalUncompressedBytes) {
+      throw FormatException(
+        'ZIP 解压总量超过 ${_formatLimit(maxTotalUncompressedBytes)} 限制。',
+      );
+    }
+    if (_crc32(decoded) != expectedCrc) {
+      throw FormatException('ZIP 条目校验失败：$name');
+    }
+    if (!name.endsWith('/')) {
+      entries[name] = Uint8List.fromList(decoded);
+    }
+    offset = dataEnd;
+  }
+  return entries;
+}
+
 String? readZipUtf8Entry(
   Uint8List bytes,
   String entryName, {
@@ -94,6 +185,9 @@ String? readZipUtf8Entry(
     final dataEnd = dataStart + compressedSize;
     if ((flags & 0x0008) != 0) {
       throw const FormatException('暂不支持带数据描述符的 ZIP 备份。');
+    }
+    if ((flags & 0x0001) != 0) {
+      throw const FormatException('不支持加密 ZIP 备份。');
     }
     if (maxCompressedBytes != null && compressedSize > maxCompressedBytes) {
       throw FormatException(
@@ -117,7 +211,7 @@ String? readZipUtf8Entry(
     if (normalized == entryName || normalized.endsWith('/$entryName')) {
       final decoded = switch (method) {
         0 => data,
-        8 => ZLibDecoder(raw: true).convert(data),
+        8 => _inflateRawBounded(data, maxUncompressedBytes),
         _ => throw FormatException('Unsupported zip compression: $method'),
       };
       if (maxUncompressedBytes != null &&
@@ -134,12 +228,62 @@ String? readZipUtf8Entry(
   return null;
 }
 
+int? _smallerLimit(int? first, int? second) {
+  if (first == null) return second;
+  if (second == null) return first;
+  return first < second ? first : second;
+}
+
+Uint8List _inflateRawBounded(List<int> bytes, int? maxBytes) {
+  final sink = _BoundedByteSink(maxBytes);
+  final decoder = ZLibDecoder(raw: true).startChunkedConversion(sink);
+  decoder
+    ..add(bytes)
+    ..close();
+  return sink.takeBytes();
+}
+
+class _BoundedByteSink implements Sink<List<int>> {
+  _BoundedByteSink(this.maxBytes);
+
+  final int? maxBytes;
+  final BytesBuilder _builder = BytesBuilder(copy: false);
+  var _length = 0;
+
+  @override
+  void add(List<int> data) {
+    final nextLength = _length + data.length;
+    if (maxBytes != null && nextLength > maxBytes!) {
+      throw FormatException('ZIP 条目解压后体积超过 ${_formatLimit(maxBytes!)} 限制。');
+    }
+    _length = nextLength;
+    _builder.add(data);
+  }
+
+  @override
+  void close() {}
+
+  Uint8List takeBytes() => _builder.takeBytes();
+}
+
 String _formatLimit(int bytes) {
   final megaBytes = bytes / (1024 * 1024);
   if (megaBytes == megaBytes.roundToDouble()) {
     return '${megaBytes.toInt()} MB';
   }
   return '${megaBytes.toStringAsFixed(1)} MB';
+}
+
+String _safeZipEntryName(String value) {
+  final normalized = value.replaceAll('\\', '/').trim();
+  final segments = normalized.split('/');
+  if (normalized.isEmpty ||
+      normalized.startsWith('/') ||
+      RegExp(r'^[A-Za-z]:').hasMatch(normalized) ||
+      segments.any((segment) => segment == '..' || segment.isEmpty)) {
+    throw FormatException('ZIP 包含不安全的条目路径：$value');
+  }
+  return normalized;
 }
 
 List<int> _u16(int value) => [value & 0xFF, (value >> 8) & 0xFF];

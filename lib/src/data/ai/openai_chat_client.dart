@@ -10,7 +10,9 @@ import 'chat_message_payloads.dart';
 import 'openai_stream_parser.dart';
 
 class OpenAiChatClient {
-  const OpenAiChatClient();
+  const OpenAiChatClient({http.Client? client}) : _client = client;
+
+  final http.Client? _client;
 
   Future<String> generate({
     required String apiKey,
@@ -21,42 +23,50 @@ class OpenAiChatClient {
     required Duration timeout,
     ValueChanged<Map<String, dynamic>>? onThemeUpdate,
   }) async {
-    final uri = Uri.parse('${app_utils.normalizeBaseUrl(baseUrl)}/chat/completions');
+    final uri = Uri.parse(
+      '${app_utils.normalizeBaseUrl(baseUrl)}/chat/completions',
+    );
     final requestMessages = await openAiMessagesWithAttachments(
       systemInstruction: systemInstruction,
       messages: messages,
     );
-    final response = await http
-        .post(
-          uri,
-          headers: {
-            'Authorization': 'Bearer $apiKey',
-            'Content-Type': 'application/json',
-          },
-          body: jsonEncode({
-            'model': model,
-            'messages': requestMessages,
-            'temperature': 0.7,
-          }),
-        )
-        .timeout(timeout);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('HTTP ${response.statusCode}: ${response.body}');
+    final ownsClient = _client == null;
+    final client = _client ?? http.Client();
+    try {
+      final response = await client
+          .post(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $apiKey',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'model': model,
+              'messages': requestMessages,
+              'temperature': 0.7,
+            }),
+          )
+          .timeout(timeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      final choices = decoded['choices'] as List? ?? [];
+      if (choices.isEmpty) return '';
+      final message = (choices.first as Map)['message'] as Map? ?? {};
+      final reasoning =
+          message['reasoning_content']?.toString() ??
+          message['reasoning']?.toString() ??
+          '';
+      final content = message['content']?.toString() ?? '';
+      final result = consumeThemeCommand(
+        reasoning.isEmpty ? content : '<think>$reasoning</think>\n$content',
+      );
+      if (result.args != null) onThemeUpdate?.call(result.args!);
+      return result.text;
+    } finally {
+      if (ownsClient) client.close();
     }
-    final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-    final choices = decoded['choices'] as List? ?? [];
-    if (choices.isEmpty) return '';
-    final message = (choices.first as Map)['message'] as Map? ?? {};
-    final reasoning =
-        message['reasoning_content']?.toString() ??
-        message['reasoning']?.toString() ??
-        '';
-    final content = message['content']?.toString() ?? '';
-    final result = consumeThemeCommand(
-      reasoning.isEmpty ? content : '<think>$reasoning</think>\n$content',
-    );
-    if (result.args != null) onThemeUpdate?.call(result.args!);
-    return result.text;
   }
 
   Future<void> generateStream({
@@ -71,8 +81,11 @@ class OpenAiChatClient {
     required Duration timeout,
     bool Function()? shouldCancel,
   }) async {
-    final uri = Uri.parse('${app_utils.normalizeBaseUrl(baseUrl)}/chat/completions');
-    final client = http.Client();
+    final uri = Uri.parse(
+      '${app_utils.normalizeBaseUrl(baseUrl)}/chat/completions',
+    );
+    final ownsClient = _client == null;
+    final client = _client ?? http.Client();
     var rawContent = '';
     var rawReasoning = '';
     try {
@@ -130,7 +143,7 @@ class OpenAiChatClient {
       if (result.args != null) onThemeUpdate(result.args!);
       onSnapshot(result.text, reasoning, false);
     } finally {
-      client.close();
+      if (ownsClient) client.close();
     }
   }
 
@@ -140,46 +153,52 @@ class OpenAiChatClient {
     required Duration timeout,
   }) async {
     final uri = Uri.parse('${app_utils.normalizeBaseUrl(baseUrl)}/models');
-    final response = await http
-        .get(
-          uri,
-          headers: {
-            'Authorization': 'Bearer $apiKey',
-            'Accept': 'application/json',
-          },
-        )
-        .timeout(timeout);
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('HTTP ${response.statusCode}: ${response.body}');
+    final ownsClient = _client == null;
+    final client = _client ?? http.Client();
+    try {
+      final response = await client
+          .get(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $apiKey',
+              'Accept': 'application/json',
+            },
+          )
+          .timeout(timeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+      if (response.body.trim().isEmpty) {
+        throw Exception('模型接口返回为空，请确认 Base URL 指向兼容 OpenAI 的 /v1 服务。');
+      }
+      final decoded = jsonDecode(response.body);
+      final records = decoded is List
+          ? decoded
+          : decoded is Map && decoded['data'] is List
+          ? decoded['data'] as List
+          : decoded is Map && decoded['models'] is List
+          ? decoded['models'] as List
+          : const [];
+      final models = records.map((item) {
+        final id = item is Map
+            ? (item['id'] ?? item['name'] ?? item).toString()
+            : item.toString();
+        final name = item is Map ? (item['name'] ?? id).toString() : id;
+        return AiModel(
+          id: id,
+          name: name,
+          capabilities: item is Map
+              ? modelCapabilitiesFromRecord({...item, 'id': id, 'name': name})
+              : guessModelCapabilities(id, name: name),
+        );
+      }).toList();
+      if (models.isEmpty) {
+        throw Exception('模型接口返回为空，请确认 Base URL 指向兼容 OpenAI 的 /v1 服务。');
+      }
+      return dedupeModels(models);
+    } finally {
+      if (ownsClient) client.close();
     }
-    if (response.body.trim().isEmpty) {
-      throw Exception('模型接口返回为空，请确认 Base URL 指向兼容 OpenAI 的 /v1 服务。');
-    }
-    final decoded = jsonDecode(response.body);
-    final records = decoded is List
-        ? decoded
-        : decoded is Map && decoded['data'] is List
-        ? decoded['data'] as List
-        : decoded is Map && decoded['models'] is List
-        ? decoded['models'] as List
-        : const [];
-    final models = records.map((item) {
-      final id = item is Map
-          ? (item['id'] ?? item['name'] ?? item).toString()
-          : item.toString();
-      final name = item is Map ? (item['name'] ?? id).toString() : id;
-      return AiModel(
-        id: id,
-        name: name,
-        capabilities: item is Map
-            ? modelCapabilitiesFromRecord({...item, 'id': id, 'name': name})
-            : guessModelCapabilities(id, name: name),
-      );
-    }).toList();
-    if (models.isEmpty) {
-      throw Exception('模型接口返回为空，请确认 Base URL 指向兼容 OpenAI 的 /v1 服务。');
-    }
-    return dedupeModels(models);
   }
 
   Future<String> testConnection({
