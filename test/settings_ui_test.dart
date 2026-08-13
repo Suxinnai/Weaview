@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:weaview_flutter/src/app/weaview_state.dart';
+import 'package:weaview_flutter/src/domain/models.dart';
 import 'package:weaview_flutter/src/features/settings/settings_sheet.dart';
 
 void main() {
@@ -286,6 +287,141 @@ void main() {
     expect(find.byKey(const ValueKey('role-prompt-field')), findsOneWidget);
     expect(tester.takeException(), isNull);
 
+    state.dispose();
+  });
+
+  testWidgets('provider credentials expose key visibility and HTTP warning', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final state = WeaviewState();
+    await state.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsSheet(
+          state: state,
+          open: true,
+          onClose: () {},
+          onPickAvatar: (_) async {},
+          showSnack: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('提供商'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OpenAI'));
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(TextField);
+    expect(fields, findsNWidgets(2));
+    expect(find.byTooltip('显示 API Key'), findsOneWidget);
+    await tester.enterText(fields.first, 'secret-key');
+    await tester.tap(find.byTooltip('显示 API Key'));
+    await tester.pump();
+    final apiEditable = tester.widget<EditableText>(
+      find.descendant(of: fields.first, matching: find.byType(EditableText)),
+    );
+    expect(apiEditable.obscureText, isFalse);
+
+    await tester.enterText(fields.at(1), 'http://api.example.com/v1');
+    await tester.pump();
+    expect(find.textContaining('HTTP 连接未加密'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    state.dispose();
+  });
+
+  testWidgets('assigned model badge stays bounded beside the role label', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final state = WeaviewState();
+    await state.load();
+    final provider = AiProvider.defaults().first.copyWith(
+      apiKey: 'key',
+      enabled: true,
+      status: '使用中',
+      current: true,
+      models: const [
+        AiModel(
+          id: 'vendor/extremely-long-main-conversation-model-name',
+          name: 'vendor/extremely-long-main-conversation-model-name',
+          capabilities: ['chat'],
+        ),
+      ],
+    );
+    state.saveProviders([provider]);
+    state.saveModelAssignment(
+      'chat',
+      const ModelAssignment(
+        provider: 'OpenAI',
+        model: 'vendor/extremely-long-main-conversation-model-name',
+        prompt: '',
+      ),
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsSheet(
+          state: state,
+          open: true,
+          onClose: () {},
+          onPickAvatar: (_) async {},
+          showSnack: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('默认模型'));
+    await tester.pumpAndSettle();
+
+    final title = tester.widget<Text>(find.text('主对话模型'));
+    expect(title.maxLines, 1);
+    expect(tester.getSize(find.text('主对话模型')).height, lessThan(28));
+    expect(tester.takeException(), isNull);
+    state.dispose();
+  });
+
+  testWidgets('TTS provider type uses compact cards instead of a dropdown', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final state = WeaviewState();
+    await state.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsSheet(
+          state: state,
+          open: true,
+          onClose: () {},
+          onPickAvatar: (_) async {},
+          showSnack: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('扩展服务'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OpenAI TTS'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('MiMo'), findsOneWidget);
+    expect(find.text('OpenAI'), findsOneWidget);
+    expect(find.text('自定义'), findsOneWidget);
+    expect(find.byType(DropdownButtonFormField<String>), findsNothing);
+    expect(find.byTooltip('显示 API Key'), findsOneWidget);
+    expect(tester.takeException(), isNull);
     state.dispose();
   });
 }

@@ -21,7 +21,7 @@
 
 - 项目不应内置真实 API Key。
 - Android 端 API Key 必须通过 Keystore 加密存储，不得写入普通 SharedPreferences 字段。
-- 远程 provider 必须使用 HTTPS；只有本机回环地址可以使用 HTTP 调试。
+- provider 支持 HTTP 与 HTTPS；HTTP 为兼容选项，界面必须明确提示 API Key 与对话内容可能被明文传输。
 - 数据备份必须屏蔽 API Key，并限制压缩包条目、解压大小和附件大小。
 - 本地配置和导出数据不应提交到仓库。
 - PR 中新增 provider 接入时，必须说明密钥来源、存储位置和调用边界。

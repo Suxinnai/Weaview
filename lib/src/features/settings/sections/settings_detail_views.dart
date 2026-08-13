@@ -57,7 +57,8 @@ String? _validateRoleDraft({
 extension SettingsDetailViews on SettingsSheetState {
   bool get _providerReadyForModels {
     final saved = editingProvider;
-    final hasSavedKey = saved != null &&
+    final hasSavedKey =
+        saved != null &&
         (saved.apiKey.trim().isNotEmpty ||
             saved.status == '已连接' ||
             saved.status == '使用中');
@@ -431,6 +432,9 @@ extension SettingsDetailViews on SettingsSheetState {
 
   Widget providerConfigView() {
     final state = widget.state;
+    final cleartextProviderUrl =
+        providerBaseUrl.trim().isNotEmpty &&
+        isCleartextBaseUrl(providerBaseUrl);
     final content = [
       SegmentedPills(
         state: state,
@@ -515,10 +519,25 @@ extension SettingsDetailViews on SettingsSheetState {
         const SizedBox(height: 8),
         TextField(
           controller: providerKeyController,
-          obscureText: true,
+          obscureText: !providerKeyVisible,
           onChanged: (value) => providerKey = value,
           style: state.textStyle(context, size: 14),
-          decoration: inputDecoration(state, hint: '请输入 Provider API Key...'),
+          decoration: inputDecoration(state, hint: '请输入 Provider API Key...')
+              .copyWith(
+                suffixIcon: IconButton(
+                  tooltip: providerKeyVisible ? '隐藏 API Key' : '显示 API Key',
+                  onPressed: () => updateSheet(
+                    () => providerKeyVisible = !providerKeyVisible,
+                  ),
+                  icon: Icon(
+                    providerKeyVisible
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    size: 19,
+                    color: state.text(context).withValues(alpha: 0.48),
+                  ),
+                ),
+              ),
         ),
         const SizedBox(height: 18),
         Text(
@@ -533,13 +552,43 @@ extension SettingsDetailViews on SettingsSheetState {
         const SizedBox(height: 8),
         TextField(
           controller: providerBaseUrlController,
-          onChanged: (value) => providerBaseUrl = value,
+          keyboardType: TextInputType.url,
+          autocorrect: false,
+          enableSuggestions: false,
+          onChanged: (value) => updateSheet(() => providerBaseUrl = value),
           style: state.textStyle(context, size: 14),
           decoration: inputDecoration(
             state,
             hint: 'https://api.example.com/v1',
           ),
         ),
+        if (cleartextProviderUrl) ...[
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.info_outline_rounded,
+                size: 16,
+                color: Color(0xFFD88926),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  'HTTP 连接未加密，请仅在可信网络中使用。API Key 与对话内容可能被中间人读取。',
+                  style: state
+                      .textStyle(
+                        context,
+                        size: 10.5,
+                        opacity: 0.72,
+                        height: 1.42,
+                      )
+                      .copyWith(color: const Color(0xFFD88926)),
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: 10),
         Text(
           'API Key 仅存储在本机；Android 上由 Keystore 加密，不会被发送给除所选模型服务外的第三方。',
@@ -604,86 +653,86 @@ extension SettingsDetailViews on SettingsSheetState {
             itemCount: providerModels.length,
             itemBuilder: (context, index) {
               final model = providerModels[index];
-              return DragTarget<String>(
-                onWillAcceptWithDetails: (details) =>
-                    details.data != model.id,
-                onAcceptWithDetails: (details) {
-                  final fromIndex = providerModels.indexWhere(
-                    (m) => m.id == details.data,
-                  );
-                  if (fromIndex < 0 || fromIndex == index) return;
-                  updateSheet(() {
-                    final target = providerModels.removeAt(fromIndex);
-                    providerModels.insert(index, target);
-                  });
-                },
-                builder: (context, candidateData, rejectedData) {
-                  final hovering = candidateData.isNotEmpty;
-                  return LongPressDraggable<String>(
-                    data: model.id,
-                    delay: const Duration(milliseconds: 260),
-                    dragAnchorStrategy: pointerDragAnchorStrategy,
-                    rootOverlay: true,
-                    feedback: SizedBox(
-                      width: 210,
-                      child: Material(
-                        color: Colors.transparent,
-                        child: _ProviderModelGridCard(
-                          state: state,
-                          model: model,
-                          providerName: providerName,
-                          onTap: () => editModel(model),
-                          highlighted: true,
-                        ),
-                      ),
-                    ),
-                    childWhenDragging: Opacity(
-                      opacity: 0.4,
-                      child: _ProviderModelGridCard(
-                        state: state,
-                        model: model,
-                        providerName: providerName,
-                        onTap: () => editModel(model),
-                      ),
-                    ),
-                    child: Dismissible(
-                      key: ValueKey('provider_model_${model.id}'),
-                      direction: DismissDirection.endToStart,
-                      confirmDismiss: (_) async {
-                        updateSheet(
-                          () => providerModels = providerModels
-                              .where((m) => m.id != model.id)
-                              .toList(),
-                        );
-                        return false;
-                      },
-                      background: Container(
-                        alignment: Alignment.centerRight,
-                        padding: const EdgeInsets.only(right: 14),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withValues(alpha: 0.12),
+              return LayoutBuilder(
+                builder: (context, itemConstraints) => DragTarget<String>(
+                  onWillAcceptWithDetails: (details) =>
+                      details.data != model.id,
+                  onAcceptWithDetails: (details) {
+                    final fromIndex = providerModels.indexWhere(
+                      (m) => m.id == details.data,
+                    );
+                    if (fromIndex < 0 || fromIndex == index) return;
+                    updateSheet(() {
+                      final target = providerModels.removeAt(fromIndex);
+                      providerModels.insert(index, target);
+                      draggingProviderModelId = null;
+                    });
+                  },
+                  builder: (context, candidateData, rejectedData) {
+                    final hovering = candidateData.isNotEmpty;
+                    final controlsVisible =
+                        providerModelDeleteTarget == model.id;
+                    final card = _ProviderModelGridCard(
+                      state: state,
+                      model: model,
+                      providerName: providerName,
+                      onTap: () => editModel(model),
+                      onDelete: () => updateSheet(() {
+                        providerModels = providerModels
+                            .where((item) => item.id != model.id)
+                            .toList();
+                        providerModelDeleteTarget = null;
+                      }),
+                      controlsVisible: controlsVisible,
+                      highlighted: hovering,
+                    );
+                    return LongPressDraggable<String>(
+                      data: model.id,
+                      delay: const Duration(milliseconds: 300),
+                      dragAnchorStrategy: childDragAnchorStrategy,
+                      rootOverlay: true,
+                      feedback: SizedBox(
+                        width: itemConstraints.maxWidth,
+                        height: itemConstraints.maxHeight,
+                        child: Material(
+                          color: Colors.transparent,
+                          elevation: 10,
+                          shadowColor: Colors.black.withValues(alpha: 0.16),
                           borderRadius: BorderRadius.circular(18),
-                        ),
-                        child: Icon(
-                          Icons.delete_outline_rounded,
-                          color: Colors.red.withValues(alpha: 0.82),
+                          child: _ProviderModelGridCard(
+                            state: state,
+                            model: model,
+                            providerName: providerName,
+                            onTap: () {},
+                            onDelete: () {},
+                            highlighted: true,
+                          ),
                         ),
                       ),
+                      childWhenDragging: Opacity(opacity: 0, child: card),
+                      onDragStarted: () => updateSheet(() {
+                        providerModelDeleteTarget = model.id;
+                        draggingProviderModelId = model.id;
+                      }),
+                      onDraggableCanceled: (_, _) => updateSheet(() {
+                        draggingProviderModelId = null;
+                      }),
+                      onDragEnd: (_) => updateSheet(() {
+                        draggingProviderModelId = null;
+                      }),
                       child: AnimatedScale(
                         duration: const Duration(milliseconds: 140),
                         curve: Curves.easeOutCubic,
-                        scale: hovering ? 0.97 : 1,
-                        child: _ProviderModelGridCard(
-                          state: state,
-                          model: model,
-                          providerName: providerName,
-                          onTap: () => editModel(model),
-                          highlighted: hovering,
-                        ),
+                        scale: draggingProviderModelId == model.id
+                            ? 0.98
+                            : hovering
+                            ? 0.97
+                            : 1,
+                        child: card,
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               );
             },
           ),
@@ -1058,6 +1107,7 @@ extension SettingsDetailViews on SettingsSheetState {
           model: 'gpt-4o-mini-tts',
           voice: 'alloy',
         );
+    var revealTtsKey = false;
     return StatefulBuilder(
       builder: (context, setLocal) {
         Widget field({
@@ -1066,6 +1116,7 @@ extension SettingsDetailViews on SettingsSheetState {
           required ValueChanged<String> onChanged,
           String hint = '',
           bool obscure = false,
+          String? helperText,
         }) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1083,10 +1134,40 @@ extension SettingsDetailViews on SettingsSheetState {
               TextFormField(
                 key: ValueKey('tts-${draft.id}-${draft.type}-$label'),
                 initialValue: value,
-                obscureText: obscure,
+                obscureText: obscure && !revealTtsKey,
+                keyboardType: label == 'Base URL' ? TextInputType.url : null,
+                autocorrect: label != 'Base URL',
+                enableSuggestions: label != 'Base URL',
                 onChanged: (value) => setLocal(() => onChanged(value)),
                 style: state.textStyle(context, size: 15),
-                decoration: inputDecoration(state, hint: hint),
+                decoration: inputDecoration(state, hint: hint).copyWith(
+                  helperText: helperText,
+                  helperMaxLines: 3,
+                  helperStyle: helperText == null
+                      ? null
+                      : state
+                            .textStyle(
+                              context,
+                              size: 10.5,
+                              opacity: 0.72,
+                              height: 1.4,
+                            )
+                            .copyWith(color: const Color(0xFFD88926)),
+                  suffixIcon: obscure
+                      ? IconButton(
+                          tooltip: revealTtsKey ? '隐藏 API Key' : '显示 API Key',
+                          onPressed: () =>
+                              setLocal(() => revealTtsKey = !revealTtsKey),
+                          icon: Icon(
+                            revealTtsKey
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            size: 19,
+                            color: state.text(context).withValues(alpha: 0.48),
+                          ),
+                        )
+                      : null,
+                ),
               ),
               const SizedBox(height: 16),
             ],
@@ -1104,19 +1185,28 @@ extension SettingsDetailViews on SettingsSheetState {
             ),
           ),
           const SizedBox(height: 8),
-          DropdownButtonFormField<String>(
-            initialValue: draft.type,
-            decoration: inputDecoration(state),
-            items: const [
-              DropdownMenuItem(value: 'xiaomi', child: Text('Xiaomi MiMo TTS')),
-              DropdownMenuItem(value: 'openai', child: Text('OpenAI TTS')),
-              DropdownMenuItem(value: 'custom', child: Text('自定义 (Custom)')),
+          Row(
+            children: [
+              for (final option in const [
+                ('xiaomi', 'MiMo', Icons.graphic_eq_rounded),
+                ('openai', 'OpenAI', Icons.record_voice_over_outlined),
+                ('custom', '自定义', Icons.tune_rounded),
+              ]) ...[
+                if (option.$1 != 'xiaomi') const SizedBox(width: 8),
+                Expanded(
+                  child: _TtsTypeOption(
+                    state: state,
+                    label: option.$2,
+                    icon: option.$3,
+                    selected: draft.type == option.$1,
+                    onTap: () => setLocal(() {
+                      draft = withTtsPreset(draft, option.$1);
+                      editingTts = draft;
+                    }),
+                  ),
+                ),
+              ],
             ],
-            onChanged: (value) => setLocal(() {
-              final nextType = value ?? draft.type;
-              draft = withTtsPreset(draft, nextType);
-              editingTts = draft;
-            }),
           ),
           const SizedBox(height: 16),
           field(
@@ -1145,6 +1235,9 @@ extension SettingsDetailViews on SettingsSheetState {
             hint: draft.type == 'xiaomi'
                 ? 'https://api.xiaomimimo.com/v1'
                 : 'https://api.openai.com/v1',
+            helperText: isCleartextBaseUrl(draft.baseUrl)
+                ? 'HTTP 连接未加密，请仅在可信网络中使用。'
+                : null,
             onChanged: (value) {
               draft = draft.copyWith(baseUrl: value);
               editingTts = draft;
@@ -1370,12 +1463,86 @@ extension SettingsDetailViews on SettingsSheetState {
   }
 }
 
+class _TtsTypeOption extends StatelessWidget {
+  const _TtsTypeOption({
+    required this.state,
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final WeaviewState state;
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = state.text(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '$label 语音服务',
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            height: 72,
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: selected
+                    ? state.accents[0].withValues(alpha: 0.72)
+                    : text.withValues(alpha: 0.10),
+                width: selected ? 1.4 : 0.8,
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 20,
+                  color: selected
+                      ? state.accents[0]
+                      : text.withValues(alpha: 0.52),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: state.textStyle(
+                    context,
+                    size: 11.5,
+                    weight: selected ? FontWeight.w700 : FontWeight.w500,
+                    opacity: selected ? 0.96 : 0.58,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _ProviderModelGridCard extends StatelessWidget {
   const _ProviderModelGridCard({
     required this.state,
     required this.model,
     required this.providerName,
     required this.onTap,
+    required this.onDelete,
+    this.controlsVisible = false,
     this.highlighted = false,
   });
 
@@ -1383,6 +1550,8 @@ class _ProviderModelGridCard extends StatelessWidget {
   final AiModel model;
   final String providerName;
   final VoidCallback onTap;
+  final VoidCallback onDelete;
+  final bool controlsVisible;
   final bool highlighted;
 
   @override
@@ -1435,7 +1604,36 @@ class _ProviderModelGridCard extends StatelessWidget {
                     padding: 5,
                   ),
                   const Spacer(),
-                  if (highlighted)
+                  if (controlsVisible)
+                    Semantics(
+                      key: ValueKey('provider_model_delete_${model.id}'),
+                      button: true,
+                      label: '删除模型',
+                      child: Material(
+                        color: state.isDark(context)
+                            ? const Color(0xFF381F25).withValues(alpha: 0.92)
+                            : const Color(0xFFFFF5F5),
+                        shape: CircleBorder(
+                          side: BorderSide(
+                            color: Colors.red.withValues(alpha: 0.34),
+                          ),
+                        ),
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: onDelete,
+                          child: SizedBox(
+                            width: 27,
+                            height: 27,
+                            child: Icon(
+                              Icons.close_rounded,
+                              size: 16,
+                              color: Colors.red.withValues(alpha: 0.86),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (highlighted)
                     Icon(
                       Icons.drag_indicator_rounded,
                       size: 14,
@@ -1467,11 +1665,7 @@ class _ProviderModelGridCard extends StatelessWidget {
                   model.id,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: state.textStyle(
-                    context,
-                    size: 9.5,
-                    opacity: 0.42,
-                  ),
+                  style: state.textStyle(context, size: 9.5, opacity: 0.42),
                 ),
               ],
               const SizedBox(height: 7),

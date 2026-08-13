@@ -1098,6 +1098,60 @@ $$E = mc^2$$
     state.dispose();
   });
 
+  testWidgets('expanded composer uses a compact four-action utility grid', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final state = WeaviewState();
+    final controller = TextEditingController();
+    final focusNode = FocusNode();
+
+    await state.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ChatInputDock(
+            state: state,
+            inputController: controller,
+            inputFocusNode: focusNode,
+            webSearchEnabled: false,
+            imageGenerationMode: false,
+            comparisonMode: false,
+            dockExpanded: true,
+            pendingAttachments: const [],
+            onToggleExpanded: () {},
+            onToggleWebSearch: () {},
+            onToggleComparison: () {},
+            onConfigureComparison: () {},
+            onSubmit: () async {},
+            onPickChatImages: () async {},
+            onPickChatFiles: () async {},
+            onRemoveAttachment: (_) {},
+            onTextChanged: () {},
+            onHeightChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('相册'), findsOneWidget);
+    expect(find.text('文件'), findsOneWidget);
+    expect(find.text('联网'), findsOneWidget);
+    expect(find.text('对比'), findsOneWidget);
+    expect(find.text('从相册选择'), findsNothing);
+    expect(find.text('添加到对话'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    focusNode.dispose();
+    controller.dispose();
+    state.dispose();
+  });
+
   testWidgets(
     'provider cards reveal delete on long press and hide on blank tap',
     (WidgetTester tester) async {

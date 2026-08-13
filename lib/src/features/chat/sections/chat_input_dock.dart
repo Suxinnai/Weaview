@@ -452,9 +452,7 @@ class _ImageModeStrip extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(10, 6, 10, 2),
       padding: const EdgeInsets.fromLTRB(10, 5, 7, 5),
       decoration: BoxDecoration(
-        color: sendGreen.withValues(
-          alpha: state.isDark(context) ? 0.10 : 0.06,
-        ),
+        color: sendGreen.withValues(alpha: state.isDark(context) ? 0.10 : 0.06),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: sendGreen.withValues(alpha: 0.16)),
       ),
@@ -590,66 +588,60 @@ class _DockActionSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
+      padding: const EdgeInsets.fromLTRB(10, 2, 10, 11),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _DockSectionLabel(state: state, label: '添加到对话'),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: _DockAttachmentTile(
-                  state: state,
-                  icon: Icons.image_outlined,
-                  label: '从相册选择',
-                  subtitle: imageAttachmentCount > 0
-                      ? '已添加 $imageAttachmentCount 张图片'
-                      : '图片会作为对话附件或参考图',
-                  onTap: onPickChatImages,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _DockAttachmentTile(
-                  state: state,
-                  icon: Icons.description_outlined,
-                  label: '选择文件',
-                  subtitle: fileAttachmentCount > 0
-                      ? '已添加 $fileAttachmentCount 个文件'
-                      : 'PDF、文档与表格分析',
-                  onTap: onPickChatFiles,
-                ),
-              ),
-            ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
+            child: _DashedDockDivider(state: state),
           ),
-          const SizedBox(height: 16),
-          _DockSectionLabel(state: state, label: '工具'),
-          const SizedBox(height: 10),
-          _DockActionRow(
-            state: state,
-            icon: Icons.public_rounded,
-            title: '联网搜索',
-            subtitle: '查找最新信息并带回对话',
-            selected: webSearchEnabled,
-            statusLabel: webSearchEnabled ? '已开启' : '未开启',
-            onTap: onToggleWebSearch,
-          ),
-          const SizedBox(height: 10),
-          _DockActionRow(
-            state: state,
-            icon: Icons.view_column_rounded,
-            title: '多模型对比',
-            subtitle: comparisonMode ? '当前会并行比较多个模型回答' : '最多同时选择 3 个模型',
-            selected: comparisonMode,
-            statusLabel: comparisonMode ? '已开启' : '未开启',
-            onTap: onToggleComparison,
-            trailingAction: comparisonMode
-                ? TextButton(
-                    onPressed: onConfigureComparison,
-                    child: const Text('配置'),
-                  )
-                : null,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final itemSize = ((constraints.maxWidth - 24) / 4).clamp(
+                68.0,
+                84.0,
+              );
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _DockQuickAction(
+                    state: state,
+                    icon: Icons.image_outlined,
+                    label: '相册',
+                    size: itemSize,
+                    badgeCount: imageAttachmentCount,
+                    onTap: onPickChatImages,
+                  ),
+                  _DockQuickAction(
+                    state: state,
+                    icon: Icons.description_outlined,
+                    label: '文件',
+                    size: itemSize,
+                    badgeCount: fileAttachmentCount,
+                    onTap: onPickChatFiles,
+                  ),
+                  _DockQuickAction(
+                    state: state,
+                    icon: Icons.travel_explore_rounded,
+                    label: '联网',
+                    size: itemSize,
+                    selected: webSearchEnabled,
+                    onTap: onToggleWebSearch,
+                  ),
+                  _DockQuickAction(
+                    state: state,
+                    icon: Icons.view_column_rounded,
+                    label: '对比',
+                    size: itemSize,
+                    selected: comparisonMode,
+                    onTap: onToggleComparison,
+                    onSecondaryTap: comparisonMode
+                        ? onConfigureComparison
+                        : null,
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -657,40 +649,72 @@ class _DockActionSheet extends StatelessWidget {
   }
 }
 
-class _DockSectionLabel extends StatelessWidget {
-  const _DockSectionLabel({required this.state, required this.label});
+class _DashedDockDivider extends StatelessWidget {
+  const _DashedDockDivider({required this.state});
 
   final WeaviewState state;
-  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: state.textStyle(
-        context,
-        size: 11.5,
-        weight: FontWeight.w700,
-        opacity: 0.54,
+    return SizedBox(
+      height: 1,
+      width: double.infinity,
+      child: CustomPaint(
+        painter: _DashedDockDividerPainter(
+          color: state.text(context).withValues(alpha: 0.16),
+        ),
       ),
     );
   }
 }
 
-class _DockAttachmentTile extends StatelessWidget {
-  const _DockAttachmentTile({
+class _DashedDockDividerPainter extends CustomPainter {
+  const _DashedDockDividerPainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1
+      ..strokeCap = StrokeCap.round;
+    const dash = 4.0;
+    const gap = 5.0;
+    for (var x = 0.0; x < size.width; x += dash + gap) {
+      canvas.drawLine(
+        Offset(x, 0.5),
+        Offset(math.min(x + dash, size.width), 0.5),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedDockDividerPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+class _DockQuickAction extends StatelessWidget {
+  const _DockQuickAction({
     required this.state,
     required this.icon,
     required this.label,
-    required this.subtitle,
+    required this.size,
     required this.onTap,
+    this.selected = false,
+    this.badgeCount = 0,
+    this.onSecondaryTap,
   });
 
   final WeaviewState state;
   final IconData icon;
   final String label;
-  final String subtitle;
-  final Future<void> Function() onTap;
+  final double size;
+  final VoidCallback onTap;
+  final bool selected;
+  final int badgeCount;
+  final VoidCallback? onSecondaryTap;
 
   @override
   Widget build(BuildContext context) {
@@ -698,198 +722,107 @@ class _DockAttachmentTile extends StatelessWidget {
     final text = state.text(context);
     return Semantics(
       button: true,
+      selected: selected,
       label: label,
-      hint: subtitle,
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(17),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(17),
           child: Ink(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: text.withValues(alpha: dark ? 0.055 : 0.04),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: text.withValues(alpha: 0.08)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: state.accents[0].withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(icon, size: 20, color: state.accents[0]),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  label,
-                  style: state.textStyle(
-                    context,
-                    size: 13.5,
-                    weight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: state.textStyle(context, size: 11.5, opacity: 0.54),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DockActionRow extends StatelessWidget {
-  const _DockActionRow({
-    required this.state,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.selected,
-    required this.statusLabel,
-    this.onTap,
-    this.trailingAction,
-  });
-
-  final WeaviewState state;
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool selected;
-  final String statusLabel;
-  final VoidCallback? onTap;
-  final Widget? trailingAction;
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = state.isDark(context);
-    final text = state.text(context);
-    final content = Ink(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: selected
-            ? state.accents[0].withValues(alpha: dark ? 0.14 : 0.10)
-            : text.withValues(alpha: dark ? 0.055 : 0.04),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: selected
-              ? state.accents[0].withValues(alpha: 0.28)
-              : text.withValues(alpha: 0.08),
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
+            width: size,
+            height: size,
             decoration: BoxDecoration(
               color: selected
-                  ? Colors.white.withValues(alpha: dark ? 0.08 : 0.56)
-                  : Colors.white.withValues(alpha: dark ? 0.04 : 0.48),
-              borderRadius: BorderRadius.circular(14),
+                  ? state.accents[0].withValues(alpha: dark ? 0.08 : 0.035)
+                  : text.withValues(alpha: dark ? 0.045 : 0.025),
+              borderRadius: BorderRadius.circular(17),
+              border: Border.all(
+                color: selected
+                    ? state.accents[0].withValues(alpha: 0.62)
+                    : text.withValues(alpha: 0.085),
+                width: selected ? 1.25 : 0.8,
+              ),
             ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: selected ? state.accents[0] : text.withValues(alpha: 0.68),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Stack(
               children: [
-                Text(
-                  title,
-                  style: state.textStyle(
-                    context,
-                    size: 13.5,
-                    weight: FontWeight.w700,
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        icon,
+                        size: 22,
+                        color: selected
+                            ? state.accents[0]
+                            : text.withValues(alpha: 0.62),
+                      ),
+                      const SizedBox(height: 7),
+                      Text(
+                        label,
+                        maxLines: 1,
+                        style: state.textStyle(
+                          context,
+                          size: 11,
+                          weight: selected ? FontWeight.w700 : FontWeight.w600,
+                          opacity: selected ? 0.96 : 0.62,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  subtitle,
-                  style: state.textStyle(context, size: 11.5, opacity: 0.54),
-                ),
+                if (badgeCount > 0)
+                  Positioned(
+                    top: 7,
+                    right: 7,
+                    child: Container(
+                      constraints: const BoxConstraints(minWidth: 18),
+                      height: 18,
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: state.accents[0],
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Text(
+                        '$badgeCount',
+                        style: state
+                            .textStyle(
+                              context,
+                              size: 9,
+                              weight: FontWeight.w700,
+                            )
+                            .copyWith(color: Colors.white),
+                      ),
+                    ),
+                  ),
+                if (onSecondaryTap != null)
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Material(
+                      color: Colors.transparent,
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: onSecondaryTap,
+                        child: SizedBox(
+                          width: 25,
+                          height: 25,
+                          child: Icon(
+                            Icons.tune_rounded,
+                            size: 14,
+                            color: state.accents[0],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          _DockStatusPill(state: state, label: statusLabel, selected: selected),
-          if (trailingAction != null) ...[
-            const SizedBox(width: 4),
-            trailingAction!,
-          ],
-        ],
-      ),
-    );
-    return Semantics(
-      button: onTap != null,
-      selected: selected,
-      label: title,
-      hint: subtitle,
-      child: onTap == null
-          ? content
-          : Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(18),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(18),
-                onTap: onTap,
-                child: content,
-              ),
-            ),
-    );
-  }
-}
-
-class _DockStatusPill extends StatelessWidget {
-  const _DockStatusPill({
-    required this.state,
-    required this.label,
-    this.selected = false,
-  });
-
-  final WeaviewState state;
-  final String label;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = state.text(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: selected
-            ? state.accents[0].withValues(alpha: 0.12)
-            : text.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: selected
-              ? state.accents[0].withValues(alpha: 0.24)
-              : text.withValues(alpha: 0.08),
         ),
-      ),
-      child: Text(
-        label,
-        style: state
-            .textStyle(
-              context,
-              size: 11,
-              weight: FontWeight.w700,
-              opacity: selected ? 1 : 0.58,
-            )
-            .copyWith(color: selected ? state.accents[0] : text),
       ),
     );
   }

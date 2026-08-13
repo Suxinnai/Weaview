@@ -98,7 +98,7 @@ flutter pub get
 
 - 不要提交真实 API Key、访问令牌、SharedPreferences 导出文件或本地截图。
 - Gemini 没有隐藏的 build-time Key fallback；需要像其他 provider 一样在设置中显式配置。
-- 远程 Base URL 必须使用 HTTPS；仅 `localhost`、`127.0.0.1` 和 `::1` 允许 HTTP，便于本机调试。
+- Base URL 支持 HTTP 与 HTTPS；使用 HTTP 时应用会显示明文传输警告，建议仅在可信网络中使用。
 - JSON/ZIP 备份会屏蔽 API Key，不会导出可用凭据。
 
 ## 运行

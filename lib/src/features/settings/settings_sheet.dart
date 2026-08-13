@@ -71,6 +71,9 @@ class SettingsSheetState extends State<SettingsSheet> {
   final Set<String> deletingProviders = {};
   String? providerDeleteTarget;
   String? draggingProviderName;
+  String? providerModelDeleteTarget;
+  String? draggingProviderModelId;
+  bool providerKeyVisible = false;
   String feedbackType = '问题反馈';
 
   static const settingsTabs = [
@@ -387,6 +390,9 @@ class SettingsSheetState extends State<SettingsSheet> {
           subView = 'main';
           providerDeleteTarget = null;
           draggingProviderName = null;
+          providerModelDeleteTarget = null;
+          draggingProviderModelId = null;
+          providerKeyVisible = false;
         });
       }
     });
@@ -405,6 +411,9 @@ class SettingsSheetState extends State<SettingsSheet> {
       statusText = '';
       providerDeleteTarget = null;
       draggingProviderName = null;
+      providerModelDeleteTarget = null;
+      draggingProviderModelId = null;
+      providerKeyVisible = false;
     });
   }
 
@@ -444,6 +453,9 @@ class SettingsSheetState extends State<SettingsSheet> {
     setState(() {
       providerDeleteTarget = null;
       draggingProviderName = null;
+      providerModelDeleteTarget = null;
+      draggingProviderModelId = null;
+      providerKeyVisible = false;
       editingProvider = provider;
       providerName = provider?.name ?? '';
       providerKey = provider?.apiKey ?? '';

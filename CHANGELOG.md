@@ -12,6 +12,24 @@
 
 - Nothing yet.
 
+## 2.0.3 - 2026-08-13
+
+### 中文
+
+- 修复提供商和模型卡片长按拖拽时的错位副本，统一为原位跟手反馈，并以小型红色关闭按钮提供删除入口。
+- 已启用的提供商改为仅用边框区分，当前提供商使用更强边框，不再使用大面积状态填充。
+- 提供商 API Key 增加显示/隐藏控制；Base URL 支持 HTTP，并对明文连接显示安全提醒。
+- 输入框工具菜单收纳为四个紧凑方形入口，并使用虚线与正文输入区分隔。
+- 修复默认模型名称挤压角色标题的问题，语音服务类型选择改为紧凑卡片式切换。
+
+### English
+
+- Fixed offset duplicate feedback when long-press dragging provider and model cards, and replaced oversized delete controls with compact red close actions.
+- Enabled providers now use border-only states, with a stronger outline for the current provider instead of large filled surfaces.
+- Added API-key visibility controls, allowed HTTP Base URLs, and surfaced an explicit cleartext transport warning.
+- Condensed composer tools into four square shortcuts separated from the text field by a dashed divider.
+- Prevented assigned model names from squeezing role labels and replaced the legacy TTS dropdown with compact type cards.
+
 ## 2.0.2 - 2026-08-13
 
 ### 中文

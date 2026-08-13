@@ -330,17 +330,22 @@ extension SettingsTabs on SettingsSheetState {
                               return LongPressDraggable<String>(
                                 data: provider.name,
                                 delay: const Duration(milliseconds: 320),
-                                dragAnchorStrategy: pointerDragAnchorStrategy,
+                                dragAnchorStrategy: childDragAnchorStrategy,
                                 rootOverlay: true,
                                 feedback: SizedBox(
                                   width: cardWidth,
                                   child: Material(
                                     color: Colors.transparent,
+                                    elevation: 10,
+                                    shadowColor: Colors.black.withValues(
+                                      alpha: 0.16,
+                                    ),
+                                    borderRadius: BorderRadius.circular(20),
                                     child: row,
                                   ),
                                 ),
                                 childWhenDragging: Opacity(
-                                  opacity: 0.46,
+                                  opacity: 0,
                                   child: row,
                                 ),
                                 onDragStarted: () => updateSheet(() {
@@ -399,22 +404,12 @@ extension SettingsTabs on SettingsSheetState {
                   final assignment = state.modelAssignments[role]!;
                   return KeyedSubtree(
                     key: ValueKey('model_assignment_$role'),
-                    child: SettingsRow(
+                    child: _ModelAssignmentRow(
                       state: state,
                       title: entry.$1,
-                      subtitle: assignment.model.trim().isEmpty
-                          ? entry.$2
-                          : _assignmentSubtitle(assignment),
-                      leading: _SettingsIconBadge(
-                        state: state,
-                        icon: _roleIcon(role),
-                      ),
-                      showChevron: true,
-                      trailing: _ModelAssignmentBadge(
-                        state: state,
-                        provider: assignment.provider,
-                        model: assignment.model,
-                      ),
+                      description: entry.$2,
+                      icon: _roleIcon(role),
+                      assignment: assignment,
                       onTap: () {
                         updateSheet(() {
                           editingRole = role;
@@ -1099,12 +1094,6 @@ extension SettingsTabs on SettingsSheetState {
     ]);
   }
 
-  String _assignmentSubtitle(ModelAssignment assignment) {
-    if (assignment.model.trim().isEmpty) return '未分配';
-    if (assignment.provider.trim().isEmpty) return assignment.model;
-    return '${assignment.provider} · ${assignment.model}';
-  }
-
   IconData _roleIcon(String role) => switch (role) {
     'chat' => Icons.chat_bubble_outline_rounded,
     'title' => Icons.short_text_rounded,
@@ -1696,17 +1685,15 @@ class _ModelAssignmentBadge extends StatelessWidget {
     final active = model.trim().isNotEmpty;
     final label = active ? model : '未分配';
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 188),
+      constraints: const BoxConstraints(maxWidth: 116),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
         decoration: BoxDecoration(
-          color: active
-              ? state.accents[0].withValues(alpha: 0.12)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: active
-                ? state.accents[0].withValues(alpha: 0.20)
+                ? state.accents[0].withValues(alpha: 0.34)
                 : state.text(context).withValues(alpha: 0.10),
           ),
         ),
@@ -1738,6 +1725,90 @@ class _ModelAssignmentBadge extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ModelAssignmentRow extends StatelessWidget {
+  const _ModelAssignmentRow({
+    required this.state,
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.assignment,
+    required this.onTap,
+  });
+
+  final WeaviewState state;
+  final String title;
+  final String description;
+  final IconData icon;
+  final ModelAssignment assignment;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final assigned = assignment.model.trim().isNotEmpty;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 78),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+            child: Row(
+              children: [
+                _SettingsIconBadge(state: state, icon: icon),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: state.textStyle(
+                          context,
+                          size: 15.5,
+                          weight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        assigned && assignment.provider.trim().isNotEmpty
+                            ? assignment.provider
+                            : description,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: state.textStyle(
+                          context,
+                          size: 11.5,
+                          opacity: 0.48,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                _ModelAssignmentBadge(
+                  state: state,
+                  provider: assignment.provider,
+                  model: assignment.model,
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 21,
+                  color: state.text(context).withValues(alpha: 0.3),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -1838,17 +1909,14 @@ class _ProviderGridCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final configured = _isProviderConfigured(provider);
     final connected = provider.enabled && configured;
-    final showWaveBorder = controlsVisible;
     final solidBorderColor = active
-        ? state.accents[0].withValues(alpha: 0.46)
+        ? state.accents[0].withValues(alpha: 0.82)
+        : connected
+        ? state.accents[0].withValues(alpha: 0.42)
         : highlighted
         ? provider.color.withValues(alpha: 0.38)
         : state.text(context).withValues(alpha: 0.07);
-    final cardFill = active
-        ? state.accents[0].withValues(
-            alpha: state.isDark(context) ? 0.14 : 0.09,
-          )
-        : state.isDark(context)
+    final cardFill = state.isDark(context)
         ? Colors.white.withValues(alpha: 0.055)
         : Colors.white.withValues(alpha: 0.82);
     final statusPillFg = connected
@@ -1878,15 +1946,19 @@ class _ProviderGridCard extends StatelessWidget {
                 color: cardFill,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: showWaveBorder ? Colors.transparent : solidBorderColor,
-                  width: active || highlighted ? 1.15 : 0.8,
+                  color: solidBorderColor,
+                  width: active
+                      ? 1.65
+                      : connected || highlighted
+                      ? 1.15
+                      : 0.8,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: active
-                        ? state.accents[0].withValues(alpha: 0.14)
+                    color: connected
+                        ? state.accents[0].withValues(alpha: 0.08)
                         : Colors.black.withValues(alpha: 0.02),
-                    blurRadius: active ? 22 : 10,
+                    blurRadius: connected ? 16 : 10,
                     offset: const Offset(0, 6),
                   ),
                 ],
@@ -1967,42 +2039,31 @@ class _ProviderGridCard extends StatelessWidget {
               ),
             ),
           ),
-          if (showWaveBorder)
-            Positioned.fill(
-              child: IgnorePointer(
-                child: CustomPaint(
-                  painter: _ProviderWaveBorderPainter(
-                    color: (active ? state.accents[0] : provider.color)
-                        .withValues(alpha: active ? 0.78 : 0.56),
-                  ),
-                ),
-              ),
-            ),
           if (controlsVisible)
             Positioned(
-              top: 8,
-              right: 8,
+              top: 9,
+              right: 9,
               child: Semantics(
                 key: ValueKey('provider_delete_${provider.name}'),
                 button: true,
                 label: '删除提供商',
                 child: Material(
                   color: state.isDark(context)
-                      ? Colors.white.withValues(alpha: 0.11)
-                      : Colors.white.withValues(alpha: 0.82),
+                      ? const Color(0xFF381F25).withValues(alpha: 0.92)
+                      : const Color(0xFFFFF5F5).withValues(alpha: 0.96),
                   shape: CircleBorder(
-                    side: BorderSide(color: Colors.red.withValues(alpha: 0.24)),
+                    side: BorderSide(color: Colors.red.withValues(alpha: 0.36)),
                   ),
                   child: InkWell(
                     customBorder: const CircleBorder(),
                     onTap: onDelete,
                     child: SizedBox(
-                      width: 40,
-                      height: 40,
+                      width: 30,
+                      height: 30,
                       child: Icon(
-                        Icons.delete_outline_rounded,
-                        size: 18,
-                        color: Colors.red.withValues(alpha: 0.78),
+                        Icons.close_rounded,
+                        size: 17,
+                        color: Colors.red.withValues(alpha: 0.86),
                       ),
                     ),
                   ),
@@ -2013,117 +2074,4 @@ class _ProviderGridCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _ProviderWaveBorderPainter extends CustomPainter {
-  const _ProviderWaveBorderPainter({required this.color});
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.7
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-    final inset = paint.strokeWidth / 2;
-    final left = inset;
-    final top = inset;
-    final right = size.width - inset;
-    final bottom = size.height - inset;
-    final radius = 22.0 - inset;
-    const amplitude = 1.45;
-    final path = Path()..moveTo(left + radius, top);
-
-    _addHorizontalWave(
-      path,
-      fromX: left + radius,
-      toX: right - radius,
-      y: top,
-      amplitude: -amplitude,
-    );
-    path.quadraticBezierTo(right, top, right, top + radius);
-    _addVerticalWave(
-      path,
-      x: right,
-      fromY: top + radius,
-      toY: bottom - radius,
-      amplitude: amplitude,
-    );
-    path.quadraticBezierTo(right, bottom, right - radius, bottom);
-    _addHorizontalWave(
-      path,
-      fromX: right - radius,
-      toX: left + radius,
-      y: bottom,
-      amplitude: amplitude,
-    );
-    path.quadraticBezierTo(left, bottom, left, bottom - radius);
-    _addVerticalWave(
-      path,
-      x: left,
-      fromY: bottom - radius,
-      toY: top + radius,
-      amplitude: -amplitude,
-    );
-    path.quadraticBezierTo(left, top, left + radius, top);
-    path.close();
-    canvas.drawPath(path, paint);
-  }
-
-  void _addHorizontalWave(
-    Path path, {
-    required double fromX,
-    required double toX,
-    required double y,
-    required double amplitude,
-  }) {
-    final distance = (toX - fromX).abs();
-    final segments = math.max(4, (distance / 22).round());
-    final step = (toX - fromX) / segments;
-    var x = fromX;
-    var direction = 1.0;
-    for (var i = 0; i < segments; i += 1) {
-      final nextX = i == segments - 1 ? toX : x + step;
-      path.quadraticBezierTo(
-        (x + nextX) / 2,
-        y + amplitude * direction,
-        nextX,
-        y,
-      );
-      x = nextX;
-      direction = -direction;
-    }
-  }
-
-  void _addVerticalWave(
-    Path path, {
-    required double x,
-    required double fromY,
-    required double toY,
-    required double amplitude,
-  }) {
-    final distance = (toY - fromY).abs();
-    final segments = math.max(3, (distance / 22).round());
-    final step = (toY - fromY) / segments;
-    var y = fromY;
-    var direction = 1.0;
-    for (var i = 0; i < segments; i += 1) {
-      final nextY = i == segments - 1 ? toY : y + step;
-      path.quadraticBezierTo(
-        x + amplitude * direction,
-        (y + nextY) / 2,
-        x,
-        nextY,
-      );
-      y = nextY;
-      direction = -direction;
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _ProviderWaveBorderPainter oldDelegate) =>
-      oldDelegate.color != color;
 }
