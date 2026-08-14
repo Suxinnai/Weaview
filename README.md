@@ -6,7 +6,7 @@
 
 织境提供一个可本地配置的多模型聊天环境。它不内置任何真实 API Key，所有模型服务、搜索服务和语音服务凭据都需要用户在 App 设置中显式配置。
 
-Latest stable / 最新正式版：`v2.0.2`
+Latest stable / 最新正式版：`v2.0.4`
 
 主要能力包括：
 
@@ -14,7 +14,7 @@ Latest stable / 最新正式版：`v2.0.2`
 - 主对话、标题总结、后续建议、翻译等角色模型独立分配。
 - 工具模型可独立分配，用于人物画像补全和长期记忆整理。
 - 流式输出、思考状态、思考链解析与折叠展示。
-- 生图对话模式支持一次输出 1–4 张图片，并按官方协议接入 OpenAI / GPT Image、Gemini / Nano Banana、Grok Imagine、Seedream、Recraft、Stability AI、FLUX、Ideogram，以及 Replicate 上的 Imagen、Qwen Image 等主流模型。
+- 生图对话模式支持一次输出 1–6 张图片，并按官方协议接入 OpenAI / GPT Image、Gemini / Nano Banana、Grok Imagine、Seedream、Recraft、Stability AI、FLUX、Ideogram，以及 Replicate 上的 Imagen、Qwen Image 等主流模型。
 - 会话历史、会话分支、长期记忆、参考历史记忆和本地数据管理。
 - 图片/文件附件入口、消息复制、编辑、删除、重试、翻译。
 - Tavily 联网搜索配置入口。
@@ -33,11 +33,12 @@ English summary:
 - 支持 OpenAI-compatible `/v1/chat/completions` 流式响应。
 - 支持 OpenAI-compatible `/v1/images/generations`、OpenAI Responses image tool、Gemini `generateContent`、火山方舟、Stability、BFL、Ideogram 与 Replicate 官方生图协议。
 - 支持 Gemini `generateContent` 显式 provider 接入，内置 `gemini-3.1-flash-lite-image`、`gemini-3.1-flash-image`、`gemini-3-pro-image` 和 `gemini-2.5-flash-image` 四个稳定生图型号。
-- 支持 PhotoStack 风格的多图结果卡组、全屏翻页预览和逐张保存。
+- 支持 PhotoStack 风格的多图结果卡组、全屏翻页预览（玻璃顶栏与缩略图导轨）和逐张保存。
+- 支持从屏幕左边缘向右滑动打开侧边栏。
 - 设置页采用“通用 / 提供商 / 默认模型 / 扩展服务 / 数据管理 / 关于织境”六入口结构；昵称和强调色可直接修改，低频设置按需展开，并遵循系统的减少动态效果偏好。
 - 支持小米 MiMo `mimo-v2-tts` 流式 TTS 返回的 PCM16 音频，并自动封装为 WAV 播放。
 - 支持 AI 生成主题指令的安全守卫，限制模型只能修改允许的聊天外观字段。
-- 支持本地自然语言外观指令解析，聊天样式变更不必进入远端模型。
+- 支持本地自然语言外观指令解析：直接输入「换一个紫色背景」即可即时生效，无需模型往返，并以自然语言确认结果。
 - 支持人物画像、助手昵称、用户资料和工具模型辅助整理。
 - 支持 Markdown、代码块、公式块、思考链、翻译块等富文本消息渲染。
 - 支持本地持久化，不要求后端服务；Android API Key 由 Android Keystore 加密保护。

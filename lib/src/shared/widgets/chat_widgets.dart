@@ -1,5 +1,6 @@
 // ignore_for_file: use_key_in_widget_constructors
 
+import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 import 'dart:math' as math;
@@ -888,8 +889,9 @@ class _StackedPhotoCardState extends State<_StackedPhotoCard>
                         ),
                       ),
                     Positioned(
-                      right: trailingInset + 10,
-                      bottom: 12,
+                      key: const ValueKey('generated-image-stack-badge'),
+                      right: 8,
+                      bottom: 0,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
@@ -1165,12 +1167,13 @@ void _openImagePreview(
     disposition: UnfocusDisposition.scope,
   );
   SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
+  unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky));
   showDialog<void>(
     context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.82),
+    barrierColor: Colors.black.withValues(alpha: 0.46),
     builder: (context) {
       return Dialog.fullscreen(
-        backgroundColor: const Color(0xFF101A27),
+        backgroundColor: Colors.transparent,
         child: _ImagePreviewCarousel(
           rootContext: rootContext,
           state: state,
@@ -1181,6 +1184,7 @@ void _openImagePreview(
       );
     },
   ).whenComplete(() {
+    unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
     FocusManager.instance.primaryFocus?.unfocus(
       disposition: UnfocusDisposition.scope,
     );
@@ -1223,165 +1227,224 @@ class _ImagePreviewCarouselState extends State<_ImagePreviewCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Stack(
-        children: [
-          Positioned.fill(
-            bottom: widget.attachments.length > 1 ? 104 : 58,
-            child: PageView.builder(
-              controller: _controller,
-              itemCount: widget.attachments.length,
-              onPageChanged: (value) => setState(() => _currentIndex = value),
-              itemBuilder: (context, index) {
-                final attachment = widget.attachments[index];
-                return Semantics(
-                  label:
-                      '图片预览 ${index + 1} / ${widget.attachments.length}：${attachment.name}',
-                  hint: '支持缩放。更多操作在右上角菜单。',
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.translucent,
-                    onLongPress: () => _showImagePreviewActions(
-                      widget.rootContext,
-                      context,
-                      widget.state,
-                      attachment,
-                    ),
-                    child: InteractiveViewer(
-                      minScale: 0.7,
-                      maxScale: 4,
-                      child: Center(
-                        child: Image.file(
-                          File(attachment.path),
-                          fit: BoxFit.contain,
-                          cacheWidth: previewDecodeWidth(context),
-                          filterQuality: FilterQuality.medium,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          Positioned(
-            top: 12,
-            left: 12,
-            right: 12,
-            child: Row(
-              children: [
-                IconButton.filledTonal(
-                  onPressed: () => Navigator.of(context).maybePop(),
-                  tooltip: '关闭预览',
-                  icon: const Icon(Icons.chevron_left_rounded),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.36),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    '${_currentIndex + 1} / ${widget.attachments.length}',
-                    style: widget.state
-                        .textStyle(context, size: 12, weight: FontWeight.w700)
-                        .copyWith(color: Colors.white),
-                  ),
-                ),
-                if (widget.onDownload != null) ...[
-                  const SizedBox(width: 10),
-                  IconButton.filledTonal(
-                    onPressed: () => widget.onDownload!(_currentAttachment),
-                    tooltip: '下载图片',
-                    icon: const Icon(Icons.download_rounded),
-                  ),
-                ],
-                const SizedBox(width: 10),
-                IconButton.filledTonal(
-                  onPressed: () => _showImagePreviewActions(
-                    widget.rootContext,
-                    context,
-                    widget.state,
-                    _currentAttachment,
-                  ),
-                  tooltip: '更多图片操作',
-                  icon: const Icon(Icons.more_horiz_rounded),
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            left: 18,
-            right: 18,
-            bottom: widget.attachments.length > 1 ? 82 : 18,
-            child: Text(
-              _currentAttachment.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: widget.state
-                  .textStyle(context, size: 12, weight: FontWeight.w600)
-                  .copyWith(color: Colors.white70),
-            ),
-          ),
-          if (widget.attachments.length > 1)
-            Positioned(
-              left: 18,
-              right: 18,
-              bottom: 14,
-              height: 58,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                itemCount: widget.attachments.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 8),
-                itemBuilder: (context, index) {
-                  final selected = index == _currentIndex;
-                  final attachment = widget.attachments[index];
-                  return Semantics(
-                    button: true,
-                    selected: selected,
-                    label: '查看图片 ${index + 1}',
-                    child: Material(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: () => _controller.animateToPage(
-                          index,
-                          duration: const Duration(milliseconds: 220),
-                          curve: Curves.easeOutCubic,
-                        ),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 160),
-                          width: 58,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: selected
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Colors.white.withValues(alpha: 0.18),
-                              width: selected ? 2 : 1,
-                            ),
-                          ),
-                          clipBehavior: Clip.antiAlias,
-                          child: Image.file(
-                            File(attachment.path),
-                            fit: BoxFit.cover,
-                            cacheWidth: 180,
-                            filterQuality: FilterQuality.low,
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
+    final current = _currentAttachment;
+    return Stack(
+      key: const Key('image_preview_root'),
+      children: [
+        Positioned.fill(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 260),
+            child: ImageFiltered(
+              key: ValueKey('preview_backdrop_${current.path}'),
+              imageFilter: ui.ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+              child: Transform.scale(
+                scale: 1.12,
+                child: Image.file(File(current.path), fit: BoxFit.cover),
               ),
             ),
-        ],
+          ),
+        ),
+        Positioned.fill(
+          child: ColoredBox(color: Colors.black.withValues(alpha: 0.38)),
+        ),
+        SafeArea(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                top: 66,
+                bottom: widget.attachments.length > 1 ? 92 : 18,
+                child: PageView.builder(
+                  controller: _controller,
+                  itemCount: widget.attachments.length,
+                  onPageChanged: (value) =>
+                      setState(() => _currentIndex = value),
+                  itemBuilder: (context, index) {
+                    final attachment = widget.attachments[index];
+                    return Semantics(
+                      label:
+                          '图片预览 ${index + 1} / ${widget.attachments.length}：${attachment.name}',
+                      hint: '双指缩放，左右滑动切换。',
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(22),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) =>
+                                InteractiveViewer(
+                                  minScale: 0.7,
+                                  maxScale: 4,
+                                  child: SizedBox(
+                                    width: constraints.maxWidth,
+                                    height: constraints.maxHeight,
+                                    child: Image.file(
+                                      File(attachment.path),
+                                      fit: BoxFit.contain,
+                                      cacheWidth: previewDecodeWidth(context),
+                                      filterQuality: FilterQuality.medium,
+                                    ),
+                                  ),
+                                ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Positioned(
+                top: 8,
+                left: 14,
+                right: 14,
+                child: DecoratedBox(
+                  key: const Key('image_preview_top_rail'),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.28),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.16),
+                    ),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Row(
+                      children: [
+                        _PreviewGlassButton(
+                          onPressed: () => Navigator.of(context).maybePop(),
+                          tooltip: '关闭预览',
+                          icon: const Icon(Icons.chevron_left_rounded),
+                        ),
+                        const Spacer(),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            '${_currentIndex + 1} / ${widget.attachments.length}',
+                            style: widget.state
+                                .textStyle(
+                                  context,
+                                  size: 12,
+                                  weight: FontWeight.w700,
+                                )
+                                .copyWith(color: Colors.white),
+                          ),
+                        ),
+                        _PreviewGlassButton(
+                          key: const Key('image_preview_download'),
+                          onPressed: () {
+                            if (widget.onDownload != null) {
+                              widget.onDownload!(_currentAttachment);
+                            } else {
+                              unawaited(
+                                _saveImageToGallery(
+                                  widget.rootContext,
+                                  _currentAttachment,
+                                ),
+                              );
+                            }
+                          },
+                          tooltip: '保存到手机相册',
+                          icon: const Icon(Icons.download_rounded),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (widget.attachments.length > 1)
+                Positioned(
+                  left: 14,
+                  right: 14,
+                  bottom: 10,
+                  height: 70,
+                  child: DecoratedBox(
+                    key: const Key('image_preview_thumbnail_rail'),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.26),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.14),
+                      ),
+                    ),
+                    child: ListView.separated(
+                      padding: const EdgeInsets.all(7),
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: widget.attachments.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 8),
+                      itemBuilder: (context, index) {
+                        final selected = index == _currentIndex;
+                        final attachment = widget.attachments[index];
+                        return Semantics(
+                          button: true,
+                          selected: selected,
+                          label: '查看图片 ${index + 1}',
+                          child: Material(
+                            color: Colors.transparent,
+                            borderRadius: BorderRadius.circular(12),
+                            clipBehavior: Clip.antiAlias,
+                            child: InkWell(
+                              onTap: () => _controller.animateToPage(
+                                index,
+                                duration: const Duration(milliseconds: 220),
+                                curve: Curves.easeOutCubic,
+                              ),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 160),
+                                width: 56,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: selected
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.white.withValues(alpha: 0.18),
+                                    width: selected ? 2 : 1,
+                                  ),
+                                ),
+                                clipBehavior: Clip.antiAlias,
+                                child: Image.file(
+                                  File(attachment.path),
+                                  fit: BoxFit.cover,
+                                  cacheWidth: 180,
+                                  filterQuality: FilterQuality.low,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PreviewGlassButton extends StatelessWidget {
+  const _PreviewGlassButton({
+    super.key,
+    required this.onPressed,
+    required this.tooltip,
+    required this.icon,
+  });
+
+  final VoidCallback onPressed;
+  final String tooltip;
+  final Widget icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      onPressed: onPressed,
+      tooltip: tooltip,
+      icon: icon,
+      color: Colors.white,
+      constraints: const BoxConstraints.tightFor(width: 48, height: 48),
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.white.withValues(alpha: 0.10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
     );
   }
@@ -1417,71 +1480,6 @@ class _AttachmentVisual extends StatelessWidget {
       );
     }
     return const Center(child: Icon(Icons.description_outlined, size: 24));
-  }
-}
-
-Future<void> _showImagePreviewActions(
-  BuildContext rootContext,
-  BuildContext sheetContext,
-  WeaviewState state,
-  MessageAttachment attachment,
-) async {
-  FocusManager.instance.primaryFocus?.unfocus(
-    disposition: UnfocusDisposition.scope,
-  );
-  SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
-  final action = await showModalBottomSheet<String>(
-    context: sheetContext,
-    useRootNavigator: true,
-    backgroundColor: Colors.transparent,
-    builder: (context) {
-      final dark = state.isDark(context);
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: state.layer(context).withValues(alpha: dark ? 0.92 : 0.96),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(
-                color: state.text(context).withValues(alpha: 0.08),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: dark ? 0.30 : 0.10),
-                  blurRadius: 24,
-                  offset: const Offset(0, 12),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.photo_library_outlined),
-                  title: Text(
-                    '保存到手机相册',
-                    style: state.textStyle(
-                      context,
-                      size: 14,
-                      weight: FontWeight.w700,
-                    ),
-                  ),
-                  subtitle: Text(
-                    '长按图片即可打开此菜单',
-                    style: state.textStyle(context, size: 11.5, opacity: 0.48),
-                  ),
-                  onTap: () => Navigator.of(context).pop('save'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    },
-  );
-  if (action == 'save' && rootContext.mounted) {
-    await _saveImageToGallery(rootContext, attachment);
   }
 }
 

@@ -24,7 +24,7 @@ class NativeImageProviderClient {
     String? aspectRatio,
     String size = '1024x1024',
   }) async {
-    final count = outputCount.clamp(1, 4).toInt();
+    final count = clampImageGenerationCount(outputCount);
     return Future.wait([
       for (var index = 0; index < count; index++)
         switch (kind) {

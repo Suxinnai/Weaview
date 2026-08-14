@@ -1,5 +1,6 @@
 import 'message_attachment.dart';
 import 'model_comparison_result.dart';
+import 'image_generation_limits.dart';
 
 class ChatMessage {
   ChatMessage({
@@ -53,9 +54,9 @@ class ChatMessage {
       reasoning: map['reasoning']?.toString() ?? '',
       translation: map['translation']?.toString() ?? '',
       activity: map['activity']?.toString() ?? '',
-      imageCount: ((map['imageCount'] as num?)?.toInt() ?? 1)
-          .clamp(1, 4)
-          .toInt(),
+      imageCount: clampImageGenerationCount(
+        (map['imageCount'] as num?)?.toInt() ?? minImageGenerationCount,
+      ),
       comparisonResults: (map['comparisonResults'] as List? ?? [])
           .map(ModelComparisonResult.fromJson)
           .toList(),

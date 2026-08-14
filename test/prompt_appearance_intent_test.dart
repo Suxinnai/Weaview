@@ -35,4 +35,19 @@ void main() {
     expect(args['bubbleOpacity'], 0.0);
     expect(args, isNot(contains('backgroundColor')));
   });
+
+  test('open background requests use a fresh low-saturation palette', () {
+    final args = PromptAppearanceIntent.parse('换个清新治愈的背景');
+
+    expect(args['backgroundColor'], '#F2FAF7');
+    expect(args, isNot(contains('bubbleStyle')));
+  });
+
+  test('open bubble requests receive a gentle glass treatment', () {
+    final args = PromptAppearanceIntent.parse('帮我换一套治愈风格的气泡');
+
+    expect(args['bubbleStyle'], 'glass');
+    expect(args['assistantBubbleColor'], '#DDEFE9');
+    expect(args['userBubbleColor'], '#E8E2F3');
+  });
 }

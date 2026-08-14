@@ -13,6 +13,7 @@ import '../data/ai/openai_compatible_client.dart' show GeneratedImageResult;
 import '../domain/models.dart';
 import 'app_constants.dart';
 import 'model_config_resolver.dart';
+import 'prompt_appearance_intent.dart';
 import 'services/backup_service.dart';
 import 'services/personalization_service.dart';
 import 'services/provider_config_service.dart';
@@ -246,17 +247,11 @@ class WeaviewState extends ChangeNotifier {
       savedSessions = persistedSessions;
     }
     _sessions.load(savedSessions);
-    final savedSessionId = prefs.lastSessionId;
-    final shouldResumeSession =
-        savedSessionId == null || savedSessionId.trim().isNotEmpty;
+    final savedSessionId = prefs.lastSessionId?.trim();
     ChatSession? sessionToResume;
-    if (savedSessions.isNotEmpty && shouldResumeSession) {
+    if (savedSessionId != null && savedSessionId.isNotEmpty) {
       sessionToResume = savedSessions.firstWhereOrNull(
         (session) => session.id == savedSessionId,
-      );
-      sessionToResume ??= savedSessions.reduce(
-        (latest, session) =>
-            session.updatedAt > latest.updatedAt ? session : latest,
       );
     }
     if (sessionToResume != null) {
@@ -697,7 +692,26 @@ class WeaviewState extends ChangeNotifier {
   }) async {
     final content = value.trim();
     if ((content.isEmpty && attachments.isEmpty) || isStreaming) return;
-    _applyPromptAppearanceIntent(content);
+    final appearanceArgs = PromptAppearanceIntent.parse(content);
+    final directAppearanceRequest =
+        attachments.isEmpty &&
+        !useWebSearch &&
+        appearanceArgs.isNotEmpty &&
+        PromptAppearanceIntent.isDirectAppearanceRequest(content);
+    if (directAppearanceRequest) {
+      applyAiTheme(appearanceArgs, userPrompt: content);
+      messages
+        ..add(ChatMessage.user(content))
+        ..add(
+          ChatMessage.model(
+            PromptAppearanceIntent.completionMessage(appearanceArgs),
+          ),
+        );
+      suggestions = [];
+      _persistCurrentSession();
+      notifyListeners();
+      return;
+    }
 
     final chatAssignment = modelAssignments['chat'];
     final chatProvider = chatAssignment == null
@@ -1157,7 +1171,7 @@ class WeaviewState extends ChangeNotifier {
           '',
           isThinking: true,
           activity: 'imageGeneration',
-          imageCount: imageCount.clamp(1, 4).toInt(),
+          imageCount: clampImageGenerationCount(imageCount),
         ),
       );
     suggestions = [];
@@ -1451,9 +1465,7 @@ class WeaviewState extends ChangeNotifier {
         ? await _imageAspectRatioFromAttachments(
             imageAttachments.isNotEmpty || !wantsOriginalAspect
                 ? imageAttachments
-                : await _historyImageAttachments(
-                    beforeIndex: beforeIndex,
-                  ),
+                : await _historyImageAttachments(beforeIndex: beforeIndex),
             preferLast: wantsOriginalAspect,
           )
         : null;

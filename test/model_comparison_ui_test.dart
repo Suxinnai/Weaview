@@ -98,6 +98,38 @@ void main() {
     state.dispose();
   });
 
+  testWidgets('comparison picker stays compact on a phone sheet', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 590);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final state = WeaviewState();
+    final options = [
+      for (var i = 1; i <= 5; i++)
+        ModelAssignment(provider: 'Gemini', model: 'model-$i', prompt: ''),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ComparisonModelPicker(
+            state: state,
+            options: options,
+            initialSelection: options.take(2).toList(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('model-1'), findsOneWidget);
+    expect(find.text('model-2'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    state.dispose();
+  });
+
   testWidgets(
     'comparison main card strips reasoning, renders Markdown and switches',
     (tester) async {

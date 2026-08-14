@@ -106,6 +106,45 @@ $$E = mc^2$$
     state.dispose();
   });
 
+  testWidgets('applies selected font style to assistant markdown', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+    await state.load();
+    state.fontStyleMood = 'italic';
+    state.messages.add(ChatMessage.model('连助手的文字也应该随风倾斜。'));
+
+    await tester.pumpWidget(MaterialApp(home: WeaviewHome(state: state)));
+    await tester.pump();
+
+    final paragraph = tester.widget<SelectableText>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is SelectableText &&
+            widget.textSpan?.toPlainText().contains('随风倾斜') == true,
+      ),
+    );
+    expect(paragraph.textSpan!.style!.fontStyle, FontStyle.italic);
+    state.dispose();
+  });
+
+  testWidgets('right swipe from the left edge opens the sidebar', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    final state = WeaviewState();
+    await state.load();
+    await tester.pumpWidget(MaterialApp(home: WeaviewHome(state: state)));
+    await tester.pumpAndSettle();
+
+    await tester.dragFrom(const Offset(2, 360), const Offset(180, 0));
+    await tester.pumpAndSettle();
+
+    expect(find.text('新的织梦'), findsOneWidget);
+    state.dispose();
+  });
+
   test('keeps role model assignments explicit by default', () {
     final assignments = ModelAssignment.defaults();
 
@@ -1006,6 +1045,11 @@ $$E = mc^2$$
             name: 'Image Only',
             capabilities: ['image'],
           ),
+          AiModel(
+            id: 'hybrid-image',
+            name: 'Hybrid Image',
+            capabilities: ['chat', 'vision', 'image', 'tool'],
+          ),
         ],
       ),
     ]);
@@ -1035,10 +1079,9 @@ $$E = mc^2$$
 
     await pumpPicker(open: true, imageMode: false);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('对话'));
-    await tester.pumpAndSettle();
     expect(find.text('Chat Only'), findsOneWidget);
     expect(find.text('Image Only'), findsNothing);
+    expect(find.text('Hybrid Image'), findsNothing);
 
     await pumpPicker(open: false, imageMode: true);
     await tester.pump();
@@ -1046,6 +1089,7 @@ $$E = mc^2$$
     await tester.pumpAndSettle();
 
     expect(find.text('Image Only'), findsOneWidget);
+    expect(find.text('Hybrid Image'), findsOneWidget);
     expect(find.text('Chat Only'), findsNothing);
 
     search.dispose();
@@ -1573,8 +1617,32 @@ $$E = mc^2$$
 
     expect(state.textOverride, isNotNull);
     expect(colorToHex(state.textOverride!), '#C9226C');
+    expect(state.messages.last.role, 'model');
+    expect(state.messages.last.content, isNot(contains('<modify_ui_state>')));
+    expect(state.messages.last.content, contains('已'));
     state.dispose();
   });
+
+  test(
+    'open appearance request completes locally without protocol markup',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final state = WeaviewState();
+
+      await state.load();
+      await state.submitMessage('换个背景');
+
+      expect(
+        colorToHex(state.backgroundOverride!),
+        isIn(['#F6F1FF', '#F1F6F4', '#F7F3EC', '#EFF6F9']),
+      );
+      expect(state.messages, hasLength(2));
+      expect(state.messages.last.role, 'model');
+      expect(state.messages.last.content, contains('清浅'));
+      expect(state.messages.last.content, isNot(contains('modify_ui_state')));
+      state.dispose();
+    },
+  );
 
   test('chat style prompt can remove bubbles locally', () async {
     SharedPreferences.setMockInitialValues({});

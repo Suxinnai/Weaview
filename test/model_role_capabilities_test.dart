@@ -94,7 +94,7 @@ void main() {
     });
 
     test(
-      'keeps multimodal chat models eligible for both image and chat roles',
+      'keeps image-capable models out of the chat role',
       () {
         const capabilities = ['chat', 'vision', 'image'];
 
@@ -113,7 +113,7 @@ void main() {
             name: 'Multimodal Image Editor',
             capabilities: capabilities,
           ),
-          isTrue,
+          isFalse,
         );
         expect(
           supportsModelRole(

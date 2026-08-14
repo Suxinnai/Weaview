@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:weaview_flutter/src/app/weaview_state.dart';
 import 'package:weaview_flutter/src/domain/models.dart';
 import 'package:weaview_flutter/src/features/chat/message_widgets.dart';
+import 'package:weaview_flutter/src/shared/widgets/chat_widgets.dart';
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -355,8 +358,62 @@ void main() {
     final stage = find.byKey(const ValueKey('generated-image-stack-stage'));
     expect(stage, findsOneWidget);
     final stageRect = tester.getRect(stage);
+    final badgeRect = tester.getRect(
+      find.byKey(const ValueKey('generated-image-stack-badge')),
+    );
     final screenWidth = tester.getSize(find.byType(Scaffold)).width;
     expect(stageRect.center.dx, lessThan(screenWidth / 2 - 20));
+    expect(badgeRect.bottom, closeTo(stageRect.bottom, 0.1));
+    expect(badgeRect.top, greaterThan(stageRect.bottom - 28));
+
+    state.dispose();
+  });
+
+  testWidgets('image preview uses one compact glass action rail', (
+    WidgetTester tester,
+  ) async {
+    final state = WeaviewState();
+    await state.load();
+    final imagePath = File('assets/app_icon.png').absolute.path;
+    final attachments = [
+      MessageAttachment(
+        path: imagePath,
+        name: 'preview-1.png',
+        mimeType: 'image/png',
+        kind: 'image',
+      ),
+      MessageAttachment(
+        path: imagePath,
+        name: 'preview-2.png',
+        mimeType: 'image/png',
+        kind: 'image',
+      ),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: GeneratedImageGallery(
+            state: state,
+            attachments: attachments,
+            animateImages: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('generated-image-stack-stage')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('image_preview_root')), findsOneWidget);
+    expect(find.byKey(const Key('image_preview_top_rail')), findsOneWidget);
+    expect(find.byKey(const Key('image_preview_download')), findsOneWidget);
+    expect(
+      find.byKey(const Key('image_preview_thumbnail_rail')),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('更多图片操作'), findsNothing);
+    expect(find.textContaining('weaview_image_'), findsNothing);
 
     state.dispose();
   });

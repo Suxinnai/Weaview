@@ -67,7 +67,8 @@ class PromptAppearanceIntent {
       }
     }
     if (asksBackground) {
-      args['backgroundColor'] = _colorHexFromPrompt(prompt) ?? '#F6F1FF';
+      args['backgroundColor'] =
+          _colorHexFromPrompt(prompt) ?? _backgroundForMood(prompt);
       final lowerColor = args['backgroundColor']!.toString().toLowerCase();
       if (lowerColor == '#000000' ||
           lowerColor == '#111827' ||
@@ -100,7 +101,15 @@ class PromptAppearanceIntent {
           args['bubbleOpacity'] = opacity ?? 0.18;
         }
         final color = _colorHexFromPrompt(prompt);
-        if (color != null) args['bubbleColor'] = color;
+        if (color != null) {
+          args['bubbleColor'] = color;
+        } else if (!args.containsKey('bubbleStyle')) {
+          args
+            ..['bubbleStyle'] = 'glass'
+            ..['bubbleOpacity'] = 0.16
+            ..['assistantBubbleColor'] = '#DDEFE9'
+            ..['userBubbleColor'] = '#E8E2F3';
+        }
       }
     }
     if (asksAlignment) {
@@ -115,8 +124,84 @@ class PromptAppearanceIntent {
     return args;
   }
 
+  static bool isDirectAppearanceRequest(String value) {
+    if (parse(value).isEmpty) return false;
+    final prompt = value.toLowerCase().trim();
+    if (prompt.runes.length <= 12) return true;
+    return _hasAny(prompt, const [
+      '改',
+      '换',
+      '设置',
+      '调整',
+      '变成',
+      '切换',
+      '去掉',
+      '去除',
+      '取消',
+      '恢复',
+      '重置',
+      'make ',
+      'change ',
+      'set ',
+      'use ',
+      'remove ',
+      'reset',
+    ]);
+  }
+
+  static String completionMessage(Map<String, dynamic> args) {
+    if (args['resetTheme'] == true) {
+      return '界面已经回到最初的样子，留白与颜色重新安静下来。';
+    }
+    final changedBackground = args.containsKey('backgroundColor');
+    final changedBubble = args.keys.any(
+      (key) => key.contains('Bubble') || key == 'bubbleStyle',
+    );
+    final changedFont = args.keys.any(
+      (key) => const {
+        'textColor',
+        'fontFamily',
+        'fontStyle',
+        'fontWeight',
+      }.contains(key),
+    );
+    final changedAlignment = args.containsKey('messageAlignment');
+    final groups = <String>[
+      if (changedBackground) '背景',
+      if (changedBubble) '气泡',
+      if (changedFont) '文字',
+      if (changedAlignment) '对齐方式',
+    ];
+    if (groups.length > 1) {
+      return '${groups.join('、')}已经一起更新，整片对话空间重新有了呼吸。';
+    }
+    if (changedBackground) {
+      return '背景已经换成一层清浅雾色，像雨后的晨光一样安静。';
+    }
+    if (changedBubble) {
+      return '气泡已经换上轻透的质感，柔和得像把对话盛进一层晨露。';
+    }
+    if (changedFont) {
+      return '文字样式已经更新，用户与助手会一起保持同一种节奏。';
+    }
+    if (changedAlignment) return '对话的排列已经调整妥当。';
+    return '界面样式已经更新。';
+  }
+
   static bool _hasAny(String prompt, List<String> terms) {
     return terms.any(prompt.contains);
+  }
+
+  static String _backgroundForMood(String prompt) {
+    if (_hasAny(prompt, const ['夜', '星空', '深色', '暗色', 'dark'])) {
+      return '#17232B';
+    }
+    if (_hasAny(prompt, const ['暖', '奶油', '夕阳', '米色'])) {
+      return '#FFF8EF';
+    }
+    if (_hasAny(prompt, const ['紫', '梦', '薰衣草'])) return '#F5F2FA';
+    if (_hasAny(prompt, const ['蓝', '雨', '雾', '天空'])) return '#F1F7F8';
+    return '#F2FAF7';
   }
 
   static String? _colorHexFromPrompt(String prompt) {

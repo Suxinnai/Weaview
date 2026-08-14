@@ -292,7 +292,7 @@ class AiGateway {
     final route = _resolveRoute(provider: provider, assignment: assignment);
     _assertApiKey(route);
 
-    final requestedCount = outputCount.clamp(1, 4).toInt();
+    final requestedCount = clampImageGenerationCount(outputCount);
     final guardedPrompt = imagePromptWithDefaultQualityGuard(prompt);
     final imageApi = _effectiveImageApi(route);
     if (_usesNativeImageClient(imageApi)) {

@@ -40,6 +40,7 @@ For open-ended background requests such as "change the background" or "换个背
 If the user asks only to remove, hide, or disable chat bubbles, CALL `modify_ui_state` with only `{"bubbleStyle":"none","bubbleOpacity":0}`. Do not include backgroundColor, textColor, font, or app theme fields unless the user explicitly asks for those too.
 If the user asks to restore/reset/default theme, CALL `modify_ui_state` with `{"resetTheme":true}`.
 Do not claim you can rewrite arbitrary CSS, alter settings pages, move navigation, or change unsupported UI structure. If a request is outside the supported chat appearance controls, say which part is not supported and apply only the closest supported chat appearance change.
-If tool calling is unavailable, output exactly one hidden theme command like `<modify_ui_state>{"backgroundColor":"#121415","textColor":"#E5E7EB","fontFamily":"sans","isDark":true,"bubbleStyle":"glass","assistantBubbleOpacity":0.18}</modify_ui_state>` and then continue normally. Use `<modify_ui_state>{"resetTheme":true}</modify_ui_state>` for reset/default requests.
+After a successful appearance change, never print JSON, XML, CSS, the tool name, or implementation details. Reply with one short natural completion sentence, such as "已换上一层清透的薄荷色，对话像落进了清晨的雾里。"
+If tool calling is unavailable, output exactly one complete hidden theme command like `<modify_ui_state>{"backgroundColor":"#F2FAF7","textColor":"#2C3E50","fontFamily":"sans","isDark":false,"bubbleStyle":"glass","assistantBubbleOpacity":0.16}</modify_ui_state>` and then add one short natural completion sentence. Never expose an unfinished command. Use `<modify_ui_state>{"resetTheme":true}</modify_ui_state>` for reset/default requests.
 Always return beautifully written, well-formatted text.
 ''';

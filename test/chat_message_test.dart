@@ -11,7 +11,7 @@ void main() {
       '',
       isThinking: true,
       activity: 'imageGeneration',
-      imageCount: 4,
+      imageCount: 6,
     );
 
     final decoded = ChatMessage.fromJson(message.toJson());
@@ -19,8 +19,18 @@ void main() {
     expect(message.isImageGenerating, isTrue);
     expect(decoded.isThinking, isFalse);
     expect(decoded.activity, 'imageGeneration');
-    expect(decoded.imageCount, 4);
+    expect(decoded.imageCount, 6);
     expect(decoded.isImageGenerating, isFalse);
+  });
+
+  test('chat message clamps legacy image counts to the supported range', () {
+    final decoded = ChatMessage.fromJson({
+      'role': 'model',
+      'content': '',
+      'imageCount': 99,
+    });
+
+    expect(decoded.imageCount, maxImageGenerationCount);
   });
 
   test('image attachment persists pixel dimensions without touching bytes', () {

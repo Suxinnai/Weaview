@@ -49,13 +49,14 @@ bool supportsModelRole({
     name: name,
     capabilities: explicitCapabilities,
   );
+  final imageGenerationModel = looksLikeImageGenerationModel(
+    id: id,
+    name: name,
+    capabilities: normalizedCaps,
+  );
   switch (role) {
     case 'image':
-      return looksLikeImageGenerationModel(
-        id: id,
-        name: name,
-        capabilities: normalizedCaps,
-      );
+      return imageGenerationModel;
     case 'tool':
       if (pureImageModel) return false;
       return normalizedCaps.contains('tool') || normalizedCaps.contains('chat');
@@ -63,9 +64,9 @@ bool supportsModelRole({
     case 'title':
     case 'suggest':
     case 'translate':
-      return normalizedCaps.contains('chat') && !pureImageModel;
+      return normalizedCaps.contains('chat') && !imageGenerationModel;
     default:
-      return normalizedCaps.contains('chat') && !pureImageModel;
+      return normalizedCaps.contains('chat') && !imageGenerationModel;
   }
 }
 

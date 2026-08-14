@@ -35,7 +35,7 @@ void main() {
   });
 
   test(
-    'migrates existing installs by restoring the most recent session',
+    'does not guess a conversation when an install has no active id',
     () async {
       SharedPreferences.setMockInitialValues({
         'chat_sessions': jsonEncode([older.toJson(), newer.toJson()]),
@@ -44,11 +44,25 @@ void main() {
 
       await state.load();
 
-      expect(state.currentSessionId, newer.id);
-      expect(state.messages.single.content, '最近内容');
+      expect(state.currentSessionId, isNull);
+      expect(state.messages, isEmpty);
       state.dispose();
     },
   );
+
+  test('does not jump when the saved active conversation is stale', () async {
+    SharedPreferences.setMockInitialValues({
+      'chat_sessions': jsonEncode([older.toJson(), newer.toJson()]),
+      'last_session_id': 'deleted-session',
+    });
+    final state = WeaviewState();
+
+    await state.load();
+
+    expect(state.currentSessionId, isNull);
+    expect(state.messages, isEmpty);
+    state.dispose();
+  });
 
   test(
     'keeps an explicitly opened new conversation blank after restart',

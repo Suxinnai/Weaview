@@ -640,99 +640,89 @@ extension SettingsDetailViews on SettingsSheetState {
             ),
           )
         else
-          GridView.builder(
+          ListView.separated(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             padding: EdgeInsets.zero,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              mainAxisExtent: 126,
-            ),
             itemCount: providerModels.length,
+            separatorBuilder: (_, _) => const SizedBox(height: 9),
             itemBuilder: (context, index) {
               final model = providerModels[index];
-              return LayoutBuilder(
-                builder: (context, itemConstraints) => DragTarget<String>(
-                  onWillAcceptWithDetails: (details) =>
-                      details.data != model.id,
-                  onAcceptWithDetails: (details) {
-                    final fromIndex = providerModels.indexWhere(
-                      (m) => m.id == details.data,
-                    );
-                    if (fromIndex < 0 || fromIndex == index) return;
-                    updateSheet(() {
-                      final target = providerModels.removeAt(fromIndex);
-                      providerModels.insert(index, target);
-                      draggingProviderModelId = null;
-                    });
-                  },
-                  builder: (context, candidateData, rejectedData) {
-                    final hovering = candidateData.isNotEmpty;
-                    final controlsVisible =
-                        providerModelDeleteTarget == model.id;
-                    final card = _ProviderModelGridCard(
-                      state: state,
-                      model: model,
-                      providerName: providerName,
-                      onTap: () => editModel(model),
-                      onDelete: () => updateSheet(() {
-                        providerModels = providerModels
-                            .where((item) => item.id != model.id)
-                            .toList();
-                        providerModelDeleteTarget = null;
-                      }),
-                      controlsVisible: controlsVisible,
-                      highlighted: hovering,
-                    );
-                    return LongPressDraggable<String>(
-                      data: model.id,
-                      delay: const Duration(milliseconds: 300),
-                      dragAnchorStrategy: childDragAnchorStrategy,
-                      rootOverlay: true,
-                      feedback: SizedBox(
-                        width: itemConstraints.maxWidth,
-                        height: itemConstraints.maxHeight,
-                        child: Material(
-                          color: Colors.transparent,
-                          elevation: 10,
-                          shadowColor: Colors.black.withValues(alpha: 0.16),
-                          borderRadius: BorderRadius.circular(18),
-                          child: _ProviderModelGridCard(
-                            state: state,
-                            model: model,
-                            providerName: providerName,
-                            onTap: () {},
-                            onDelete: () {},
-                            highlighted: true,
-                          ),
+              return DragTarget<String>(
+                onWillAcceptWithDetails: (details) => details.data != model.id,
+                onAcceptWithDetails: (details) {
+                  final fromIndex = providerModels.indexWhere(
+                    (m) => m.id == details.data,
+                  );
+                  if (fromIndex < 0 || fromIndex == index) return;
+                  updateSheet(() {
+                    final target = providerModels.removeAt(fromIndex);
+                    providerModels.insert(index, target);
+                    draggingProviderModelId = null;
+                  });
+                },
+                builder: (context, candidateData, rejectedData) {
+                  final hovering = candidateData.isNotEmpty;
+                  final controlsVisible = providerModelDeleteTarget == model.id;
+                  final card = _ProviderModelGridCard(
+                    state: state,
+                    model: model,
+                    providerName: providerName,
+                    onTap: () => editModel(model),
+                    onDelete: () => updateSheet(() {
+                      providerModels = providerModels
+                          .where((item) => item.id != model.id)
+                          .toList();
+                      providerModelDeleteTarget = null;
+                    }),
+                    controlsVisible: controlsVisible,
+                    highlighted: hovering,
+                  );
+                  return LongPressDraggable<String>(
+                    data: model.id,
+                    delay: const Duration(milliseconds: 300),
+                    dragAnchorStrategy: childDragAnchorStrategy,
+                    rootOverlay: true,
+                    feedback: SizedBox(
+                      width: MediaQuery.sizeOf(context).width - 40,
+                      child: Material(
+                        color: Colors.transparent,
+                        elevation: 10,
+                        shadowColor: Colors.black.withValues(alpha: 0.16),
+                        borderRadius: BorderRadius.circular(18),
+                        child: _ProviderModelGridCard(
+                          state: state,
+                          model: model,
+                          providerName: providerName,
+                          onTap: () {},
+                          onDelete: () {},
+                          highlighted: true,
                         ),
                       ),
-                      childWhenDragging: Opacity(opacity: 0, child: card),
-                      onDragStarted: () => updateSheet(() {
-                        providerModelDeleteTarget = model.id;
-                        draggingProviderModelId = model.id;
-                      }),
-                      onDraggableCanceled: (_, _) => updateSheet(() {
-                        draggingProviderModelId = null;
-                      }),
-                      onDragEnd: (_) => updateSheet(() {
-                        draggingProviderModelId = null;
-                      }),
-                      child: AnimatedScale(
-                        duration: const Duration(milliseconds: 140),
-                        curve: Curves.easeOutCubic,
-                        scale: draggingProviderModelId == model.id
-                            ? 0.98
-                            : hovering
-                            ? 0.97
-                            : 1,
-                        child: card,
-                      ),
-                    );
-                  },
-                ),
+                    ),
+                    childWhenDragging: Opacity(opacity: 0, child: card),
+                    onDragStarted: () => updateSheet(() {
+                      providerModelDeleteTarget = model.id;
+                      draggingProviderModelId = model.id;
+                    }),
+                    onDraggableCanceled: (_, _) => updateSheet(() {
+                      draggingProviderModelId = null;
+                    }),
+                    onDragEnd: (_) => updateSheet(() {
+                      draggingProviderModelId = null;
+                    }),
+                    child: AnimatedScale(
+                      duration: const Duration(milliseconds: 140),
+                      curve: Curves.easeOutCubic,
+                      scale: draggingProviderModelId == model.id
+                          ? 0.98
+                          : hovering
+                          ? 0.97
+                          : 1,
+                      child: card,
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -1564,9 +1554,10 @@ class _ProviderModelGridCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
         child: AnimatedContainer(
+          key: ValueKey('provider_model_row_${model.id}'),
           duration: const Duration(milliseconds: 160),
           curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+          padding: const EdgeInsets.fromLTRB(12, 11, 8, 11),
           decoration: BoxDecoration(
             color: highlighted
                 ? state.accents[0].withValues(alpha: dark ? 0.14 : 0.09)
@@ -1590,90 +1581,97 @@ class _ProviderModelGridCard extends StatelessWidget {
                   ]
                 : null,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  BrandIcon.model(
-                    model: model,
-                    providerName: providerName,
-                    size: 30,
-                    radius: 10,
-                    padding: 5,
-                  ),
-                  const Spacer(),
-                  if (controlsVisible)
-                    Semantics(
-                      key: ValueKey('provider_model_delete_${model.id}'),
-                      button: true,
-                      label: '删除模型',
-                      child: Material(
-                        color: state.isDark(context)
-                            ? const Color(0xFF381F25).withValues(alpha: 0.92)
-                            : const Color(0xFFFFF5F5),
-                        shape: CircleBorder(
-                          side: BorderSide(
-                            color: Colors.red.withValues(alpha: 0.34),
-                          ),
-                        ),
-                        child: InkWell(
-                          customBorder: const CircleBorder(),
-                          onTap: onDelete,
-                          child: SizedBox(
-                            width: 27,
-                            height: 27,
-                            child: Icon(
-                              Icons.close_rounded,
-                              size: 16,
-                              color: Colors.red.withValues(alpha: 0.86),
-                            ),
-                          ),
+              BrandIcon.model(
+                model: model,
+                providerName: providerName,
+                size: 42,
+                radius: 13,
+                padding: 7,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      model.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: state.textStyle(
+                        context,
+                        size: 13.5,
+                        weight: FontWeight.w600,
+                        height: 1.2,
+                      ),
+                    ),
+                    if (model.id != model.name) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        model.id,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: state.textStyle(
+                          context,
+                          size: 10,
+                          opacity: 0.42,
                         ),
                       ),
-                    )
-                  else if (highlighted)
-                    Icon(
-                      Icons.drag_indicator_rounded,
-                      size: 14,
-                      color: state.accents[0].withValues(alpha: 0.7),
-                    )
-                  else
-                    Icon(
-                      Icons.drag_indicator_rounded,
-                      size: 13,
-                      color: state.text(context).withValues(alpha: 0.22),
+                    ],
+                    const SizedBox(height: 7),
+                    ModelCapabilityChips(
+                      state: state,
+                      capabilities: model.capabilities,
+                      compact: true,
                     ),
-                ],
-              ),
-              const SizedBox(height: 7),
-              Text(
-                model.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: state.textStyle(
-                  context,
-                  size: 12.5,
-                  weight: FontWeight.w600,
-                  height: 1.2,
+                  ],
                 ),
               ),
-              if (model.id != model.name) ...[
-                const SizedBox(height: 2),
-                Text(
-                  model.id,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: state.textStyle(context, size: 9.5, opacity: 0.42),
+              const SizedBox(width: 8),
+              if (controlsVisible)
+                Semantics(
+                  key: ValueKey('provider_model_delete_${model.id}'),
+                  button: true,
+                  label: '删除模型',
+                  child: Material(
+                    color: state.isDark(context)
+                        ? const Color(0xFF381F25).withValues(alpha: 0.92)
+                        : const Color(0xFFFFF5F5),
+                    shape: CircleBorder(
+                      side: BorderSide(
+                        color: Colors.red.withValues(alpha: 0.34),
+                      ),
+                    ),
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: onDelete,
+                      child: SizedBox(
+                        width: 44,
+                        height: 44,
+                        child: Icon(
+                          Icons.close_rounded,
+                          size: 18,
+                          color: Colors.red.withValues(alpha: 0.86),
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                SizedBox(
+                  width: 36,
+                  height: 44,
+                  child: Icon(
+                    Icons.drag_indicator_rounded,
+                    size: 18,
+                    color: highlighted
+                        ? state.accents[0].withValues(alpha: 0.72)
+                        : state.text(context).withValues(alpha: 0.24),
+                  ),
                 ),
-              ],
-              const SizedBox(height: 7),
-              ModelCapabilityChips(
-                state: state,
-                capabilities: model.capabilities,
-                compact: true,
-              ),
             ],
           ),
         ),

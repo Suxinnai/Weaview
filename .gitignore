@@ -29,6 +29,7 @@ ios/Flutter/.last_build_id
 
 # Native build output and installable packages
 dist/
+.release/
 *.apk
 *.aab
 *.ipa

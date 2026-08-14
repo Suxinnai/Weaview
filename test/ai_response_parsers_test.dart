@@ -37,5 +37,26 @@ void main() {
       expect(parsed.text, '普通回答');
       expect(parsed.args, isNull);
     });
+
+    test('hides an unfinished theme command while streaming', () {
+      expect(
+        stripThemeCommandMarkup('正在换一层春雾。<modify_ui_state>{"backgroundColor":'),
+        '正在换一层春雾。',
+      );
+    });
+
+    test('hides even the first partial theme token while streaming', () {
+      expect(stripThemeCommandMarkup('正在更新。<modif'), '正在更新。');
+      expect(stripThemeCommandMarkup('<m'), isEmpty);
+    });
+
+    test('removes a theme command without swallowing following prose', () {
+      expect(
+        stripThemeCommandMarkup(
+          '稍候。<modify_ui_state>{"bubbleStyle":"glass"}</modify_ui_state>气泡已经变得轻盈。',
+        ),
+        '稍候。气泡已经变得轻盈。',
+      );
+    });
   });
 }

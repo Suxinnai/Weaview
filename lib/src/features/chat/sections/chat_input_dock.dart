@@ -74,23 +74,17 @@ class ChatInputDock extends StatelessWidget {
         .length;
     final fileAttachmentCount =
         pendingAttachments.length - imageAttachmentCount;
-    final activeToolIcon = imageGenerationMode
-        ? Icons.auto_awesome_rounded
-        : comparisonMode
+    final activeToolIcon = comparisonMode
         ? Icons.view_column_rounded
         : webSearchEnabled
         ? Icons.travel_explore_rounded
         : null;
-    final activeToolLabel = imageGenerationMode
-        ? '图片生成'
-        : comparisonMode
+    final activeToolLabel = comparisonMode
         ? '多模型对照'
         : webSearchEnabled
         ? '联网搜索'
         : '';
-    final activeToolTap = imageGenerationMode
-        ? onToggleExpanded
-        : comparisonMode
+    final activeToolTap = comparisonMode
         ? onConfigureComparison
         : webSearchEnabled
         ? onToggleWebSearch
@@ -143,13 +137,30 @@ class ChatInputDock extends StatelessWidget {
           AnimatedSize(
             duration: const Duration(milliseconds: 220),
             curve: Curves.easeOutCubic,
-            child: imageGenerationMode
-                ? _ImageModeStrip(
-                    state: state,
-                    imageCount: imageCount.clamp(1, 4),
-                    onImageCountChanged: onImageCountChanged,
-                  )
-                : const SizedBox.shrink(),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              switchInCurve: Curves.easeOutCubic,
+              switchOutCurve: Curves.easeInCubic,
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.12),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              ),
+              child: imageGenerationMode
+                  ? _ImageModeStrip(
+                      state: state,
+                      imageCount: clampImageGenerationCount(imageCount),
+                      onImageCountChanged: onImageCountChanged,
+                    )
+                  : const SizedBox.shrink(
+                      key: ValueKey('image-mode-strip-hidden'),
+                    ),
+            ),
           ),
           Padding(
             padding: const EdgeInsets.all(4),
@@ -263,10 +274,8 @@ class ChatInputDock extends StatelessWidget {
                       state.isStreaming || (canSubmit && !state.isStreaming),
                   onTap: onSubmit,
                   state: state,
-                  idleLabel: imageGenerationMode
-                      ? '生成 ${imageCount.clamp(1, 4)} 张'
-                      : '编织',
-                  streamingLabel: imageGenerationMode ? '生成中' : '编织中',
+                  idleLabel: imageGenerationMode ? '织梦' : '编织',
+                  streamingLabel: imageGenerationMode ? '织梦中' : '编织中',
                 ),
               ],
             ),
@@ -449,27 +458,27 @@ class _ImageModeStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       key: const ValueKey('image-mode-strip'),
-      margin: const EdgeInsets.fromLTRB(10, 6, 10, 2),
-      padding: const EdgeInsets.fromLTRB(10, 5, 7, 5),
+      margin: const EdgeInsets.fromLTRB(8, 7, 8, 1),
+      padding: const EdgeInsets.fromLTRB(9, 4, 5, 4),
       decoration: BoxDecoration(
         color: sendGreen.withValues(alpha: state.isDark(context) ? 0.10 : 0.06),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(15),
         border: Border.all(color: sendGreen.withValues(alpha: 0.16)),
       ),
       child: Row(
         children: [
           Icon(
             Icons.auto_awesome_rounded,
-            size: 14,
+            size: 13,
             color: sendGreen.withValues(alpha: 0.9),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 5),
           Expanded(
             child: Text(
               '图片生成',
               style: state.textStyle(
                 context,
-                size: 12,
+                size: 11.5,
                 weight: FontWeight.w500,
                 opacity: 0.72,
               ),
@@ -505,47 +514,76 @@ class _ImageCountSelector extends StatelessWidget {
       message: '输出张数',
       child: Container(
         key: const ValueKey('image-count-selector'),
-        height: 44,
+        height: 36,
         padding: const EdgeInsets.all(3),
         decoration: BoxDecoration(
           color: base.withValues(alpha: dark ? 0.085 : 0.06),
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(11),
           border: Border.all(color: base.withValues(alpha: 0.08)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            for (var option = 1; option <= 4; option++)
+            for (
+              var option = minImageGenerationCount;
+              option <= maxImageGenerationCount;
+              option++
+            )
               Padding(
-                padding: EdgeInsets.only(right: option == 4 ? 0 : 2),
+                padding: EdgeInsets.only(
+                  right: option == maxImageGenerationCount ? 0 : 1,
+                ),
                 child: Semantics(
                   button: true,
                   selected: option == value,
                   label: '输出 $option 张图片',
                   child: Material(
-                    color: option == value ? sendGreen : Colors.transparent,
-                    borderRadius: BorderRadius.circular(7),
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
                     child: InkWell(
                       key: ValueKey('image-count-option-$option'),
-                      borderRadius: BorderRadius.circular(7),
+                      borderRadius: BorderRadius.circular(8),
                       onTap: onChanged == null
                           ? null
                           : () => onChanged!(option),
-                      child: SizedBox(
-                        width: 40,
-                        child: Center(
-                          child: Text(
-                            '$option',
+                      child: AnimatedScale(
+                        duration: const Duration(milliseconds: 180),
+                        curve: Curves.easeOutBack,
+                        scale: option == value ? 1 : 0.96,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          curve: Curves.easeOutCubic,
+                          width: 30,
+                          height: 30,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: option == value
+                                ? sendGreen
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: option == value
+                                ? [
+                                    BoxShadow(
+                                      color: sendGreen.withValues(alpha: 0.22),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ]
+                                : null,
+                          ),
+                          child: AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 160),
                             style: state
                                 .textStyle(
                                   context,
-                                  size: 11.5,
-                                  weight: FontWeight.w500,
-                                  opacity: option == value ? 1 : 0.6,
+                                  size: 11,
+                                  weight: FontWeight.w600,
+                                  opacity: option == value ? 1 : 0.56,
                                 )
                                 .copyWith(
                                   color: option == value ? Colors.white : base,
                                 ),
+                            child: Text('$option'),
                           ),
                         ),
                       ),

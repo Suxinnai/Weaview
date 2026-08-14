@@ -46,7 +46,7 @@ class _ChatModelDropdownState extends State<ChatModelDropdown> {
     super.initState();
     _filter = widget.imageGenerationMode
         ? _ModelFilter.image
-        : _ModelFilter.all;
+        : _ModelFilter.chat;
   }
 
   @override

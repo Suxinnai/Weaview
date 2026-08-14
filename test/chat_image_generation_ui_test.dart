@@ -56,19 +56,18 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('image-count-selector')), findsOneWidget);
-    expect(
-      find.byKey(const ValueKey('image-mode-strip')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('image-mode-strip')), findsOneWidget);
     expect(
       tester.getSize(find.byKey(const ValueKey('image-count-selector'))).height,
-      44,
+      lessThanOrEqualTo(40),
     );
+    expect(find.text('织梦'), findsOneWidget);
+    expect(find.byIcon(Icons.auto_awesome_rounded), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('image-count-option-4')));
+    await tester.tap(find.byKey(const ValueKey('image-count-option-6')));
     await tester.pumpAndSettle();
 
-    expect(selectedCount, 4);
+    expect(selectedCount, 6);
 
     focusNode.dispose();
     controller.dispose();

@@ -12,6 +12,32 @@
 
 - Nothing yet.
 
+## 2.0.4 - 2026-08-14
+
+### 中文
+
+- 单次生图数量上限从 4 张提升到 6 张，数量限制统一收敛到独立常量并贯穿网关、Gemini、OpenAI 与原生图像 Provider。
+- 直接输入外观指令（如「换成紫色背景」）改为本地即时生效，不再等待模型往返；完成后以一句诗意的自然语言确认，不再把 JSON 命令暴露到对话里。
+- 外观指令按情绪提供默认背景色：夜晚与星空对应深色，暖色与奶油对应米色，紫色与薰衣草对应淡紫，蓝色、雨雾与天空对应天蓝。
+- 从模型回复中剥离完整或残缺的界面主题命令标记，避免命令文本泄漏到可见消息。
+- 纯生图模型不再被分配到主对话、标题、建议或翻译角色，避免图像模型被误用为文本模型。
+- 启动时只恢复上次明确选择的会话，移除「按最近更新兜底」的不可预测恢复行为。
+- 从屏幕左边缘向右滑动即可打开侧边栏，新增 28 像素宽的边缘手势区域。
+- 全屏图片预览重构为玻璃质感顶栏、底部缩略图导轨与逐张操作，并补充无障碍语义。
+- 图像模式按钮文案改为「织梦」，计数条带加入淡入上滑动画；提供商模型网格、对比选择器与设置页间距细节继续打磨。
+
+### English
+
+- Raised the per-request image generation limit from 4 to 6, centralizing the count in a shared constant used by the gateway, Gemini, OpenAI, and native image providers.
+- Direct appearance requests such as "make the background purple" now apply instantly on device instead of waiting for a model round trip, and finish with a short poetic confirmation instead of exposing JSON commands.
+- Appearance requests now choose mood-based default backgrounds: dark for night and starry scenes, cream for warm tones, lavender for purple themes, and sky blue for rain, fog, and skies.
+- Stripped complete and unfinished theme-command markup from assistant replies so command text never leaks into visible messages.
+- Image-generation-only models can no longer be assigned to primary chat, title, suggestion, or translation roles, preventing image models from being misused as text models.
+- Startup now resumes exactly the previously selected session and no longer falls back to the most recently updated one.
+- Added a 28-pixel edge gesture zone so swiping right from the left screen edge opens the sidebar.
+- Rebuilt the fullscreen image preview with a glass top rail, bottom thumbnail rail, per-image actions, and improved accessibility semantics.
+- Renamed the image-mode send action to Weave Dream, animated the count strip in with a fade and slide, and continued polishing provider model grids, comparison pickers, and settings spacing.
+
 ## 2.0.3 - 2026-08-13
 
 ### 中文

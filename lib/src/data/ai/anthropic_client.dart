@@ -119,7 +119,11 @@ class AnthropicClient {
         if (parsed.type == 'content_block_delta') {
           rawContent += parsed.text;
           final split = splitReasoning(rawContent);
-          onSnapshot(split.answer, split.reasoning, split.thinking);
+          onSnapshot(
+            stripThemeCommandMarkup(split.answer),
+            split.reasoning,
+            split.thinking,
+          );
         }
       }
 

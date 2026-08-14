@@ -352,6 +352,7 @@ class ThemeService {
   }
 
   bool applyPromptAppearanceIntent(String value, WeaviewPreferences? prefs) {
+    if (!PromptAppearanceIntent.isDirectAppearanceRequest(value)) return false;
     final args = PromptAppearanceIntent.parse(value);
     if (args.isEmpty) return false;
     applyAiTheme(args, userPrompt: value, prefs: prefs);

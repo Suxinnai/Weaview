@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../../domain/models.dart';
+import 'ai_response_parsers.dart';
 import 'chat_message_payloads.dart';
 import 'openai_compatible_client.dart';
 
@@ -93,7 +94,11 @@ class GeminiClient {
       }
     }
 
-    if (first.functionCalls.isEmpty) return first.text;
+    if (first.functionCalls.isEmpty) {
+      final parsed = consumeThemeCommand(first.text);
+      if (parsed.args != null) onThemeUpdate(parsed.args!);
+      return parsed.text;
+    }
 
     final secondContents = [
       ...contents,
@@ -124,7 +129,11 @@ class GeminiClient {
       includeTools: false,
       timeout: timeout,
     );
-    return second.text.isNotEmpty ? second.text : first.text;
+    final result = consumeThemeCommand(
+      second.text.isNotEmpty ? second.text : first.text,
+    );
+    if (result.args != null) onThemeUpdate(result.args!);
+    return result.text;
   }
 
   Future<_GeminiResult> _callGemini({
@@ -214,7 +223,7 @@ class GeminiClient {
     String? aspectRatio,
     String? imageSize,
   }) async {
-    final requestedCount = outputCount.clamp(1, 4).toInt();
+    final requestedCount = clampImageGenerationCount(outputCount);
     final first = await _requestImages(
       apiKey: apiKey,
       model: model,

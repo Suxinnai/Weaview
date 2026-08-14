@@ -52,6 +52,7 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
   bool _backgroundedWithImageGeneration = false;
   int _imageGenerationCount = 1;
   int _lifecycleResumeGeneration = 0;
+  double _sidebarEdgeDragDistance = 0;
 
   @override
   void initState() {
@@ -285,7 +286,7 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
       useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (context) => FractionallySizedBox(
-        heightFactor: 0.78,
+        heightFactor: 0.70,
         child: ComparisonModelPicker(
           state: widget.state,
           options: options,
@@ -328,7 +329,9 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
                 false);
         _imageGenerationMode = _editingImageGenerationMessage;
         if (_editingImageGenerationMessage) {
-          _imageGenerationCount = next?.imageCount.clamp(1, 4).toInt() ?? 1;
+          _imageGenerationCount = next == null
+              ? minImageGenerationCount
+              : clampImageGenerationCount(next.imageCount);
         }
         if (_imageGenerationMode) _comparisonMode = false;
         _pendingAttachments = message.attachments
@@ -833,6 +836,37 @@ class _WeaviewHomeState extends State<WeaviewHome> with WidgetsBindingObserver {
                       });
                     },
                   ),
+                  if (!_sidebarOpen && !_modelDropdownOpen && !_usageStatsOpen)
+                    Positioned(
+                      key: const Key('sidebar_edge_swipe'),
+                      left: 0,
+                      top: MediaQuery.paddingOf(context).top + 72,
+                      bottom: 92,
+                      width: 28,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onHorizontalDragStart: (_) {
+                          _sidebarEdgeDragDistance = 0;
+                        },
+                        onHorizontalDragUpdate: (details) {
+                          if (details.delta.dx > 0) {
+                            _sidebarEdgeDragDistance += details.delta.dx;
+                          }
+                        },
+                        onHorizontalDragEnd: (details) {
+                          final velocity = details.primaryVelocity ?? 0;
+                          if (_sidebarEdgeDragDistance >= 52 ||
+                              velocity >= 260) {
+                            FocusManager.instance.primaryFocus?.unfocus();
+                            setState(() {
+                              _sidebarOpen = true;
+                              _dockExpanded = false;
+                            });
+                          }
+                          _sidebarEdgeDragDistance = 0;
+                        },
+                      ),
+                    ),
                   SidebarOverlay(
                     state: state,
                     open: _sidebarOpen,

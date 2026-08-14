@@ -3,6 +3,7 @@ export 'ai_provider.dart';
 export 'chat_message.dart';
 export 'chat_session.dart';
 export 'gemini_image_models.dart';
+export 'image_generation_limits.dart';
 export 'image_model_catalog.dart';
 export 'message_attachment.dart';
 export 'memory_item.dart';

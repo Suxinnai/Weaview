@@ -131,7 +131,11 @@ class OpenAiChatClient {
           if (rawReasoning.trim().isNotEmpty) rawReasoning.trim(),
           if (parsed.reasoning.trim().isNotEmpty) parsed.reasoning.trim(),
         ].join('\n\n');
-        onSnapshot(parsed.answer, reasoning, parsed.thinking);
+        onSnapshot(
+          stripThemeCommandMarkup(parsed.answer),
+          reasoning,
+          parsed.thinking,
+        );
       }
       if (shouldCancel?.call() == true) return;
       final parsed = splitReasoning(rawContent);

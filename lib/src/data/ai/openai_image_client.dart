@@ -172,7 +172,7 @@ class OpenAiImageClient {
     String? aspectRatio,
     String? imageSize,
   }) async {
-    final requestedCount = outputCount.clamp(1, 4).toInt();
+    final requestedCount = clampImageGenerationCount(outputCount);
     final first = await _generateChatImagesOnce(
       apiKey: apiKey,
       baseUrl: baseUrl,
@@ -291,8 +291,10 @@ class OpenAiImageClient {
         timeout: timeout,
       );
     } catch (error) {
-      debugPrint('Streaming chat image generation failed, '
-          'falling back to a single response: $error');
+      debugPrint(
+        'Streaming chat image generation failed, '
+        'falling back to a single response: $error',
+      );
       return _generateChatImagesLegacy(
         uri: uri,
         apiKey: apiKey,
@@ -326,9 +328,7 @@ class OpenAiImageClient {
       });
     final response = await http.Client().send(request).timeout(timeout);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception(
-        'Chat Completions image HTTP ${response.statusCode}',
-      );
+      throw Exception('Chat Completions image HTTP ${response.statusCode}');
     }
     final nodes = <dynamic>[];
     final contentText = StringBuffer();

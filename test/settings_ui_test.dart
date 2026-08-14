@@ -41,7 +41,11 @@ void main() {
 
     expect(find.text('模型提供商'), findsOneWidget);
     expect(find.textContaining('已配置'), findsOneWidget);
-    expect(find.text('自定义提供商'), findsNothing);
+    expect(find.text('自定义提供商'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('add_custom_provider_card')),
+      findsOneWidget,
+    );
     expect(find.text('搜索提供商'), findsNothing);
     expect(find.textContaining('查看全部'), findsNothing);
     expect(find.byKey(const ValueKey('provider_menu_OpenAI')), findsNothing);
@@ -331,6 +335,59 @@ void main() {
     await tester.enterText(fields.at(1), 'http://api.example.com/v1');
     await tester.pump();
     expect(find.textContaining('HTTP 连接未加密'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    state.dispose();
+  });
+
+  testWidgets('provider models use roomy single-column rows', (tester) async {
+    tester.view.physicalSize = const Size(393, 852);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final state = WeaviewState();
+    await state.load();
+    final provider = AiProvider.defaults().first.copyWith(
+      apiKey: 'key',
+      enabled: true,
+      status: '使用中',
+      current: true,
+      models: const [
+        AiModel(
+          id: 'vendor/a-very-long-model-identifier-for-layout',
+          name: 'A spacious model name',
+          capabilities: ['chat', 'vision', 'image', 'tools'],
+        ),
+      ],
+    );
+    state.saveProviders([provider]);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SettingsSheet(
+          state: state,
+          open: true,
+          onClose: () {},
+          onPickAvatar: (_) async {},
+          showSnack: (_) {},
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('提供商'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('OpenAI').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('模型').first);
+    await tester.pumpAndSettle();
+
+    final row = find.byKey(
+      const ValueKey(
+        'provider_model_row_vendor/a-very-long-model-identifier-for-layout',
+      ),
+    );
+    expect(row, findsOneWidget);
+    expect(tester.getSize(row).width, greaterThan(320));
+    expect(tester.getSize(row).height, lessThan(110));
     expect(tester.takeException(), isNull);
     state.dispose();
   });

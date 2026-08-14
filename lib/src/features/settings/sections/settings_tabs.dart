@@ -272,112 +272,108 @@ extension SettingsTabs on SettingsSheetState {
           style: state.textStyle(context, size: 13, opacity: 0.56),
         ),
         const SizedBox(height: 18),
-        if (state.providers.isEmpty)
-          CardShell(
-            state: state,
-            child: Padding(
-              padding: const EdgeInsets.all(22),
-              child: Text(
-                '暂无提供商',
-                style: state.textStyle(context, size: 14, opacity: 0.56),
-              ),
-            ),
-          )
-        else
-          LayoutBuilder(
-            builder: (context, constraints) {
-              const spacing = 12.0;
-              final cardWidth = (constraints.maxWidth - spacing) / 2;
-              return Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: [
-                  for (final provider in state.providers)
-                    Builder(
-                      key: ValueKey('provider_${provider.name}'),
-                      builder: (context) {
-                        final actualIndex = state.providers.indexWhere(
-                          (item) => item.name == provider.name,
-                        );
-                        final isCurrent =
-                            provider.enabled &&
-                            (provider.current || provider.status == '使用中');
-                        final controlsVisible =
-                            providerDeleteTarget == provider.name;
-                        return SizedBox(
-                          width: cardWidth,
-                          child: DragTarget<String>(
-                            onWillAcceptWithDetails: (details) =>
-                                details.data != provider.name,
-                            onAcceptWithDetails: (details) {
-                              dropProviderOn(details.data, actualIndex);
-                              updateSheet(() {
-                                draggingProviderName = null;
-                              });
-                            },
-                            builder: (context, candidateData, rejectedData) {
-                              final hovering = candidateData.isNotEmpty;
-                              final row = _ProviderGridCard(
-                                state: state,
-                                provider: provider,
-                                active: isCurrent,
-                                controlsVisible: controlsVisible,
-                                highlighted: hovering,
-                                onEdit: () => openProviderConfig(provider),
-                                onDelete: () =>
-                                    confirmDeleteProvider(provider.name),
-                              );
-                              return LongPressDraggable<String>(
-                                data: provider.name,
-                                delay: const Duration(milliseconds: 320),
-                                dragAnchorStrategy: childDragAnchorStrategy,
-                                rootOverlay: true,
-                                feedback: SizedBox(
-                                  width: cardWidth,
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    elevation: 10,
-                                    shadowColor: Colors.black.withValues(
-                                      alpha: 0.16,
-                                    ),
-                                    borderRadius: BorderRadius.circular(20),
-                                    child: row,
+        LayoutBuilder(
+          builder: (context, constraints) {
+            const spacing = 12.0;
+            final cardWidth = (constraints.maxWidth - spacing) / 2;
+            return Wrap(
+              spacing: spacing,
+              runSpacing: spacing,
+              children: [
+                for (final provider in state.providers)
+                  Builder(
+                    key: ValueKey('provider_${provider.name}'),
+                    builder: (context) {
+                      final actualIndex = state.providers.indexWhere(
+                        (item) => item.name == provider.name,
+                      );
+                      final isCurrent =
+                          provider.enabled &&
+                          (provider.current || provider.status == '使用中');
+                      final controlsVisible =
+                          providerDeleteTarget == provider.name;
+                      return SizedBox(
+                        width: cardWidth,
+                        child: DragTarget<String>(
+                          onWillAcceptWithDetails: (details) =>
+                              details.data != provider.name,
+                          onAcceptWithDetails: (details) {
+                            dropProviderOn(details.data, actualIndex);
+                            updateSheet(() {
+                              draggingProviderName = null;
+                            });
+                          },
+                          builder: (context, candidateData, rejectedData) {
+                            final hovering = candidateData.isNotEmpty;
+                            final row = _ProviderGridCard(
+                              state: state,
+                              provider: provider,
+                              active: isCurrent,
+                              controlsVisible: controlsVisible,
+                              highlighted: hovering,
+                              onEdit: () => openProviderConfig(provider),
+                              onDelete: () =>
+                                  confirmDeleteProvider(provider.name),
+                            );
+                            return LongPressDraggable<String>(
+                              data: provider.name,
+                              delay: const Duration(milliseconds: 320),
+                              dragAnchorStrategy: childDragAnchorStrategy,
+                              rootOverlay: true,
+                              feedback: SizedBox(
+                                width: cardWidth,
+                                child: Material(
+                                  color: Colors.transparent,
+                                  elevation: 10,
+                                  shadowColor: Colors.black.withValues(
+                                    alpha: 0.16,
                                   ),
-                                ),
-                                childWhenDragging: Opacity(
-                                  opacity: 0,
+                                  borderRadius: BorderRadius.circular(20),
                                   child: row,
                                 ),
-                                onDragStarted: () => updateSheet(() {
-                                  providerDeleteTarget = provider.name;
-                                  draggingProviderName = provider.name;
-                                }),
-                                onDraggableCanceled: (_, _) => updateSheet(() {
-                                  draggingProviderName = null;
-                                }),
-                                onDragEnd: (_) => updateSheet(() {
-                                  draggingProviderName = null;
-                                }),
-                                child: AnimatedScale(
-                                  duration: const Duration(milliseconds: 140),
-                                  curve: Curves.easeOutCubic,
-                                  scale: draggingProviderName == provider.name
-                                      ? 0.98
-                                      : hovering
-                                      ? 0.992
-                                      : 1,
-                                  child: row,
-                                ),
-                              );
-                            },
-                          ),
-                        );
-                      },
-                    ),
-                ],
-              );
-            },
-          ),
+                              ),
+                              childWhenDragging: Opacity(
+                                opacity: 0,
+                                child: row,
+                              ),
+                              onDragStarted: () => updateSheet(() {
+                                providerDeleteTarget = provider.name;
+                                draggingProviderName = provider.name;
+                              }),
+                              onDraggableCanceled: (_, _) => updateSheet(() {
+                                draggingProviderName = null;
+                              }),
+                              onDragEnd: (_) => updateSheet(() {
+                                draggingProviderName = null;
+                              }),
+                              child: AnimatedScale(
+                                duration: const Duration(milliseconds: 140),
+                                curve: Curves.easeOutCubic,
+                                scale: draggingProviderName == provider.name
+                                    ? 0.98
+                                    : hovering
+                                    ? 0.992
+                                    : 1,
+                                child: row,
+                              ),
+                            );
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                SizedBox(
+                  width: cardWidth,
+                  child: _AddProviderGridCard(
+                    key: const Key('add_custom_provider_card'),
+                    state: state,
+                    onTap: () => openProviderConfig(null),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
         const SizedBox(height: 18),
         Text(
           '点按配置 · 长按卡片可排序或删除',
@@ -2071,6 +2067,82 @@ class _ProviderGridCard extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _AddProviderGridCard extends StatelessWidget {
+  const _AddProviderGridCard({
+    super.key,
+    required this.state,
+    required this.onTap,
+  });
+
+  final WeaviewState state;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = state.text(context);
+    return Semantics(
+      button: true,
+      label: '添加自定义提供商',
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Ink(
+            height: 134,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: state.accents[0].withValues(alpha: 0.045),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: state.accents[0].withValues(alpha: 0.34),
+                width: 1.1,
+              ),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: state.accents[0].withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    Icons.add_rounded,
+                    color: state.accents[0],
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '自定义提供商',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: state.textStyle(
+                    context,
+                    size: 13.5,
+                    weight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  '连接兼容 API',
+                  style: state
+                      .textStyle(context, size: 10.5, opacity: 0.5)
+                      .copyWith(color: text.withValues(alpha: 0.5)),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
